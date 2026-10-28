@@ -242,6 +242,15 @@ describe('TerminalPane: copy on select, right click, copy and paste keys', () =>
     expect(wrote(be)).toEqual(['abc'])
   })
 
+  it('Next / Previous tab are not sent to the shell: the terminal lets them through to the app', async () => {
+    const {be, term} = await mountWith({appCombos: ['Ctrl+Tab', 'Ctrl+Shift+Tab']})
+    expect(term.keyHandler(keydown({key: 'Tab', code: 'Tab', ctrlKey: true}))).toBe(false)
+    expect(term.keyHandler(keydown({key: 'Tab', code: 'Tab', ctrlKey: true, shiftKey: true}))).toBe(false)
+    expect(term.keyHandler(keydown({key: 'Tab', code: 'Tab'}))).toBe(true) // a plain Tab is completion
+    expect(term.keyHandler(keydown({key: 'd', code: 'KeyD', ctrlKey: true}))).toBe(true) // Ctrl+D stays the shell's
+    expect(wrote(be)).toEqual([])
+  })
+
   it('the copy and paste combinations can be changed', async () => {
     const {be, term} = await mountWith({copyCombo: 'Alt+Y', pasteCombo: 'Alt+P'})
     term.selection = 'sel'

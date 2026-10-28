@@ -18,6 +18,7 @@ import {PortForwardsPage} from './lib/panels/PortForwardsPage'
 import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
+import {CLOSE_HOST_TAB} from './lib/sftp/SftpBrowser'
 import {SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
@@ -336,8 +337,14 @@ export default function App({initial}: {/** an app window opened for this place 
     go_snippets: () => goHome('snippets'),
     go_knownhosts: () => goHome('knownhosts'),
     go_logs: () => goHome('logs'),
+    go_vaults: () => goHome(),
+    open_sftp: () => setActive(SFTP_TAB_ID),
     lock_vault: () => { void be.vault.lock().then(refreshVault) },
-    close_tab: () => { if (termActive) closeTab(termActive) },
+    close_tab: () => {
+      // on the SFTP screen the shortcut closes the host tab showing in its Remote pane (the SFTP tab itself stays)
+      if (activeTabObj?.kind === 'sftp' && !onHome) window.dispatchEvent(new Event(CLOSE_HOST_TAB))
+      else if (termActive) closeTab(termActive)
+    },
     next_tab: () => cycle(1),
     prev_tab: () => cycle(-1),
     close_pane: () => { if (activeTabObj && inTerminalTab && !onHome) void closePaneAsk(activeTabObj.id, activeTabObj.activePane) },

@@ -827,3 +827,10 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .fpane-head .fpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fpane-head.filtering .spacer { display: none; } /* the filter box takes the free room instead */
 .fpane-x { margin-left: -2px; opacity: .7; } .fpane-x:hover { opacity: 1; }
+.rpanes { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rpanes > .rpane, .rpanes > .fpane { flex: 1; }
+.rtabs { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.rtab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 200px; padding: 4px 6px 4px 8px; border-radius: 8px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.rtab:hover { background: var(--bg-3); }
+.rtab.on { background: var(--bg-3); color: var(--text); font-weight: 600; }
+.rtab-name { overflow: hidden; text-overflow: ellipsis; }

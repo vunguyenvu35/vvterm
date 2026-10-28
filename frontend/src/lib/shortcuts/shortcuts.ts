@@ -24,6 +24,8 @@ export const ACTIONS: ActionDef[] = [
   {id: 'go_snippets', label: 'Go to Snippets', group: 'Pages', default: 'Mod+4'},
   {id: 'go_knownhosts', label: 'Go to Known Hosts', group: 'Pages', default: 'Mod+5'},
   {id: 'go_logs', label: 'Go to Logs', group: 'Pages', default: 'Mod+6'},
+  {id: 'go_vaults', label: 'Back to Vaults (the home screen)', group: 'Pages', default: 'Mod+Shift+H'},
+  {id: 'open_sftp', label: 'Open SFTP', group: 'Pages', default: 'Mod+Shift+S'},
   {id: 'lock_vault', label: 'Lock the vault', group: 'General', default: 'Mod+L'},
   {id: 'close_tab', label: 'Close the current tab', group: 'Tabs', default: 'Mod+W'},
   {id: 'next_tab', label: 'Next tab', group: 'Tabs', default: 'Ctrl+Tab'},

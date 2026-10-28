@@ -1,15 +1,19 @@
-import {useCallback, useEffect, useState} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {errMsg} from '../util'
-import {IconDownload, IconFolder} from '../ui/Icons'
+import {IconClose, IconDownload, IconFolder, IconPlus} from '../ui/Icons'
+import {OsIcon} from '../ui/OsIcon'
 import {formatBytes} from './format'
 import {DragPayload, FilePane, Item, PaneFs, PaneState} from './FilePane'
 import {RemoteHost, RemotePane} from './RemotePane'
 import type {Host, TransferProgress, TransferResult} from '../types'
 
 const NONE: PaneState = {cwd: '', selected: []}
+interface RemoteTab {key: string; host: RemoteHost}
+let tabSeq = 0
+const nextTabKey = () => 'rt' + tabSeq++
 /** how long the progress bar stays after a transfer finished */
 export const TRANSFER_HIDE_MS = 2000
 
@@ -38,25 +42,73 @@ export function replaceQuestion(r: TransferResult, where: string): string {
  * buttons. Folders go with everything inside. Nothing is replaced without asking, and the question comes
  * once for the whole batch.
  */
-export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: given}: {hostId?: string; hostLabel?: string; nonce?: number; /** the app's current hosts (kept up to date by the app); without it they are loaded once */ hosts?: Host[]}) {
+/** sent by the app when the Close tab shortcut is used on an SFTP screen: close the host tab that is showing */
+export const CLOSE_HOST_TAB = 'vvterm:sftp-close-host'
+
+export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: given, visible = true}: {hostId?: string; hostLabel?: string; nonce?: number; /** this screen is the one showing (only that one answers the Close tab shortcut) */ visible?: boolean; /** the app's current hosts (kept up to date by the app); without it they are loaded once */ hosts?: Host[]}) {
   const be = useBackend()
   const toast = useToast()
   const confirm = useConfirm()
-  const [host, setHost] = useState<RemoteHost | null>(hostId ? {id: hostId, label: hostLabel || hostId} : null)
+  // the hosts open on the right, as tabs in the pane header; every one keeps its own connection, folder and selection
+  const [tabs, setTabs] = useState<RemoteTab[]>(() => (hostId ? [{key: nextTabKey(), host: {id: hostId, label: hostLabel || hostId}}] : []))
+  const [activeKey, setActiveKey] = useState(() => tabs[0]?.key ?? '')
+  const active = tabs.find(t => t.key === activeKey) ?? null
+  const host = active?.host ?? null
   const [loaded, setLoaded] = useState<Host[]>([])
   const hosts = given ?? loaded
   const [localHome, setLocalHome] = useState('')
   const [local, setLocal] = useState<PaneState>(NONE)
-  const [remote, setRemote] = useState<PaneState>(NONE)
-  const [sid, setSid] = useState('')
+  const [remotes, setRemotes] = useState<Record<string, PaneState>>({})
+  const [sids, setSids] = useState<Record<string, string>>({})
+  const remote = remotes[activeKey] ?? NONE
+  const sid = sids[activeKey] ?? ''
   const [localKey, setLocalKey] = useState(0)
   const [remoteKey, setRemoteKey] = useState(0)
   const [transfer, setTransfer] = useState<TransferProgress | null>(null)
   const [error, setError] = useState('')
 
-  // a host card asked for this host (again): connect to it, even when it is the one that was just left
+  // the callbacks of a pane must keep one identity (the pane reports into them from effects), so one pair per tab
+  const callbacks = useRef(new Map<string, {onState(s: PaneState): void; onSession(id: string): void}>())
+  const cbFor = (key: string) => {
+    let c = callbacks.current.get(key)
+    if (!c) {
+      c = {onState: st => setRemotes(m => ({...m, [key]: st})), onSession: id => setSids(m => (m[key] === id ? m : {...m, [key]: id}))}
+      callbacks.current.set(key, c)
+    }
+    return c
+  }
+  const addTab = (h: RemoteHost) => {
+    const key = nextTabKey()
+    setTabs(ts => [...ts, {key, host: h}])
+    setActiveKey(key)
+    setTransfer(null)
+  }
+  const closeTab = (key: string) => {
+    const at = tabs.findIndex(t => t.key === key)
+    const rest = tabs.filter(t => t.key !== key)
+    setTabs(rest)
+    if (key === activeKey) setActiveKey(rest[Math.max(0, at - 1)]?.key ?? '')
+    callbacks.current.delete(key)
+    setRemotes(m => { const n = {...m}; delete n[key]; return n })
+    setSids(m => { const n = {...m}; delete n[key]; return n })
+    setTransfer(null)
+  }
+
+  const activeRef = useRef(activeKey)
+  activeRef.current = activeKey
   useEffect(() => {
-    if (hostId) { setHost({id: hostId, label: hostLabel || hostId}); setTransfer(null); setRemote(NONE) }
+    if (!visible) return
+    const close = () => { if (activeRef.current) closeTab(activeRef.current) }
+    window.addEventListener(CLOSE_HOST_TAB, close)
+    return () => window.removeEventListener(CLOSE_HOST_TAB, close)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, tabs])
+
+  // a host card asked for this host (again): connect to it in a tab of its own (not on the first run: the tab is already there)
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return }
+    if (hostId) addTab({id: hostId, label: hostLabel || hostId})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostId, nonce])
   useEffect(() => {
@@ -120,8 +172,32 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: give
       <div className="sftp-panes">
         <FilePane side="local" title="Local" icon={<IconFolder size={16} />} fs={localHome ? fs : null} startDir={localHome} reloadKey={localKey} showHiddenDefault={false}
           onState={setLocal} onDropEntry={onDropToLocal} onCopyOut={sid ? items => void move('upload', items) : undefined} copyLabel="Upload" />
-        <RemotePane host={host} hosts={hosts} onHost={h => { setHost(h); setTransfer(null); setRemote(NONE) }} reloadKey={remoteKey}
-          onState={setRemote} onDropEntry={onDropToRemote} onSession={setSid} onCopyOut={items => void move('download', items)} />
+        <div className="rpanes">
+          {tabs.map(t => {
+            const cb = cbFor(t.key)
+            return (
+              <RemotePane key={t.key} host={t.host} hosts={hosts} hidden={t.key !== activeKey} onNewTab={addTab} onHost={() => closeTab(t.key)} reloadKey={remoteKey}
+                onState={cb.onState} onDropEntry={onDropToRemote} onSession={cb.onSession} onCopyOut={items => void move('download', items)}
+                tabsLead={add => (
+                  <div className="rtabs" role="tablist" aria-label="Remote hosts">
+                    {tabs.map(x => (
+                      <div key={x.key} role="tab" aria-selected={x.key === activeKey} className={'rtab' + (x.key === activeKey ? ' on' : '')} onClick={() => setActiveKey(x.key)}>
+                        <OsIcon os={hosts.find(h => h.id === x.host.id)?.os} size={15} />
+                        <span className="rtab-name">{x.host.label}</span>
+                        <button className="icon ghost fpane-x" aria-label={tabs.length === 1 ? 'Change host' : `Close ${x.host.label}`} title={tabs.length === 1 ? 'Disconnect and pick another host' : 'Close this host'}
+                          onClick={e => { e.stopPropagation(); closeTab(x.key) }}><IconClose size={13} /></button>
+                      </div>
+                    ))}
+                    <button className="icon ghost fpane-x" aria-label="Add host" title="Connect to another host" onClick={add}><IconPlus size={14} /></button>
+                  </div>
+                )} />
+            )
+          })}
+          {tabs.length === 0 && (
+            <RemotePane host={null} hosts={hosts} onHost={h => { if (h) addTab(h) }} reloadKey={remoteKey}
+              onState={cbFor('none').onState} onDropEntry={onDropToRemote} onSession={cbFor('none').onSession} />
+          )}
+        </div>
       </div>
       <div className="sftp-foot">
         <button disabled={!canDown} onClick={() => void move('download', remote.selected)} aria-label="Download selected"><IconDownload size={15} /> Download{count(remote.selected.length)} to local folder</button>

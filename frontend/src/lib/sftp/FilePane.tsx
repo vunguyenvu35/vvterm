@@ -1,7 +1,7 @@
 import {DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {errMsg} from '../util'
 import {useConfirm} from '../ui/Confirm'
-import {IconArrowUp, IconChevron, IconClose, IconEye, IconEyeOff, IconFile, IconFolder, IconHome, IconRefresh, IconSearch} from '../ui/Icons'
+import {IconArrowUp, IconChevron, IconClose, IconPlus, IconEye, IconEyeOff, IconFile, IconFolder, IconHome, IconRefresh, IconSearch} from '../ui/Icons'
 import {PermissionsDialog} from './Permissions'
 import {breadcrumbs, formatBytes, formatDate, joinPath, kindOf, parentOf, validName} from './format'
 import type {RemoteEntry} from '../types'
@@ -48,6 +48,10 @@ interface Props {
   copyLabel?: string
   /** the menu's Close: leave this pane's host; absent, Close is greyed out */
   onClose?(): void
+  /** the + next to the host name: pick another host */
+  onAdd?(): void
+  /** replaces the icon, name and buttons at the left of the header (the Remote pane puts its host tabs here) */
+  lead?: ReactNode
 }
 
 const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
@@ -57,7 +61,7 @@ const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
  * once (Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A), new folder / rename / delete, and drag and drop of the
  * selection to the other side. It knows nothing about SSH.
  */
-export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut, onClose, copyLabel = 'Copy to target directory'}: Props) {
+export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut, onClose, onAdd, lead, copyLabel = 'Copy to target directory'}: Props) {
   const confirm = useConfirm()
   const alive = useRef(true)
   const cwdRef = useRef('')
@@ -212,9 +216,12 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   return (
     <section className={'fpane' + (over ? ' drop-target' : '')} aria-label={label(side)}>
       <div className={'fpane-head' + (filtering ? ' filtering' : '')}>
-        <span className="fpane-icon">{icon}</span>
-        <b className="fpane-title">{title}</b>
-        {onClose && <button className="icon ghost fpane-x" aria-label="Change host" title="Disconnect and pick another host" onClick={onClose}><IconClose size={13} /></button>}
+        {lead ?? <>
+          <span className="fpane-icon">{icon}</span>
+          <b className="fpane-title">{title}</b>
+          {onClose && <button className="icon ghost fpane-x" aria-label="Change host" title="Disconnect and pick another host" onClick={onClose}><IconClose size={13} /></button>}
+          {onAdd && <button className="icon ghost fpane-x" aria-label="Add host" title="Connect to another host" onClick={onAdd}><IconPlus size={14} /></button>}
+        </>}
         <span className="spacer" />
         {actions}
         {filtering && <input className="fpane-filter" aria-label={`${label(side)} filter`} autoFocus placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}

@@ -503,6 +503,18 @@ describe('SftpBrowser: right-click menu', () => {
     expect(screen.getByText('Connect to host')).toBeInTheDocument()
   })
 
+  it('the + next to the host name opens the host list to switch hosts, and Cancel keeps the current one', async () => {
+    setup()
+    await ready()
+    await userEvent.click(within(R()).getByRole('button', {name: 'Add host'}))
+    const dlg = screen.getByRole('dialog', {name: 'Select host'})
+    await userEvent.click(within(dlg).getByRole('button', {name: 'Cancel'}))
+    expect(screen.queryByRole('dialog', {name: 'Select host'})).toBeNull()
+    expect(within(R()).getByRole('button', {name: 'Change host'})).toBeInTheDocument()
+    await userEvent.click(within(R()).getByRole('button', {name: 'Add host'}))
+    expect(within(screen.getByRole('dialog', {name: 'Select host'})).getAllByRole('button', {name: /^Connect to /}).length).toBeGreaterThan(0)
+  })
+
   it('Filter narrows the rows by name', async () => {
     setup()
     await ready()

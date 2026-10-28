@@ -475,6 +475,64 @@ describe('App: the SFTP tab next to Vaults', () => {
     expect(screen.getAllByTestId('sftp')).toHaveLength(1) // the same tab, not another one
   })
 
+  it('Ctrl+Shift+S opens SFTP and Ctrl+Shift+H goes back to Vaults', async () => {
+    const be = setup()
+    await unlock(be)
+    const key = (k: string, code: string) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {key: k, code, ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true})) })
+    key('S', 'KeyS')
+    expect(await screen.findByTestId('sftp')).toBeVisible()
+    expect(screen.getByRole('tab', {name: 'SFTP'})).toHaveAttribute('aria-selected', 'true')
+    key('H', 'KeyH')
+    await waitFor(() => expect(screen.getByRole('tab', {name: 'Vaults'})).toHaveAttribute('aria-selected', 'true'))
+  })
+
+  it('the + adds a host as one more tab in the Remote header (the same host again too), each closable', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.click(screen.getByRole('tab', {name: 'SFTP'}))
+    const remote = () => screen.getAllByRole('region', {name: 'Remote'}).at(-1)!
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Select host'}))
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Connect to web-1'}))
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'sftp.open' && c[1] === 'h1')).toBe(true))
+    // add the same host again, then another: three tabs inside the pane, one SFTP tab in the app
+    await userEvent.click(await screen.findByRole('button', {name: 'Add host'}))
+    await userEvent.click(within(screen.getByRole('dialog', {name: 'Select host'})).getByRole('button', {name: 'Connect to web-1'}))
+    await waitFor(() => expect(within(screen.getByRole('tablist', {name: 'Remote hosts'})).getAllByRole('tab')).toHaveLength(2))
+    await userEvent.click(await screen.findByRole('button', {name: 'Add host'}))
+    await userEvent.click(within(screen.getByRole('dialog', {name: 'Select host'})).getByRole('button', {name: 'Connect to db-1'}))
+    const strip = () => within(screen.getByRole('tablist', {name: 'Remote hosts'}))
+    await waitFor(() => expect(strip().getAllByRole('tab')).toHaveLength(3))
+    expect(strip().getAllByRole('tab').map(t => t.textContent)).toEqual(['web-1', 'web-1', 'db-1'])
+    expect(strip().getAllByRole('tab')[2]).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByTestId('sftp')).toHaveLength(1)
+    // switch back to the first, close the last
+    await userEvent.click(strip().getAllByRole('tab')[0])
+    expect(strip().getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(strip().getByRole('button', {name: 'Close db-1'}))
+    await waitFor(() => expect(strip().getAllByRole('tab')).toHaveLength(2))
+  })
+
+  it('Ctrl+W on the SFTP screen closes the host tab showing in the Remote pane, never the SFTP tab itself', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.click(screen.getByRole('tab', {name: 'SFTP'}))
+    const remote = () => screen.getAllByRole('region', {name: 'Remote'}).at(-1)!
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Select host'}))
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Connect to web-1'}))
+    await userEvent.click(await screen.findByRole('button', {name: 'Add host'}))
+    await userEvent.click(within(screen.getByRole('dialog', {name: 'Select host'})).getByRole('button', {name: 'Connect to db-1'}))
+    const strip = () => within(screen.getByRole('tablist', {name: 'Remote hosts'}))
+    await waitFor(() => expect(strip().getAllByRole('tab')).toHaveLength(2))
+    const w = () => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {key: 'w', code: 'KeyW', ctrlKey: true, bubbles: true, cancelable: true})) })
+    w()
+    await waitFor(() => expect(strip().getAllByRole('tab')).toHaveLength(1))
+    expect(strip().getByRole('tab')).toHaveTextContent('web-1')
+    w()
+    expect(await screen.findByText('Connect to host')).toBeInTheDocument()
+    w() // nothing left to close: the SFTP tab stays
+    expect(screen.getByRole('tab', {name: 'SFTP'})).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('connects to a host chosen inside the tab: Select host, then the host (a card has no SFTP button)', async () => {
     const be = setup()
     await unlock(be)

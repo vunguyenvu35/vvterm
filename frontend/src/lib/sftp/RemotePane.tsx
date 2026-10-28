@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {ReactNode, useEffect, useMemo, useRef, useState} from 'react'
 import {useBackend} from '../backend'
 import {errMsg} from '../util'
 import {IconFolder} from '../ui/Icons'
@@ -14,6 +14,12 @@ interface Props {
   host: RemoteHost | null
   hosts: Host[]
   onHost(h: RemoteHost | null): void
+  /** a host was picked while one is open: it becomes one more tab of this pane */
+  onNewTab?(h: RemoteHost): void
+  /** the host tabs shown in the header; `add` opens the host list */
+  tabsLead?(add: () => void): ReactNode
+  /** another host's tab is showing: keep this connection alive but out of sight */
+  hidden?: boolean
   reloadKey: number
   onState(s: PaneState): void
   onDropEntry(p: DragPayload): void
@@ -27,7 +33,7 @@ interface Props {
  * The Remote side: shows "Connect to host" until a saved host is chosen, then owns that host's SFTP
  * connection (through its jump chain, with the host key prompt) and browses it in a FilePane.
  */
-export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry, onSession, onCopyOut}: Props) {
+export function RemotePane({host, hosts, onHost, onNewTab, tabsLead, hidden, reloadKey, onState, onDropEntry, onSession, onCopyOut}: Props) {
   const be = useBackend()
   const sid = useRef('')
   const alive = useRef(true)
@@ -104,6 +110,22 @@ export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry
 
   const matching = useMemo(() => hosts.filter(h => (h.label + ' ' + h.hostname).toLowerCase().includes(filter.trim().toLowerCase())), [hosts, filter])
 
+  const picker = (
+    <div className="host-picker">
+      <h3>Select host</h3>
+      <input aria-label="Filter hosts" autoFocus placeholder="Search hosts" value={filter} onChange={e => setFilter(e.target.value)} />
+      <div className="host-picker-list">
+        {matching.map(h => (
+          <button key={h.id} aria-label={`Connect to ${h.label}`} onClick={() => { setPicking(false); setFilter(''); const r = {id: h.id, label: h.label}; if (host && onNewTab) onNewTab(r); else onHost(r) }}>
+            <OsIcon os={h.os} size={18} /><span>{h.label}</span><small className="muted">{h.username ? h.username + '@' : ''}{h.hostname}</small>
+          </button>
+        ))}
+        {matching.length === 0 && <div className="muted">{hosts.length ? 'No host matches.' : 'No saved hosts yet. Add one in Hosts first.'}</div>}
+      </div>
+      <button onClick={() => { setPicking(false); setFilter('') }}>Cancel</button>
+    </div>
+  )
+
   if (!host) {
     return (
       <section className="fpane" aria-label="Remote">
@@ -115,30 +137,17 @@ export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry
               <p className="muted">Start by connecting to a saved host to manage your files with SFTP.</p>
               <button className="primary" onClick={() => setPicking(true)}>Select host</button>
             </>
-          ) : (
-            <div className="host-picker">
-              <h3>Select host</h3>
-              <input aria-label="Filter hosts" autoFocus placeholder="Search hosts" value={filter} onChange={e => setFilter(e.target.value)} />
-              <div className="host-picker-list">
-                {matching.map(h => (
-                  <button key={h.id} aria-label={`Connect to ${h.label}`} onClick={() => { setPicking(false); setFilter(''); onHost({id: h.id, label: h.label}) }}>
-                    <OsIcon os={h.os} size={18} /><span>{h.label}</span><small className="muted">{h.username ? h.username + '@' : ''}{h.hostname}</small>
-                  </button>
-                ))}
-                {matching.length === 0 && <div className="muted">{hosts.length ? 'No host matches.' : 'No saved hosts yet. Add one in Hosts first.'}</div>}
-              </div>
-              <button onClick={() => { setPicking(false); setFilter('') }}>Cancel</button>
-            </div>
-          )}
+          ) : picker}
         </div>
       </section>
     )
   }
 
   return (
-    <div className="rpane">
+    <div className="rpane" style={hidden ? {display: 'none'} : undefined}>
       <FilePane side="remote" title={host.label} icon={<OsIcon os={hosts.find(x => x.id === host.id)?.os} size={16} />} fs={fs} startDir={home} reloadKey={reloadKey} showHiddenDefault
-        onState={onState} onDropEntry={onDropEntry} onCopyOut={onCopyOut} copyLabel="Download" onClose={() => onHost(null)} />
+        onState={onState} onDropEntry={onDropEntry} onCopyOut={onCopyOut} copyLabel="Download" onClose={() => onHost(null)} onAdd={() => setPicking(true)} lead={tabsLead?.(() => setPicking(true))} />
+      {picking && <div className="overlay" role="dialog" aria-label="Select host"><div className="card">{picker}</div></div>}
       {state === 'connecting' && !prompt && <div className="banner info">Connecting to {host.label}…</div>}
       {state === 'closed' && (
         <div className="banner" role="alert">

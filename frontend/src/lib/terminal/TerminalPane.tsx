@@ -36,6 +36,8 @@ interface Props {
   rightClick?: 'paste' | 'menu' | 'none'
   /** key combinations for Copy and Paste (platform defaults when not given) */
   copyCombo?: string
+  /** keys the app owns and the terminal must let through to it (Next / Previous tab): xterm would send them to the shell and swallow them */
+  appCombos?: string[]
   pasteCombo?: string
   /** who this pane connects to: drawn on the connecting screen */
   connect?: {label: string; os?: string; subtitle: string}
@@ -74,6 +76,8 @@ export function TerminalPane(p: Props) {
   const copyOnSelect = useRef(p.copyOnSelect ?? true)
   const rightClick = useRef(p.rightClick ?? 'paste')
   copyCombo.current = p.copyCombo ?? 'Mod+Shift+C'
+  const appCombos = useRef<string[]>([])
+  appCombos.current = p.appCombos ?? []
   pasteCombo.current = p.pasteCombo ?? 'Mod+Shift+V'
   copyOnSelect.current = p.copyOnSelect ?? true
   rightClick.current = p.rightClick ?? 'paste'
@@ -215,6 +219,7 @@ export function TerminalPane(p: Props) {
         void pasteClipboard()
         return false
       }
+      if (appCombos.current.some(c => matches(e, c))) return false // not for the shell: the app's own handler gets it
       return true
     })
 
