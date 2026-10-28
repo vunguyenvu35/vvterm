@@ -1,84 +1,84 @@
-# VVTerm — Tài liệu thiết kế kiến trúc
+# VVTerm — Architecture design document
 
-> Cập nhật: 2026-10-28 · Tác giả: Vũ Nguyễn Vũ
+> Updated: 2026-10-28 · Author: Vũ Nguyễn Vũ
 
-> **Implementation note (English, 2026-10-28).** This is the original design, kept as written. The implementation deviates in a few places; the decisions are recorded in [CleanArchitecture.md](CleanArchitecture.md) (ADR-0001 SQLite instead of JSON files, ADR-0002 clean architecture and package layout, ADR-0003 own `ssh_config` parser) and the full comparison is in [Assessment.md](Assessment.md). Open questions: frontend = React + TypeScript; SFTP and team sharing stay out of scope.
+> **Implementation note (2026-10-28).** This is the original design, kept as written (translated into English). The implementation deviates in a few places; the decisions are recorded in [CleanArchitecture.md](CleanArchitecture.md) (ADR-0001 SQLite instead of JSON files, ADR-0002 clean architecture and package layout, ADR-0003 own `ssh_config` parser) and the full comparison is in [Assessment.md](Assessment.md). Open questions: frontend = React + TypeScript; SFTP and team sharing stay out of scope.
 
-## Mục lục
+## Contents
 
-1. [Tổng quan](#1-tổng-quan)
-2. [Lựa chọn công nghệ](#2-lựa-chọn-công-nghệ)
-3. [Kiến trúc tổng thể](#3-kiến-trúc-tổng-thể)
-4. [Mô hình dữ liệu](#4-mô-hình-dữ-liệu)
-5. [Bảo mật và Vault](#5-bảo-mật-và-vault)
-6. [Luồng SSH](#6-luồng-ssh)
-7. [Import/Export và Sync](#7-importexport-và-sync)
-8. [Cấu trúc dự án và API binding](#8-cấu-trúc-dự-án-và-api-binding)
-9. [Lộ trình, rủi ro và câu hỏi mở](#9-lộ-trình-rủi-ro-và-câu-hỏi-mở)
+1. [Overview](#1-overview)
+2. [Technology choices](#2-technology-choices)
+3. [Overall architecture](#3-overall-architecture)
+4. [Data model](#4-data-model)
+5. [Security and the vault](#5-security-and-the-vault)
+6. [SSH flow](#6-ssh-flow)
+7. [Import/export and sync](#7-importexport-and-sync)
+8. [Project structure and API bindings](#8-project-structure-and-api-bindings)
+9. [Roadmap, risks and open questions](#9-roadmap-risks-and-open-questions)
 
 ---
 
-## 1. Tổng quan
+## 1. Overview
 
-VVTerm là SSH client desktop, dữ liệu do người dùng tự kiểm soát và luôn export được. Host và key không bao giờ bị khoá trong app: mọi thứ xuất ra được dạng chuẩn, sync qua kho Git của chính người dùng.
+VVTerm is a desktop SSH client whose data the user controls and can always export. Hosts and keys are never locked inside the app: everything can be exported in a standard format, and synced through the user's own Git repository.
 
-**Mục tiêu**
+**Goals**
 
-- Quản lý host theo group, tag và màu môi trường (dev, staging, production).
-- Vault lưu private key và mật khẩu, mã hoá bằng master password.
-- Terminal nhiều tab, split pane, jump host, port forwarding.
-- Import/export `~/.ssh/config` và file JSON mã hoá — không bao giờ khoá dữ liệu.
-- Sync giữa các máy qua Git repo private do người dùng sở hữu.
+- Manage hosts by group, tag and environment colour (dev, staging, production).
+- A vault that stores private keys and passwords, encrypted with a master password.
+- Multi-tab terminal, split panes, jump hosts, port forwarding.
+- Import and export `~/.ssh/config` and encrypted JSON files, so data is never locked in.
+- Sync between machines through a private Git repository that the user owns.
 
-**Ngoài phạm vi MVP**
+**Out of scope for the MVP**
 
-- SFTP browser, snippet lệnh, lịch sử phiên, mobile app.
-- Chia sẻ host theo team và phân quyền.
+- SFTP browser, command snippets, session history, mobile app.
+- Sharing hosts within a team, and permissions.
 - Telnet, serial, RDP, VNC.
 
-Nền tảng ưu tiên: macOS; Windows và Linux build được nhưng không kiểm thử kỹ ở MVP.
+Preferred platform: macOS. Windows and Linux build, but are not tested thoroughly in the MVP.
 
 ---
 
-## 2. Lựa chọn công nghệ
+## 2. Technology choices
 
-Chọn **Wails v2 + Go** cho backend và **xterm.js** cho terminal: tận dụng Go đang dùng, thư viện SSH chuẩn, binary nhẹ hơn Electron vì dùng WebView của hệ điều hành.
+The choice is **Wails v2 + Go** for the backend and **xterm.js** for the terminal: it builds on the Go knowledge already in the team, has a standard SSH library, and produces a lighter binary than Electron because it uses the operating system's WebView.
 
-| Tiêu chí | Wails + Go | Electron + Node | Tauri + Rust |
+| Criterion | Wails + Go | Electron + Node | Tauri + Rust |
 | --- | --- | --- | --- |
-| Thư viện SSH | golang.org/x/crypto/ssh | ssh2 | russh |
-| WebView | WKWebView (macOS) | Chromium đóng gói | WKWebView (macOS) |
-| Độ nặng app | Nhẹ | Nặng nhất | Nhẹ nhất |
-| Phù hợp team | Cao (đã dùng Go) | Trung bình | Thấp (phải học Rust) |
-| Tham khảo sẵn | Ít | Tabby, Electerm | Ít |
+| SSH library | golang.org/x/crypto/ssh | ssh2 | russh |
+| WebView | WKWebView (macOS) | Bundled Chromium | WKWebView (macOS) |
+| App weight | Light | Heaviest | Lightest |
+| Fit for the team | High (already uses Go) | Medium | Low (Rust must be learned) |
+| Existing references | Few | Tabby, Electerm | Few |
 
-**Thành phần chính**
+**Main components**
 
-- Frontend: Svelte hoặc React + TypeScript, xterm.js và addon `fit`, `search`, `web-links`.
+- Frontend: Svelte or React + TypeScript, xterm.js with the `fit`, `search` and `web-links` addons.
 - SSH: `golang.org/x/crypto/ssh`, `golang.org/x/crypto/ssh/agent`, `golang.org/x/crypto/ssh/knownhosts`.
-- Mã hoá: `golang.org/x/crypto/argon2`, `crypto/aes` + `crypto/cipher` (GCM).
-- Keychain: `github.com/zalando/go-keyring` (macOS Keychain, Windows Credential Manager, Secret Service trên Linux).
-- Parse ssh config: `github.com/kevinburke/ssh_config`.
-- Git sync: gọi `git` CLI có sẵn trên máy, hoặc `github.com/go-git/go-git/v5` nếu muốn không phụ thuộc.
-- Lưu trữ: file JSON trên đĩa, chưa cần SQLite ở MVP.
+- Encryption: `golang.org/x/crypto/argon2`, `crypto/aes` + `crypto/cipher` (GCM).
+- Keychain: `github.com/zalando/go-keyring` (macOS Keychain, Windows Credential Manager, Secret Service on Linux).
+- ssh config parsing: `github.com/kevinburke/ssh_config`.
+- Git sync: call the `git` CLI already on the machine, or `github.com/go-git/go-git/v5` to avoid the dependency.
+- Storage: JSON files on disk; SQLite is not needed in the MVP.
 
-Rủi ro của Wails: WebView khác nhau giữa các OS có thể khiến xterm.js render khác nhau; cần test font và hiệu năng khi output lớn (ví dụ `tail -f` log).
+Wails risk: WebViews differ between operating systems, so xterm.js may render differently; fonts and performance with large output (for example `tail -f` on a log) must be tested.
 
 ---
 
-## 3. Kiến trúc tổng thể
+## 3. Overall architecture
 
-Ứng dụng gồm ba tầng: frontend trong WebView chỉ hiển thị, Go backend giữ toàn bộ kết nối và secret, và các thành phần bên ngoài app.
+The application has three tiers: the frontend in the WebView, which only displays; the Go backend, which holds all connections and secrets; and the components outside the app.
 
 ```mermaid
 flowchart TB
     subgraph FE["Frontend · WebView"]
-        T["Terminal<br/><small>xterm.js, tab, split pane</small>"]
-        H["Host và group<br/><small>danh sách, form, tìm kiếm</small>"]
-        V["Vault UI<br/><small>unlock, quản lý key</small>"]
+        T["Terminal<br/><small>xterm.js, tabs, split panes</small>"]
+        H["Hosts and groups<br/><small>list, form, search</small>"]
+        V["Vault UI<br/><small>unlock, key management</small>"]
     end
 
-    subgraph BE["Go backend · service (app/) và package (internal/)"]
+    subgraph BE["Go backend · services (app/) and packages (internal/)"]
         direction TB
         subgraph SV["Services"]
             S1[Session]
@@ -89,10 +89,10 @@ flowchart TB
         end
         subgraph PK["Packages"]
             P1["sshx<br/><small>dial, jump host, PTY, keepalive</small>"]
-            P2["store<br/><small>JSON trên đĩa, ghi atomic</small>"]
+            P2["store<br/><small>JSON on disk, atomic writes</small>"]
             P3["vault<br/><small>Argon2id, AES-256-GCM</small>"]:::secret
             P4["forward<br/><small>local, remote, SOCKS5</small>"]
-            P5["syncgit<br/><small>merge bản ghi, fetch, push</small>"]
+            P5["syncgit<br/><small>record merge, fetch, push</small>"]
         end
         S1 --> P1
         S2 --> P2
@@ -101,14 +101,14 @@ flowchart TB
         S5 --> P5
     end
 
-    E1[("SSH server<br/><small>qua jump host</small>")]
-    E2[("Đĩa local<br/><small>hosts, vault</small>")]
+    E1[("SSH server<br/><small>through a jump host</small>")]
+    E2[("Local disk<br/><small>hosts, vault</small>")]
     E3[("Keychain<br/><small>DEK, Touch ID</small>")]
-    E4[("Port local<br/><small>127.0.0.1</small>")]
+    E4[("Local port<br/><small>127.0.0.1</small>")]
     E5[("Git repo<br/><small>bundle.enc</small>")]
 
-    FE -- "binding: gọi hàm" --> BE
-    BE -. "event: output, trạng thái" .-> FE
+    FE -- "binding: function calls" --> BE
+    BE -. "events: output, state" .-> FE
 
     P1 --> E1
     P2 --> E2
@@ -119,88 +119,88 @@ flowchart TB
     classDef secret stroke:#2f6fdb,stroke-width:2px;
 ```
 
-Session và Sync cũng gọi Vault để lấy secret hoặc DEK ngay trong Go; frontend chỉ nhận metadata, output terminal và trạng thái. Vault là nơi duy nhất giữ secret đã giải mã.
+Session and Sync also call the Vault to obtain a secret or the DEK inside Go; the frontend only receives metadata, terminal output and state. The vault is the only place that holds decrypted secrets.
 
 ---
 
-## 4. Mô hình dữ liệu
+## 4. Data model
 
-Dữ liệu tách làm hai phần: cấu hình không bí mật (host, group) lưu dạng JSON thường, còn secret (key, password) nằm trong vault mã hoá. Host chỉ tham chiếu tới Identity bằng ID, không bao giờ chứa secret.
+Data is split in two: non-secret configuration (hosts, groups) is stored as plain JSON, while secrets (keys, passwords) live in the encrypted vault. A host only references an Identity by ID and never contains a secret.
 
-| Entity | Trường chính | Lưu ở |
+| Entity | Main fields | Stored in |
 | --- | --- | --- |
 | Group | id, name, parent_id, color, sort_order | `hosts.json` |
 | Host | id, label, group_id, hostname, port, username, identity_id, jump_host_id, env (dev/staging/prod), tags[], keepalive_sec, created_at, updated_at | `hosts.json` |
 | PortForward | id, host_id, type (local/remote/dynamic), bind_addr, bind_port, dest_host, dest_port, auto_start | `hosts.json` |
 | Identity | id, name, username, auth_type (key/password/agent), secret_ref | `hosts.json` (metadata) |
 | Secret | id, kind (private_key/password/passphrase), ciphertext, nonce | `vault.json` |
-| KnownHost | hostname:port, key_type, fingerprint | `known_hosts` (định dạng OpenSSH) |
+| KnownHost | hostname:port, key_type, fingerprint | `known_hosts` (OpenSSH format) |
 
-**Cấu trúc thư mục dữ liệu** (macOS: `~/Library/Application Support/vvterm/`)
+**Data directory layout** (macOS: `~/Library/Application Support/vvterm/`)
 
 ```
 data/
-  hosts.json        # group, host, port forward, identity metadata
-  vault.json        # secret đã mã hoá + header KDF
-  known_hosts       # định dạng OpenSSH
-  settings.json     # theme, font, phím tắt (không sync)
-sync/               # Git working copy, chỉ chứa file đã mã hoá
+  hosts.json        # groups, hosts, port forwards, identity metadata
+  vault.json        # encrypted secrets + KDF header
+  known_hosts       # OpenSSH format
+  settings.json     # theme, font, shortcuts (not synced)
+sync/               # Git working copy, holds encrypted files only
 ```
 
-Mỗi bản ghi có `id` dạng UUID v7 và `updated_at` để phục vụ merge khi sync. Xoá dùng tombstone (`deleted_at`) thay vì xoá cứng, để máy khác biết bản ghi đã bị xoá.
+Every record has an `id` (UUID v7) and an `updated_at`, used to merge on sync. Deletion uses a tombstone (`deleted_at`) instead of a hard delete, so that other machines learn that the record was removed.
 
 ---
 
-## 5. Bảo mật và Vault
+## 5. Security and the vault
 
-Vault dùng envelope encryption: một data key (DEK) ngẫu nhiên mã hoá mọi secret, còn master password chỉ dùng để bọc DEK. Đổi master password chỉ cần bọc lại DEK, không phải mã hoá lại toàn bộ secret.
+The vault uses envelope encryption: one random data key (DEK) encrypts every secret, and the master password is only used to wrap the DEK. Changing the master password only requires wrapping the DEK again, not re-encrypting all the secrets.
 
-**Luồng mã hoá**
+**Encryption flow**
 
-1. Khi tạo vault: sinh `salt` 16 byte và DEK 32 byte bằng `crypto/rand`.
-2. KEK = Argon2id(master password, salt), tham số đề xuất m = 64 MiB, t = 3, p = 4, độ dài 32 byte. Tham số lưu trong header để nâng sau này.
-3. DEK được bọc bằng AES-256-GCM với KEK, lưu `wrapped_dek` + `nonce` trong header `vault.json`.
-4. Mỗi secret mã hoá riêng bằng AES-256-GCM với DEK, nonce 12 byte ngẫu nhiên; `secret.id` dùng làm AAD để chống hoán đổi ciphertext giữa các bản ghi.
+1. When the vault is created: generate a 16-byte `salt` and a 32-byte DEK with `crypto/rand`.
+2. KEK = Argon2id(master password, salt), with the proposed parameters m = 64 MiB, t = 3, p = 4 and a 32-byte output. The parameters are stored in the header so they can be raised later.
+3. The DEK is wrapped with AES-256-GCM using the KEK; `wrapped_dek` + `nonce` are stored in the `vault.json` header.
+4. Each secret is encrypted separately with AES-256-GCM using the DEK and a random 12-byte nonce; the `secret.id` is used as AAD so that ciphertexts cannot be swapped between records.
 
-**Mở khoá nhanh**
+**Quick unlock**
 
-- Tuỳ chọn lưu DEK vào macOS Keychain, yêu cầu Touch ID hoặc mật khẩu máy để đọc.
-- Tự khoá vault sau N phút không hoạt động và khi máy sleep; xoá DEK khỏi bộ nhớ khi khoá.
+- Optionally store the DEK in the macOS Keychain, requiring Touch ID or the machine password to read it.
+- Lock the vault automatically after N minutes of inactivity and when the machine sleeps; the DEK is erased from memory when the vault locks.
 
-**Xác thực host**
+**Host authentication**
 
-- Kiểm tra host key bằng `knownhosts.New`; host mới thì hiển thị fingerprint SHA256 cho người dùng xác nhận.
-- Host key thay đổi thì chặn kết nối và cảnh báo, không có nút "bỏ qua" mặc định.
-- Tuyệt đối không dùng `ssh.InsecureIgnoreHostKey()`.
+- Verify the host key with `knownhosts.New`; for a new host, show the SHA256 fingerprint for the user to confirm.
+- If a host key changes, block the connection and warn; there is no "ignore" button by default.
+- Never use `ssh.InsecureIgnoreHostKey()`.
 
 **Threat model**
 
-| Mối đe doạ | Biện pháp |
+| Threat | Mitigation |
 | --- | --- |
-| Lộ repo sync hoặc file backup | Secret đã mã hoá; `hosts.json` khi sync cũng mã hoá để không lộ IP nội bộ |
-| Brute-force master password | Argon2id tham số cao; yêu cầu độ dài tối thiểu |
-| MITM khi kết nối | Kiểm tra known_hosts nghiêm ngặt |
-| Frontend bị XSS (ví dụ output terminal độc) | Frontend không bao giờ nhận secret; Go giữ secret, chỉ trả về metadata; CSP chặt |
-| Máy bị chiếm khi vault đang mở | Tự khoá theo thời gian và khi sleep |
+| Leak of the sync repository or a backup file | Secrets are encrypted; `hosts.json` is also encrypted when synced so that internal IP addresses are not exposed |
+| Brute-forcing the master password | Argon2id with strong parameters; a minimum length is required |
+| MITM while connecting | Strict known_hosts verification |
+| XSS in the frontend (for example malicious terminal output) | The frontend never receives secrets; Go keeps them and only returns metadata; strict CSP |
+| The machine is taken over while the vault is open | Automatic lock after a time and on sleep |
 
-Không bảo vệ được: malware đã chạy trên máy với quyền user, có thể đọc bộ nhớ khi vault đang mở.
+Not protected against: malware already running on the machine with the user's rights, which can read memory while the vault is open.
 
 ---
 
-## 6. Luồng SSH
+## 6. SSH flow
 
-Mỗi tab terminal là một `Session` trong Go, có `sid` riêng; dữ liệu chạy hai chiều qua Wails: output bằng event, input bằng binding. Frontend không bao giờ giữ socket hay secret.
+Each terminal tab is a `Session` in Go with its own `sid`; data flows both ways through Wails: output as events, input as bindings. The frontend never holds a socket or a secret.
 
-**Kết nối một host**
+**Connecting to a host**
 
-1. Frontend gọi `SessionService.Open(hostID, cols, rows)` và nhận về `sid`.
-2. Go đọc Host, giải mã Identity từ vault, dựng `ssh.ClientConfig` với `HostKeyCallback` từ known_hosts.
-3. Nếu có `jump_host_id`: kết nối jump host trước, rồi mở kênh tới đích qua nó (đoạn code bên dưới). Hỗ trợ chuỗi nhiều jump host bằng đệ quy, giới hạn độ sâu để tránh vòng lặp.
-4. Mở `session`, `RequestPty("xterm-256color", rows, cols, modes)`, rồi `Shell()`.
-5. Goroutine đọc stdout/stderr theo khối, emit event `term:data:<sid>`; frontend `term.write()`.
-6. Phím gõ từ xterm.js đi qua `SessionService.Write(sid, data)` vào stdin.
-7. Khung cửa sổ thay đổi: addon `fit` tính lại cols/rows, gọi `Resize(sid, cols, rows)` → `session.WindowChange`.
-8. Đóng tab hoặc remote thoát: đóng session, client, port forward liên quan; emit `term:closed:<sid>`.
+1. The frontend calls `SessionService.Open(hostID, cols, rows)` and receives a `sid`.
+2. Go reads the Host, decrypts the Identity from the vault, and builds an `ssh.ClientConfig` with a `HostKeyCallback` backed by known_hosts.
+3. If there is a `jump_host_id`: connect to the jump host first, then open a channel to the target through it (see the code below). A chain of several jump hosts is supported by recursion, with a depth limit to avoid loops.
+4. Open a `session`, `RequestPty("xterm-256color", rows, cols, modes)`, then `Shell()`.
+5. A goroutine reads stdout/stderr in chunks and emits the `term:data:<sid>` event; the frontend calls `term.write()`.
+6. Keystrokes from xterm.js go through `SessionService.Write(sid, data)` into stdin.
+7. When the window is resized: the `fit` addon recomputes cols/rows and calls `Resize(sid, cols, rows)` → `session.WindowChange`.
+8. When the tab is closed or the remote exits: close the session, the client and the related port forwards; emit `term:closed:<sid>`.
 
 ```mermaid
 sequenceDiagram
@@ -208,19 +208,19 @@ sequenceDiagram
     participant SS as SessionService
     participant VT as Vault
     participant J as Jump host
-    participant D as Host đích
+    participant D as Target host
 
     UI->>SS: Open(hostID, cols, rows)
-    SS->>VT: Lấy secret của Identity
+    SS->>VT: Get the Identity's secret
     VT-->>SS: Private key / password
-    opt Có jump_host_id
+    opt There is a jump_host_id
         SS->>J: SSH connect
-        SS->>J: Dial tcp tới đích
+        SS->>J: Dial tcp to the target
     end
-    SS->>D: Handshake + kiểm tra known_hosts
+    SS->>D: Handshake + known_hosts check
     SS->>D: RequestPty + Shell
     SS-->>UI: sid
-    loop Phiên làm việc
+    loop Working session
         UI->>SS: Write(sid, data)
         SS->>D: stdin
         D-->>SS: stdout / stderr
@@ -229,7 +229,7 @@ sequenceDiagram
 ```
 
 ```go
-// Kết nối tới đích thông qua jump host
+// Connect to the target through a jump host
 func dialVia(jump *ssh.Client, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 	conn, err := jump.Dial("tcp", addr)
 	if err != nil {
@@ -246,74 +246,74 @@ func dialVia(jump *ssh.Client, addr string, cfg *ssh.ClientConfig) (*ssh.Client,
 
 **Port forwarding**
 
-| Loại | Cách làm trong Go | Ví dụ dùng |
+| Type | How it is done in Go | Example use |
 | --- | --- | --- |
-| Local (-L) | `net.Listen` trên máy, mỗi kết nối gọi `client.Dial` tới đích rồi `io.Copy` hai chiều | Forward MariaDB 3306, Redis 6379 về localhost |
-| Remote (-R) | `client.Listen` trên server, mỗi kết nối `net.Dial` về máy local | Cho server gọi webhook về máy dev |
-| Dynamic (-D) | SOCKS5 server local, mỗi request gọi `client.Dial` | Duyệt web nội bộ qua bastion |
+| Local (-L) | `net.Listen` on this machine; for each connection call `client.Dial` to the target, then `io.Copy` both ways | Forward MariaDB 3306 or Redis 6379 to localhost |
+| Remote (-R) | `client.Listen` on the server; for each connection `net.Dial` back to this machine | Let a server call a webhook on the developer machine |
+| Dynamic (-D) | A local SOCKS5 server; each request calls `client.Dial` | Browse an internal website through a bastion |
 
-Mặc định bind `127.0.0.1`, không bind `0.0.0.0` trừ khi người dùng bật rõ ràng.
+By default the bind address is `127.0.0.1`; `0.0.0.0` is not bound unless the user explicitly turns it on.
 
-**Giữ kết nối và kết nối lại**
+**Keep-alive and reconnecting**
 
-- Gửi `keepalive@openssh.com` theo `keepalive_sec`; nhiều lần không phản hồi thì coi là mất kết nối.
-- Mất kết nối: giữ nguyên nội dung terminal, hiện banner "Nhấn Enter để kết nối lại"; không tự kết nối lại để tránh chạy lại lệnh ngoài ý muốn.
-- Port forward có `auto_start` được dựng lại sau khi kết nối lại thành công.
+- Send `keepalive@openssh.com` every `keepalive_sec`; several unanswered probes count as a lost connection.
+- When the connection is lost: keep the terminal contents and show the banner "Press Enter to reconnect"; never reconnect automatically, to avoid running commands again unexpectedly.
+- Port forwards with `auto_start` are rebuilt after a successful reconnect.
 
 ---
 
-## 7. Import/Export và Sync
+## 7. Import/export and sync
 
-Mọi dữ liệu phải ra được dạng chuẩn mà không cần app; sync chỉ đẩy file đã mã hoá lên Git repo private của người dùng.
+All data must be available in a standard format without the app; sync only pushes encrypted files to the user's private Git repository.
 
 **Import**
 
-| Nguồn | Ánh xạ |
+| Source | Mapping |
 | --- | --- |
-| `~/.ssh/config` | `Host` → Host; `HostName`, `Port`, `User`; `IdentityFile` → nhập key vào vault; `ProxyJump` → jump_host_id; `LocalForward`/`RemoteForward`/`DynamicForward` → PortForward; theo dõi `Include` |
-| Thư mục key | Chọn file private key, hỏi passphrase nếu có, lưu vào vault |
-| File backup JSON mã hoá | Khôi phục toàn bộ, hỏi mật khẩu backup |
+| `~/.ssh/config` | `Host` → Host; `HostName`, `Port`, `User`; `IdentityFile` → import the key into the vault; `ProxyJump` → jump_host_id; `LocalForward`/`RemoteForward`/`DynamicForward` → PortForward; `Include` is followed |
+| A key directory | Pick private key files, ask for the passphrase if there is one, store them in the vault |
+| Encrypted JSON backup file | Restore everything, ask for the backup password |
 
-Group khi import từ ssh config lấy theo tên file trong `config.d/` (ví dụ `acme-prod` → group `acme-prod`). Host trùng tên thì hỏi ghi đè, bỏ qua hay tạo bản sao.
+When importing from an ssh config, the group is taken from the file name in `config.d/` (for example `acme-prod` → group `acme-prod`). A host with the same name prompts to overwrite, skip or create a copy.
 
 **Export**
 
-| Định dạng | Nội dung | Ghi chú |
+| Format | Contents | Notes |
 | --- | --- | --- |
-| `ssh config` | Host, group (mỗi group một file), jump host, port forward | Key xuất ra file riêng chỉ khi người dùng tick chọn, có cảnh báo, `chmod 600` |
-| JSON mã hoá | Toàn bộ dữ liệu kể cả secret | Mật khẩu backup đặt riêng khi export, không phải master password |
-| JSON thường | Chỉ metadata, không secret | Dùng để chia sẻ danh sách host |
+| `ssh config` | Hosts, groups (one file per group), jump hosts, port forwards | Keys are exported to separate files only if the user ticks the option, with a warning, `chmod 600` |
+| Encrypted JSON | All data including secrets | The backup password is set separately at export time; it is not the master password |
+| Plain JSON | Metadata only, no secrets | Used to share a host list |
 
-**Sync qua Git**
+**Sync through Git**
 
-Repo chỉ chứa `bundle.enc` (hosts + vault, mã hoá bằng DEK) và `vault-header.json` (salt, tham số Argon2id, wrapped DEK). Máy mới clone repo, nhập master password để mở DEK là có đủ dữ liệu.
+The repository only contains `bundle.enc` (hosts + vault, encrypted with the DEK) and `vault-header.json` (salt, Argon2id parameters, wrapped DEK). A new machine clones the repository and enters the master password to unlock the DEK, and then has all the data.
 
-1. `git fetch` và đọc `bundle.enc` tại `origin/main`.
-2. Giải mã, merge với dữ liệu local theo từng bản ghi.
-3. Mã hoá lại, commit trên đỉnh `origin/main`, `git push`.
-4. Push bị từ chối vì máy khác vừa đẩy: quay lại bước 1, tối đa vài lần rồi báo lỗi.
+1. `git fetch` and read `bundle.enc` at `origin/main`.
+2. Decrypt and merge with the local data record by record.
+3. Encrypt again, commit on top of `origin/main`, `git push`.
+4. If the push is rejected because another machine just pushed: go back to step 1, a few times at most, then report an error.
 
-**Xử lý xung đột**
+**Conflict handling**
 
-Ciphertext không merge được bằng Git, nên app tự merge ở mức bản ghi:
+Ciphertext cannot be merged by Git, so the app merges at record level:
 
-- Bản ghi chỉ có ở một phía → giữ.
-- Có ở cả hai phía → lấy bản có `updated_at` mới hơn (last-write-wins).
-- Tombstone mới hơn bản sửa → xoá; bản sửa mới hơn tombstone → khôi phục.
-- Đồng hồ máy lệch có thể làm sai thứ tự; chấp nhận ở MVP vì một người dùng hiếm khi sửa cùng host trên hai máy cùng lúc.
+- A record that exists on only one side → keep it.
+- A record on both sides → take the one with the newer `updated_at` (last-write-wins).
+- A tombstone newer than an edit → delete; an edit newer than the tombstone → restore.
+- Clock skew between machines can give the wrong order; this is accepted in the MVP because one person rarely edits the same host on two machines at the same time.
 
-`settings.json` và `known_hosts` không sync ở MVP.
+`settings.json` and `known_hosts` are not synced in the MVP.
 
 ---
 
-## 8. Cấu trúc dự án và API binding
+## 8. Project structure and API bindings
 
-Code Go chia theo service, mỗi service là một struct được Wails bind sang frontend; logic nằm trong `internal/`, không phụ thuộc Wails để test được bằng `go test`.
+The Go code is split by service; each service is a struct that Wails binds to the frontend. The logic lives in `internal/` and does not depend on Wails, so it can be tested with `go test`.
 
 ```
 vvterm/
-  main.go                 # khởi tạo Wails, đăng ký service
-  app/                    # adapter mỏng: service bind sang frontend
+  main.go                 # start Wails, register services
+  app/                    # thin adapter: services bound to the frontend
     host_service.go
     vault_service.go
     session_service.go
@@ -321,77 +321,77 @@ vvterm/
     sync_service.go
   internal/
     model/                # Host, Group, Identity, PortForward, Secret
-    store/                # đọc/ghi JSON, ghi file atomic (tmp + rename)
+    store/                # read/write JSON, atomic file writes (tmp + rename)
     vault/                # Argon2id, AES-GCM, keychain
     sshx/                 # dial, jump host, pty, keepalive, known_hosts
     forward/              # local, remote, SOCKS5
     importer/             # ssh config, backup
     exporter/
-    syncgit/              # fetch, merge bản ghi, push
+    syncgit/              # fetch, record merge, push
   frontend/
     src/
-      lib/terminal/       # xterm.js wrapper, tab, split pane
-      lib/hosts/          # danh sách, group, form
-      lib/vault/          # màn hình unlock, quản lý key
-      wailsjs/            # binding sinh tự động
+      lib/terminal/       # xterm.js wrapper, tabs, split panes
+      lib/hosts/          # list, groups, form
+      lib/vault/          # unlock screen, key management
+      wailsjs/            # generated bindings
 ```
 
-**API binding**
+**API bindings**
 
-| Service | Phương thức | Ghi chú |
+| Service | Methods | Notes |
 | --- | --- | --- |
-| VaultService | `Status()`, `Create(pw)`, `Unlock(pw)`, `UnlockBiometric()`, `Lock()`, `ChangePassword(old, new)` | Không phương thức nào trả secret về frontend |
-| VaultService | `ListIdentities()`, `AddKey(name, path, passphrase)`, `AddPassword(name, user, pw)`, `GenerateKey(name, type)`, `PublicKey(id)` | `GenerateKey` sinh ed25519, chỉ trả public key để copy |
-| HostService | `ListGroups()`, `SaveGroup(g)`, `DeleteGroup(id)`, `ListHosts(filter)`, `SaveHost(h)`, `DeleteHost(id)` | Xoá = tombstone |
-| SessionService | `Open(hostID, cols, rows) → sid`, `Write(sid, data)`, `Resize(sid, cols, rows)`, `Close(sid)` | Output qua event `term:data:<sid>` |
-| SessionService | `TrustHostKey(sid, fingerprint)` | Trả lời khi có event `term:hostkey:<sid>` |
-| ForwardService | `Start(forwardID)`, `Stop(forwardID)`, `List()` | Trạng thái qua event `forward:state` |
-| SyncService | `Configure(repoURL)`, `SyncNow()`, `Status()` | Git auth dùng SSH agent hoặc credential helper có sẵn |
+| VaultService | `Status()`, `Create(pw)`, `Unlock(pw)`, `UnlockBiometric()`, `Lock()`, `ChangePassword(old, new)` | No method returns a secret to the frontend |
+| VaultService | `ListIdentities()`, `AddKey(name, path, passphrase)`, `AddPassword(name, user, pw)`, `GenerateKey(name, type)`, `PublicKey(id)` | `GenerateKey` generates an ed25519 key and only returns the public key to copy |
+| HostService | `ListGroups()`, `SaveGroup(g)`, `DeleteGroup(id)`, `ListHosts(filter)`, `SaveHost(h)`, `DeleteHost(id)` | Delete = tombstone |
+| SessionService | `Open(hostID, cols, rows) → sid`, `Write(sid, data)`, `Resize(sid, cols, rows)`, `Close(sid)` | Output through the `term:data:<sid>` event |
+| SessionService | `TrustHostKey(sid, fingerprint)` | The answer to a `term:hostkey:<sid>` event |
+| ForwardService | `Start(forwardID)`, `Stop(forwardID)`, `List()` | State through the `forward:state` event |
+| SyncService | `Configure(repoURL)`, `SyncNow()`, `Status()` | Git authentication uses the SSH agent or a credential helper already on the machine |
 | ImportExportService | `ImportSSHConfig(path)`, `ExportSSHConfig(dir, withKeys)`, `ExportBackup(path, pw)`, `ImportBackup(path, pw)` | |
 
-**Event từ Go sang frontend**
+**Events from Go to the frontend**
 
-- `term:data:<sid>` — output, gộp theo khối ~16 ms để không ngập event khi output lớn.
-- `term:hostkey:<sid>` — cần xác nhận fingerprint.
-- `term:closed:<sid>` — phiên kết thúc, kèm lý do.
-- `vault:locked` — vault tự khoá, frontend chuyển về màn hình unlock.
+- `term:data:<sid>` — output, batched in chunks of about 16 ms so that large output does not flood the events.
+- `term:hostkey:<sid>` — a fingerprint needs confirming.
+- `term:closed:<sid>` — the session ended, with the reason.
+- `vault:locked` — the vault locked itself; the frontend returns to the unlock screen.
 
 ---
 
-## 9. Lộ trình, rủi ro và câu hỏi mở
+## 9. Roadmap, risks and open questions
 
-Triển khai theo bốn giai đoạn; chỉ sang giai đoạn sau khi qua gate của giai đoạn trước. Chưa ước lượng thời gian cho từng giai đoạn.
+The work is delivered in four phases; move to the next phase only after passing the gate of the previous one. No time estimate is given for each phase yet.
 
 ```mermaid
 flowchart LR
-    P0["Giai đoạn 0 · Nền tảng<br/>Khung Wails + store<br/>Vault: tạo, unlock<br/>CRUD host, group"]
-    G1{{"Gate 1<br/>Vault mở, lưu được host"}}
-    P1["Giai đoạn 1 · Terminal<br/>SSH, PTY, nhiều tab<br/>known_hosts<br/>Jump host, keepalive"]
-    G2{{"Gate 2<br/>SSH qua bastion thật"}}
-    P2["Giai đoạn 2 · Forward và dữ liệu<br/>Port forwarding<br/>Import ssh config<br/>Export config, backup"]
-    G3{{"Gate 3<br/>Đã chuyển hết host"}}
-    P3["Giai đoạn 3 · Sync và hoàn thiện<br/>Sync qua Git<br/>Keychain, Touch ID<br/>Tự khoá, split pane"]:::final
-    G4{{"Gate 4<br/>Dùng hằng ngày"}}:::final
+    P0["Phase 0 · Foundation<br/>Wails skeleton + store<br/>Vault: create, unlock<br/>Host and group CRUD"]
+    G1{{"Gate 1<br/>The vault opens, a host can be saved"}}
+    P1["Phase 1 · Terminal<br/>SSH, PTY, multiple tabs<br/>known_hosts<br/>Jump host, keepalive"]
+    G2{{"Gate 2<br/>SSH through a real bastion"}}
+    P2["Phase 2 · Forwarding and data<br/>Port forwarding<br/>Import ssh config<br/>Export config, backup"]
+    G3{{"Gate 3<br/>All hosts have been moved over"}}
+    P3["Phase 3 · Sync and polish<br/>Sync through Git<br/>Keychain, Touch ID<br/>Auto-lock, split panes"]:::final
+    G4{{"Gate 4<br/>Used every day"}}:::final
 
     P0 --> G1 --> P1 --> G2 --> P2 --> G3 --> P3 --> G4
 
     classDef final stroke:#2f6fdb,stroke-width:2px;
 ```
 
-Sau Gate 2 đã dùng được hằng ngày cho SSH cơ bản; Gate 4 là lúc VVTerm đủ tính năng để làm công cụ SSH chính.
+After Gate 2 it is usable every day for basic SSH; Gate 4 is when VVTerm has enough features to be the main SSH tool.
 
-**Rủi ro**
+**Risks**
 
-| Rủi ro | Ảnh hưởng | Xử lý |
+| Risk | Impact | Response |
 | --- | --- | --- |
-| xterm.js trên WKWebView chậm khi output lớn | Lag khi `tail -f` log | Gộp event theo khối, đo hiệu năng ngay ở giai đoạn 1 |
-| Key cũ (RSA SHA-1, DSA) không tương thích `x/crypto/ssh` | Không vào được server cũ | Hỗ trợ `rsa-sha2-256/512`; báo rõ khi key không hỗ trợ |
-| Quên master password | Mất toàn bộ vault | Cảnh báo khi tạo vault; nhắc export backup định kỳ |
-| Lệch đồng hồ giữa các máy khi sync | Ghi đè nhầm bản sửa | Chấp nhận ở MVP; sau có thể dùng version vector |
+| xterm.js on WKWebView is slow with large output | Lag during `tail -f` on a log | Batch events in chunks; measure performance as early as phase 1 |
+| Old keys (RSA SHA-1, DSA) are not compatible with `x/crypto/ssh` | Cannot log in to old servers | Support `rsa-sha2-256/512`; say clearly when a key is not supported |
+| Forgotten master password | The whole vault is lost | Warn when the vault is created; remind the user to export a backup regularly |
+| Clock skew between machines when syncing | An edit may be overwritten by mistake | Accepted in the MVP; a version vector can be used later |
 
-**Câu hỏi mở**
+**Open questions**
 
-- [x] Tên app: **VVTerm** (repo `vvterm`, CLI `vvt`)
-- [ ] Frontend dùng Svelte hay React?
-- [ ] Có đưa SFTP vào sớm hơn giai đoạn 3 không?
-- [ ] Chỉ dùng cá nhân hay sẽ chia sẻ host cho team?
+- [x] App name: **VVTerm** (repo `vvterm`, CLI `vvt`)
+- [ ] Svelte or React for the frontend?
+- [ ] Should SFTP come earlier than phase 3?
+- [ ] Personal use only, or will hosts be shared with a team?
