@@ -34,6 +34,8 @@ interface Props {
   /** a blank tab: a host was picked, or an open tab */
   onOpenFromNewTab?(tabId: string, h: Host): void
   onSelectTab?(id: string): void
+  /** a blank tab becomes a terminal on this computer */
+  onLocalFromNewTab?(tabId: string): void
   groups?: Group[]
   /** close a whole tab (the Close button of the connecting / protocol screens) */
   onCloseTab?(tabId: string): void
@@ -123,7 +125,7 @@ export function Workspace(p: Props) {
     <div className="panes" style={{display: p.activeTab ? 'block' : 'none', background: termTheme.background}}>
       {p.tabs.map(t => (
         <div key={t.id} style={{display: t.id === p.activeTab ? 'block' : 'none', height: '100%'}}>
-          {t.kind === 'new' ? <NewTabScreen hosts={p.hosts ?? []} groups={p.groups ?? []} tabs={p.tabs} onOpen={h => p.onOpenFromNewTab?.(t.id, h)} onSelectTab={id => p.onSelectTab?.(id)} /> : t.choose && hostOf(leaves(t.root)[0].hostId) ? <ProtocolScreen host={hostOf(leaves(t.root)[0].hostId)!} onContinue={proto => p.onProtocol?.(t.id, proto)} onClose={() => p.onCloseTab?.(t.id)} /> : t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
+          {t.kind === 'new' ? <NewTabScreen hosts={p.hosts ?? []} groups={p.groups ?? []} tabs={p.tabs} onOpen={h => p.onOpenFromNewTab?.(t.id, h)} onSelectTab={id => p.onSelectTab?.(id)} onLocal={p.onLocalFromNewTab ? () => p.onLocalFromNewTab!(t.id) : undefined} /> : t.choose && hostOf(leaves(t.root)[0].hostId) ? <ProtocolScreen host={hostOf(leaves(t.root)[0].hostId)!} onContinue={proto => p.onProtocol?.(t.id, proto)} onClose={() => p.onCloseTab?.(t.id)} /> : t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
         </div>
       ))}
     </div>

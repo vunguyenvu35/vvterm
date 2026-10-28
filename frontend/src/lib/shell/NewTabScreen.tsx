@@ -15,15 +15,17 @@ interface Props {
   onOpen(h: Host): void
   /** an open tab was picked */
   onSelectTab(id: string): void
+  /** a terminal on this computer */
+  onLocal?(): void
 }
 
-type Row = {key: string; label: string; os?: string; where: string; pick(): void; tab?: boolean}
+type Row = {key: string; label: string; os?: string; where: string; pick(): void; tab?: boolean; local?: boolean}
 
 /**
  * What a new tab shows (like Termius): a search box for hosts and open tabs, and the connections used
  * most recently. Enter opens the highlighted row.
  */
-export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab}: Props) {
+export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab, onLocal}: Props) {
   const [q, setQ] = useState('')
   const [at, setAt] = useState(0)
   const input = useRef<HTMLInputElement>(null)
@@ -49,17 +51,19 @@ export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab}: Props) 
   const rows: Row[] = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const hostRow = (h: Host): Row => ({key: 'h' + h.id, label: h.label, os: h.os, where: path(h), pick: () => onOpen(h)})
+    const local: Row[] = onLocal ? [{key: 'local', label: 'Local Terminal', where: 'This computer', local: true, pick: onLocal}] : []
     if (!needle) {
       const recent = getRecent().map(id => hosts.find(h => h.id === id)).filter((h): h is Host => !!h)
       const list = recent.length ? recent : hosts
-      return list.slice(0, 8).map(hostRow)
+      return [...local, ...list.slice(0, 8).map(hostRow)]
     }
     const hs = hosts.filter(h => `${h.label} ${h.hostname} ${h.username}`.toLowerCase().includes(needle)).map(hostRow)
     const ts: Row[] = tabs.filter(t => t.kind !== 'new' && t.title.toLowerCase().includes(needle))
       .map(t => ({key: 't' + t.id, label: t.title, where: 'Open tab', tab: true, pick: () => onSelectTab(t.id)}))
-    return [...hs, ...ts]
+    const wantsLocal = 'local terminal this computer shell'.includes(needle) || needle === 'terminal'
+    return [...(wantsLocal ? local : []), ...hs, ...ts]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, hosts, groups, tabs])
+  }, [q, hosts, groups, tabs, onLocal])
 
   const key = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setAt(a => Math.min(rows.length - 1, a + 1)) }
@@ -80,7 +84,7 @@ export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab}: Props) 
         <div className="newtab-list" role="listbox" aria-label={q.trim() ? 'Results' : 'Recent connections'}>
           {rows.map((r, i) => (
             <button key={r.key} role="option" aria-selected={i === at} className={'newtab-row' + (i === at ? ' on' : '')} onClick={r.pick} onMouseEnter={() => setAt(i)}>
-              {r.tab ? <span className="newtab-os"><IconTerminal size={13} /></span> : r.os ? <OsIcon os={r.os} size={20} /> : <span className="newtab-os"><IconServer size={13} /></span>}
+              {r.tab || r.local ? <span className="newtab-os"><IconTerminal size={13} /></span> : r.os ? <OsIcon os={r.os} size={20} /> : <span className="newtab-os"><IconServer size={13} /></span>}
               <span className="newtab-name">{r.label}</span>
               <span className="newtab-where">{r.where}</span>
             </button>

@@ -722,3 +722,6 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .topbar > .tab.active { flex: 0 0 auto; min-width: 120px; max-width: 260px; }
 .topbar > .tab:not(.active):not(.tab-home):not(.add) .x { opacity: 0; }
 .topbar > .tab:not(.active):hover .x { opacity: .55; }
+/* the SFTP tab has no close button: exactly as wide as its name */
+.topbar > .tab.pinned, .topbar > .tab.pinned.active { flex: none; min-width: 0; max-width: none; }
+.topbar > .tab.tab-home, .topbar > .tab.tab-home.active, .topbar > .tab.add { flex: none; min-width: 0; max-width: none; }

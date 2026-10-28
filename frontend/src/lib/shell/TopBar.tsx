@@ -60,7 +60,7 @@ export function TopBar(p: Props) {
         <IconKey size={15} /> <span>Vaults</span>
       </button>
       {p.tabs.map(t => (
-        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
+        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
           onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
           {t.kind === 'sftp' ? <IconFolder size={15} /> : t.kind === 'new' ? <IconPlus size={15} /> : <IconTerminal />}
           {editing?.id === t.id ? (
