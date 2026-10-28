@@ -1,7 +1,7 @@
 import {OS_INFO, OsIcon, osName} from '../ui/OsIcon'
 import {loadView, saveView, ViewMenu, ViewMode} from './ViewMenu'
 import {TagMenu} from './TagMenu'
-import {DragEvent, ReactNode, useMemo, useState} from 'react'
+import {DragEvent, ReactNode, useEffect, useMemo, useState} from 'react'
 import type {Env, Group, Host} from '../types'
 import {formatAddr} from '../util'
 import {IconChevron, IconEdit, IconFolder, IconForward, IconPlay, IconSearch, IconServer, IconTerminal, IconTrash} from '../ui/Icons'
@@ -13,6 +13,8 @@ export interface QuickConnect {
 }
 
 interface Props {
+  /** changes each time the Hosts item of the navigation is pressed again: back to "All hosts" */
+  resetKey?: number
   groups: Group[]
   hosts: Host[]
   /** Rendered between the search bar and the lists (New host / New group buttons). */
@@ -62,6 +64,7 @@ export function HostList(p: Props) {
   const [view, setView] = useState<ViewMode>(loadView)
   const changeView = (v: ViewMode) => { setView(v); saveView(v) }
   const [groupId, setGroupId] = useState('')
+  useEffect(() => { if (p.resetKey) setGroupId('') }, [p.resetKey])
   const [tagFilter, setTagFilter] = useState<string[]>([])
   const allTags = useMemo(() => Array.from(new Set(p.hosts.flatMap(h => h.tags ?? []))).sort((a, b) => a.localeCompare(b)), [p.hosts])
   // a tag that no host has any more (deleted elsewhere) is dropped from the filter

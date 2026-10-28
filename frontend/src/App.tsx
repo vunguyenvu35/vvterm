@@ -63,6 +63,7 @@ export default function App({initial}: {/** an app window opened for this place 
   const [tabs, setTabs] = useState<Tab[]>(() => [pinnedSftpTab()])
   const [active, setActive] = useState('home') // 'home' or a tab id
   const [page, setPage] = useState<Page>('hosts')
+  const [hostsReset, setHostsReset] = useState(0) // bumped when Hosts is pressed while already on it
   const [settingsOpen, setSettingsOpen] = useState(false)
   // the panel on the right of a terminal (hosts, snippets, history, themes): open or closed is remembered
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('vvterm.sidebar') !== 'closed' } catch { return true } })
@@ -365,10 +366,10 @@ export default function App({initial}: {/** an app window opened for this place 
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
-          <Nav page={page} onPage={changePage} shortcuts={bindings} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
+          <Nav page={page} onPage={p => { if (p === 'hosts' && page === 'hosts') { setHostsReset(n => n + 1); setDialog(null) } else changePage(p) }} shortcuts={bindings} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
           <main className="main">
             {page === 'hosts' && (
-              <HostList groups={groups} hosts={hosts} onMoveHost={moveHost} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
+              <HostList resetKey={hostsReset} groups={groups} hosts={hosts} onMoveHost={moveHost} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
                 toolbar={<>
                   <span className="split-wrap">
                     <button className="split-btn" aria-label="New host" onClick={() => setDialog({k: 'host'})}><IconPlus size={14} /> New host</button>
