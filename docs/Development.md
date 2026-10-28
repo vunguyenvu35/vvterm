@@ -16,6 +16,7 @@ For people who want to build, test or change VVTerm. End users should read the [
 make dev          # hot-reload development mode (wails dev)
 make build        # build/bin/vvterm.app
 make test         # go vet + go test -race + frontend typecheck + vitest
+./e2e/run.sh      # the walkthrough: also regenerates docs/screenshots and then runs scripts/check-doc-links.sh
 make e2e          # end-to-end walkthrough on the real backend; refreshes docs/screenshots
 make inventory    # regenerate docs/TestInventory.md
 make deploy-dev   # install a "VVTerm Dev" build next to the production app
@@ -93,3 +94,10 @@ Nothing leaves your machine by default. `--tag` creates a local annotated tag; `
 2. `make test && make e2e && make inventory`; commit the refreshed screenshots and inventory.
 3. Run the manual checklist in [TestPlan.md](TestPlan.md) on a real Mac.
 4. `scripts/deploy.sh prod --e2e --tag --publish`.
+
+## Windows, bridge and screenshots
+
+- **Second processes.** Wails v2 has one window per process, so the Settings window (`vvterm --settings`) and an app window (`vvterm --window <host id> <title>`, Duplicate in new window) are other processes of the same binary. They hold no data: `app/bridge.go` (loopback HTTP, random token in `settings-ipc.json`, mode 0600) serves `/call` (a short allow-list for Settings) and `/appcall` (every use case service, for an app window), `/events` (what the main process emits, kept only for terminal and SFTP sessions a window opened) and `/menu`. In an app window the frontend gets a `window.go.usecase` proxy (`installWindowBridge`), so the whole UI runs unchanged.
+- **Panes.** `Workspace` draws every pane of every tab in one flat, keyed list placed by `paneRects` (layout.ts); never nest panes again, or moving one would rebuild it and end its session.
+- **Screenshots.** The E2E run numbers them, so adding a step shifts the numbers; `scripts/check-doc-links.sh` lists links that no longer point to a file (README and docs).
+- **While the E2E run is going, do not edit files**: `wails dev` reloads and a reconnect overlay covers the page.

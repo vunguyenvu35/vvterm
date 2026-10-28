@@ -56,6 +56,12 @@ Not covered by automation; run on a real Mac build (`make build`, open `build/bi
 5. Sync against a real private remote (GitHub/GitLab) using ssh-agent and using a credential helper.
 6. Sleep/wake the Mac with the vault unlocked (see the sleep-lock gap in [Assessment](Assessment.md)).
 7. Window resize and split panes with a full-screen program (`vim`, `htop`).
+8. **Duplicate in new window** on a real build: the new window shows the whole app with the host open, shares the unlocked vault, its sessions end when it is closed, and quitting VVTerm closes it.
+9. **Settings window**: Esc closes it, its title is centred, the menu bar stays File / Edit / View / Window / Help, and no second icon appears in the Dock.
+10. **Drag a tab onto a pane** while a command runs in both: neither session reconnects or loses output. Then *Move pane to its own tab*.
+11. **Connecting screen** against a slow or unreachable host: the line moves slowly, stops and turns red on failure; Retry works; a wrong password shows the reason.
+12. Type Vietnamese with the system's Telex input and with a global input tool (GoTiengViet / OpenKey) in a terminal, and check the log has no *getApplicationProperty* line from VVTerm.
+13. **Dock and app switcher icon**, the Caps Lock hint in the unlock field, and right-click anywhere (no *Look Up* / *Inspect Element* menu).
 
 ## Test data and environments
 

@@ -57,7 +57,7 @@ An honest comparison of what was built with [Architecture.md](Architecture.md), 
 | G13 | Settings is a second native window implemented as a second process (Wails v2 has one window per process), connected by a local token-protected bridge. | A second Dock icon while open; a new local attack surface (loopback, token, allow-list). The native window was not exercised visually in this environment. | Wails v3 multi-window would remove the extra process. |
 | G14 | A saved host cannot pick its own terminal theme; the theme is global. | Less flexible than Termius. | Add `terminal_theme` to the host record. |
 | G15 | Replacing a host's saved password creates a new identity; the old one stays in Keychain. | Orphan identities until deleted by hand. | Offer to update the existing identity's secret. |
-| G17 | SFTP moves single files only: no folders, queue, resume or drag and drop. | Large trees must be moved with `scp -r` or `rsync` in a terminal. | Recursive transfer with a queue. |
+| G17 | SFTP has no transfer queue or resume (several files and folders, drag and drop and a replace question per batch are supported). | A transfer interrupted halfway starts over. | A queue with resume. |
 | G18 | Account is a local profile; Sign in is a placeholder. | No cloud features yet (by design). | Define the account service before enabling it. |
 | G16 | Sync after a vault reset: the Git repository still holds the old vault. | `Sync now` fails with a different-key error. | Use a new repository (documented). |
 
@@ -65,10 +65,10 @@ An honest comparison of what was built with [Architecture.md](Architecture.md), 
 
 | Check | Result |
 | --- | --- |
-| Go tests (`go test -race ./...`) | 191 passing (test functions and sub-tests), 0 failing; also green in a Linux container |
-| Go statement coverage | 81.1 % overall; importer 92 %, exporter 89 %, usecase 88 %, store 85 %, sftpx 82 %, sshx 82 %, forward 81 %, syncgit 78 %, sqlitedb 76 %, vault 75 %, app 73 %, domain 44 % (see G12) |
-| Frontend (Vitest) | 323 passing in 22 files, strict TypeScript typecheck clean |
-| E2E | 1 walkthrough, 17 steps, 40 screenshots, uses the real Go backend, SQLite, vault, two SSH servers, a real TCP check through a tunnel, real SFTP transfers verified on disk, a window drag, maximise/roll-up, a changed shortcut that really triggers its action, and a narrow-window overflow guard |
+| Go tests (`go test -race ./...`) | 296 passing (test functions and sub-tests), 0 failing |
+| Go statement coverage | 80.6 % overall (the figures per package below are from the first measurement); importer 92 %, exporter 89 %, usecase 88 %, store 85 %, sftpx 82 %, sshx 82 %, forward 81 %, syncgit 78 %, sqlitedb 76 %, vault 75 %, app 73 %, domain 44 % (see G12) |
+| Frontend (Vitest) | 575 passing in 35 files, strict TypeScript typecheck clean |
+| E2E | 1 walkthrough, 20 steps, 60 screenshots, uses the real Go backend, SQLite, vault, two SSH servers, a real TCP check through a tunnel, real SFTP transfers verified on disk, a window drag, maximise/roll-up, a changed shortcut that really triggers its action, and a narrow-window overflow guard |
 | Architecture rule | enforced by 5 tests, and verified to fail on a deliberately introduced violation |
 | `go vet` | clean |
 
@@ -92,3 +92,14 @@ An honest comparison of what was built with [Architecture.md](Architecture.md), 
 ## 5. Verdict
 
 Feature complete for the MVP scope in the design, with the security properties that can be tested automatically verified. Before calling it ready for daily use as the main SSH tool (Gate 4), close G1–G3 and run the manual checklist on a real Mac; G4 and G5 are the next most valuable.
+
+## 5. Added since this evaluation was first written
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Terminal on this computer, Serial, Telnet (own login), Known Hosts, Logs | Done | `localtty`, `serialx`, `telnetx` adapters behind `usecase` ports; the Telnet password is a vault secret; Telnet is unencrypted (documented) |
+| Choose protocol, connecting screen, tab badges, New Tab, sidebar, tab drag (order, split, pop out), tag filter, drag host to group, SFTP right-click and permissions | Done | component tests, E2E screenshots; no session is rebuilt when a pane moves (flat pane list) |
+| Duplicate in new window | Done, **not exercised on a real second window** | an app window is a second process that calls the main process through the loopback bridge (`/appcall`, `/events`); covered by bridge and frontend tests only |
+| Mosh | Not built | shown on the protocol screen as unsupported |
+| AWS / DigitalOcean / Azure integrations, multiplayer | Not built | out of scope (paid / cloud) |
+| Native macOS pieces (menu bar in the Settings window, hidden Dock icon of the Settings window, Dock icon) | Checked by hand only | no automated check can screenshot another app's window |

@@ -22,6 +22,12 @@ Every screenshot here comes from the automated end-to-end walkthrough (`make e2e
 14. [Forgot your master password](#14-forgot-your-master-password)
 15. [When something goes wrong](#15-when-something-goes-wrong)
 16. [Where your data lives](#16-where-your-data-lives)
+17. [Connecting: protocol, progress and errors](#17-connecting-protocol-progress-and-errors)
+18. [Tabs: order, split, new window](#18-tabs-order-split-new-window)
+19. [The terminal sidebar](#19-the-terminal-sidebar)
+20. [This computer, Telnet and serial ports](#20-this-computer-telnet-and-serial-ports)
+21. [Known Hosts and Logs](#21-known-hosts-and-logs)
+22. [Shortcuts at a glance](#22-shortcuts-at-a-glance)
 
 ## 1. Create and unlock the vault
 
@@ -274,3 +280,77 @@ In a narrow window the layout adapts: the navigation becomes icons and the New h
 | Git working copy (ciphertext only) | `sync/` |
 
 Set `VVTERM_DATA_DIR` to relocate everything. Back up with **Import / Export → Encrypted backup**; losing the master password without a backup means losing the vault.
+
+## 17. Connecting: protocol, progress and errors
+
+Opening a host first asks **which protocol** to use (SSH, Mosh, Telnet), like Termius. SSH is chosen for you: press **Continue** (or double-click it). Mosh is shown but not supported yet; Telnet can be picked once the host has Telnet turned on (see [section 20](#20-this-computer-telnet-and-serial-ports)). Turn the question off in **Settings → Terminal → Ask which protocol to use**; a host that has Telnet still asks.
+
+![Choose protocol](screenshots/12-choose-protocol.png)
+
+Then the **connecting screen** shows who you are connecting to and a line from the plug to the terminal. The line moves **smoothly**: slowly while the server answers, further once the login is done, and to the end when the shell is open, and only then does the terminal show. If it fails, the line stops where it got to and turns red, with the reason and **Retry**, **Show logs** (opens the Logs page) and **Close**.
+
+The state of every tab is a small badge on its icon: a spinner while connecting, a **green** dot while connected, a **red** dot when the connection is lost (press Enter in the pane, or Retry, to reconnect: VVTerm never reconnects by itself).
+
+## 18. Tabs: order, split, new window
+
+- **The + button** opens a **New Tab**: a search box for hosts and open tabs (⌘/Ctrl + K), **Local Terminal** on its own, and your **Recent connections**. Pick one and the tab becomes that connection.
+- **Drag a tab left or right** to put your tabs in order. SFTP always stays first.
+- **Drag a tab onto a pane** to split it: the side nearest to the pointer lights up (left / right: side by side, top / bottom: one above the other). The dragged tab joins as a split and its sessions **keep running**, nothing reconnects.
+- **Take a pane back out**: hover over a pane of a split and press **Move pane to its own tab**.
+- **Right-click a tab**: Duplicate, **Duplicate in new window**, Rename, Split right, Split down, Close. Double-click a tab to rename it.
+- **Many tabs** shrink like in a browser; the active tab always shows its whole name, and a hovered one shows its close button.
+- **Duplicate in new window** opens the whole app in a second window (Vaults, SFTP, tabs, sidebar) with that host open in its first tab. Both windows share the same data and the same unlocked vault, and the sessions opened in the new window end when you close it. It runs as a second process, so it has its own Dock icon.
+
+![New Tab](screenshots/40-new-tab.png)
+
+## 19. The terminal sidebar
+
+The panel on the right of every terminal (the last button of the title bar shows or hides it):
+
+| Tab | What it does |
+| --- | --- |
+| Hosts | Search your hosts and open one in a new tab. |
+| Snippets | One line each; click one to see the whole script with **Run** and **Paste**. |
+| History | The commands you typed, newest first, searchable. Click to type one again, double-click to run it. Only lines the terminal echoed are kept, so what you type at a password prompt never is. |
+| Themes and font | Pick the terminal theme from pictures, change the font and the text size. |
+
+![History](screenshots/37-sidebar-history.png)
+![Themes and font](screenshots/38-sidebar-themes.png)
+
+## 20. This computer, Telnet and serial ports
+
+- **Terminal** (button beside New host, or ⌘/Ctrl + Shift + T) opens a real shell on this computer. **Serial** opens a serial port at a baud rate.
+- **Telnet**: in the host form press **Add Telnet** for its port, its own user name and password (kept in the vault) and the encoding (UTF-8 or ISO-8859-1). Telnet is **not encrypted**: use it only on networks you trust, for devices that offer nothing else.
+- **Terminal theme per host**: a card with a picture of the theme; pick *Use the app setting* to follow Settings.
+- **Highlighting**: errors, IP addresses, paths and URLs are coloured (switch in Settings → Terminal). **Copy on select**, right-click to paste (or a menu, or nothing) and the copy / paste keys are configurable.
+
+![Telnet in the host form](screenshots/43-new-host-telnet.png)
+![Local terminal](screenshots/36-local-terminal.png)
+
+## 21. Known Hosts and Logs
+
+- **Known Hosts** lists every server key you trusted (type and fingerprint) and lets you **forget** one so the next connection asks again. Keys stored hashed in an existing `known_hosts` cannot be forgotten from here.
+- **Logs** is a filterable, searchable list of what happened, newest first: connections, transfers, forwards, host-key decisions, unlocks, sync. It never contains a password or key.
+
+![Logs](screenshots/57-logs.png)
+
+## 22. Shortcuts at a glance
+
+All of them can be changed in **Settings → Shortcuts**. ⌘ on a Mac is Ctrl elsewhere.
+
+| Keys | Action |
+| --- | --- |
+| ⌘ N | New host |
+| ⌘ T | New tab (search hosts or tabs) |
+| ⌘ Shift T | Terminal on this computer |
+| ⌘ 1 … 6 | Hosts, Keychain, Port Forwarding, Snippets, Known Hosts, Logs (shown at the right of the navigation item when you point at it) |
+| ⌘ , | Settings |
+| ⌘ L | Lock the vault |
+| ⌘ W / ⌘ Shift W | Close the tab / the pane |
+| ⌘ D / ⌘ Shift D | Split right / down |
+| ⌘ B | Broadcast input to every pane of the tab |
+| ⌘ F | Search the terminal's scrollback |
+
+The SFTP file lists have a **right-click menu**: Open, Open with…, Copy to target directory, Rename, Delete, Refresh, New Folder and **Edit Permissions** (a grid of read / write / execute, or the octal number).
+
+![SFTP right-click menu](screenshots/34-sftp-context-menu.png)
