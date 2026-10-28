@@ -263,6 +263,8 @@ export default function App() {
   act.current = {
     open_settings: () => openSettings(true),
     new_connection: () => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) },
+    new_host: () => { goHome('hosts'); setDialog({k: 'host'}) },
+    new_local_terminal: () => openDevice('local', 'Local'),
     lock_vault: () => { void be.vault.lock().then(refreshVault) },
     close_tab: () => { if (termActive) closeTab(termActive) },
     next_tab: () => cycle(1),

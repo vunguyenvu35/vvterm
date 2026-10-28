@@ -591,7 +591,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 
 /* ---- terminal sidebar (hosts, snippets, history, themes) ---- */
 .top-tools button.on { background: var(--bg-3); color: var(--accent, #3ecf8e); }
-.term-side { width: 300px; flex: none; margin: 8px 8px 8px 0; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.term-side { width: 300px; flex: none; background: var(--bg-2); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .side-tabs { display: flex; gap: 6px; padding: 12px 12px 8px; }
 .side-tabs button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 9px; color: var(--muted); }
 .side-tabs button:hover { background: var(--bg-3); color: var(--text); }

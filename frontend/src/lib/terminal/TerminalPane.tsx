@@ -141,10 +141,16 @@ export function TerminalPane(p: Props) {
         sendKeys(d)
         onTyped.current?.(d)
         for (const line of track(d)) {
-          // only what the terminal echoed: a password prompt shows nothing, so nothing is remembered
-          const buf = t.buffer?.active
-          const shown = buf?.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? ''
-          if (buf?.type === 'normal' && shown.includes(line.trim().slice(-20))) recordCommand(line)
+          // only what the terminal echoed: a password prompt shows nothing, so nothing is remembered. The echo
+          // comes back from the server a moment after the keys, so look a moment later, a few lines up.
+          const tail = line.trim().slice(-20)
+          window.setTimeout(() => {
+            const buf = t.buffer?.active
+            if (!buf || buf.type !== 'normal') return
+            for (let y = buf.baseY + buf.cursorY, n = 0; y >= 0 && n < 8; y--, n++) {
+              if (buf.getLine(y)?.translateToString(true).includes(tail)) { recordCommand(line); return }
+            }
+          }, 250)
         }
       } else if (stateRef.current === 'closed' && (d === '\r' || d === '\n')) {
         // Never reconnect automatically: replaying commands unexpectedly is dangerous.

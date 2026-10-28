@@ -981,3 +981,18 @@ describe('App: terminal sidebar and new windows', () => {
     expect(screen.getAllByTestId('terminal')).toHaveLength(1) // this window got no extra tab
   })
 })
+
+describe('App: New host and local terminal shortcuts', () => {
+  const key = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, ...init})) })
+
+  it('Ctrl/Cmd+N opens the New host panel, Ctrl/Cmd+Shift+T a terminal on this computer', async () => {
+    const be = setup()
+    await unlock(be)
+    key({key: 'n', code: 'KeyN', ctrlKey: true})
+    expect(await screen.findByRole('dialog', {name: 'New host'})).toBeInTheDocument()
+    key({key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true})
+    const term = await screen.findByTestId('terminal')
+    expect(term).toHaveAttribute('data-host', 'local')
+    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('Local')
+  })
+})

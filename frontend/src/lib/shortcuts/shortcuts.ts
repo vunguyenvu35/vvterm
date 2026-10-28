@@ -16,6 +16,8 @@ export interface ActionDef {
 export const ACTIONS: ActionDef[] = [
   {id: 'open_settings', label: 'Open settings', group: 'General', default: 'Mod+,'},
   {id: 'new_connection', label: 'New connection (find a host)', group: 'General', default: 'Mod+T'},
+  {id: 'new_host', label: 'New host', group: 'General', default: 'Mod+N'},
+  {id: 'new_local_terminal', label: 'New terminal on this computer', group: 'General', default: 'Mod+Shift+T'},
   {id: 'lock_vault', label: 'Lock the vault', group: 'General', default: 'Mod+L'},
   {id: 'close_tab', label: 'Close the current tab', group: 'Tabs', default: 'Mod+W'},
   {id: 'next_tab', label: 'Next tab', group: 'Tabs', default: 'Ctrl+Tab'},
