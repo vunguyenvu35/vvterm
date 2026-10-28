@@ -49,24 +49,31 @@ describe('Workspace: the header of a pane', () => {
     expect(bars[0]).toHaveTextContent('ssh, telnet, root')
   })
 
-  it('a single pane has a header with its name but no Broadcast, maximise or close', () => {
+  it('a single pane has no header at all: it would only cover the first line of the terminal', () => {
     const solo = {...newTab('h1', 'web'), id: 't'}
     mount(solo)
-    const bar = screen.getByRole('toolbar')
-    expect(bar).toHaveTextContent('web-1')
-    expect(bar).not.toHaveTextContent('(1)')
-    expect(within(bar).queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('toolbar')).toBeNull()
   })
 
   it('describes this computer, serial ports and Telnet panes', () => {
-    const t = {...newTab('local', 'a'), id: 't'}
-    const {unmount} = render(<Workspace {...base} onFocusPane={vi.fn()} onPaneExit={vi.fn()} onClosePane={vi.fn()} tabs={[t]} hosts={hosts} />)
-    expect(screen.getByRole('toolbar')).toHaveTextContent('This computer')
-    expect(screen.getByRole('toolbar')).toHaveTextContent('local shell')
-    unmount()
-    render(<Workspace {...base} onFocusPane={vi.fn()} onPaneExit={vi.fn()} onClosePane={vi.fn()} tabs={[{...newTab('serial:/dev/cu.usbserial-1@9600', 'b'), id: 't'}]} hosts={hosts} />)
-    expect(screen.getByRole('toolbar')).toHaveTextContent('cu.usbserial-1')
-    expect(screen.getByRole('toolbar')).toHaveTextContent('serial')
+    const split = (hostId: string) => splitPane({...newTab(hostId, 'a'), id: 't'}, newTab(hostId, 'x').activePane, 'row')
+    const show = (hostId: string) => {
+      let t = {...newTab(hostId, 'a'), id: 't'}
+      t = splitPane(t, t.activePane, 'row')
+      return render(<Workspace {...base} onFocusPane={vi.fn()} onPaneExit={vi.fn()} onClosePane={vi.fn()} tabs={[t]} hosts={hosts} />)
+    }
+    void split
+    let view = show('local')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('This computer (1)')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('local shell')
+    view.unmount()
+    view = show('serial:/dev/cu.usbserial-1@9600')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('cu.usbserial-1 (1)')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('serial')
+    view.unmount()
+    show('telnet:h1')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('web-1 (1)')
+    expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('telnet, root')
   })
 
   it('the buttons call back with the tab and the pane', async () => {
