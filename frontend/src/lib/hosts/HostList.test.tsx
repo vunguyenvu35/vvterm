@@ -24,9 +24,9 @@ function setup(over: Partial<React.ComponentProps<typeof HostList>> = {}) {
 const labels = () => within(screen.getByRole('list', {name: 'Hosts'})).queryAllByRole('listitem').map(e => e.querySelector('.label')?.textContent)
 
 describe('HostList', () => {
-  it('shows ungrouped hosts and group cards with host counts (including sub-groups)', () => {
+  it('shows every host and the group cards with host counts (including sub-groups)', () => {
     setup()
-    expect(labels().sort()).toEqual(['box', 'db-1'])
+    expect(labels().sort()).toEqual(['box', 'cdn-1', 'db-1', 'web-1']) // every host, also the ones that are in a group
     const card = screen.getByRole('button', {name: 'Open group prod-cluster'})
     expect(card).toHaveTextContent('2 Hosts')
     expect(screen.queryByRole('button', {name: 'Open group edge'})).toBeNull() // nested, not at the root
@@ -41,7 +41,7 @@ describe('HostList', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Open group edge'}))
     expect(labels()).toEqual(['cdn-1'])
     await userEvent.click(screen.getByRole('button', {name: 'All hosts'}))
-    expect(labels().sort()).toEqual(['box', 'db-1'])
+    expect(labels().sort()).toEqual(['box', 'cdn-1', 'db-1', 'web-1'])
   })
 
   it('searches across all groups by label, hostname, user and tag', async () => {
@@ -63,7 +63,7 @@ describe('HostList', () => {
     await userEvent.click(screen.getByRole('button', {name: /^prod$/}))
     expect(labels().sort()).toEqual(['cdn-1', 'web-1'])
     await userEvent.click(screen.getByRole('button', {name: /^prod$/}))
-    expect(labels().sort()).toEqual(['box', 'db-1'])
+    expect(labels().sort()).toEqual(['box', 'cdn-1', 'db-1', 'web-1'])
   })
 
   it('connects on double click and via the hover actions', async () => {
@@ -214,7 +214,7 @@ describe('HostList: Grid / List view', () => {
     expect(screen.queryByRole('menu')).toBeNull()
     expect(hostsEl()).toHaveAttribute('data-view', 'list')
     expect(hostsEl()).toHaveClass('as-list')
-    expect(labels().sort()).toEqual(['box', 'db-1'])
+    expect(labels().sort()).toEqual(['box', 'cdn-1', 'db-1', 'web-1'])
     expect(screen.getByRole('button', {name: 'View'})).toHaveAttribute('title', 'List view')
     expect(localStorage.getItem('vvterm.hostsView')).toBe('list')
   })

@@ -93,9 +93,10 @@ export function HostList(p: Props) {
   const subgroups = useMemo(
     () => p.groups.filter(g => (g.parent_id && groupIds.has(g.parent_id) ? g.parent_id : '') === current),
     [p.groups, groupIds, current])
+  // "All hosts" lists every host, whichever group it is in; inside a group, the hosts of that group
   const visibleHosts = filtering
     ? matches
-    : p.hosts.filter(h => (h.group_id && groupIds.has(h.group_id) ? h.group_id : '') === current)
+    : current === '' ? p.hosts : p.hosts.filter(h => h.group_id === current)
 
   const count = (g: Group) => {
     const ids = descendants(p.groups, g.id)
