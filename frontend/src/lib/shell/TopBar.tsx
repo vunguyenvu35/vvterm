@@ -1,13 +1,11 @@
 import {useEffect, useState} from 'react'
 import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSidebar, IconSplitH, IconSplitV} from '../ui/Icons'
-import {isTerminalTab, type Tab} from '../layout'
+import {isTerminalTab, setDraggingTab, TAB_DRAG, type Tab} from '../layout'
 import {TabStatus} from './TabStatus'
 import {OS_INFO, OsIcon} from '../ui/OsIcon'
 import {leaves} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
 import type {Host, Snippet} from '../types'
-
-export const TAB_DRAG = 'application/x-vvterm-tab'
 
 interface Props {
   tabs: Tab[]
@@ -84,8 +82,8 @@ export function TopBar(p: Props) {
       {p.tabs.map(t => (
         <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '') + (dragId === t.id ? ' dragging' : '') + (over?.id === t.id && dragId !== t.id ? (over.after ? ' drop-after' : ' drop-before') : '')} onClick={() => p.onSelect(t.id)}
           draggable={!t.pinned && !!p.onMoveTab && editing?.id !== t.id}
-          onDragStart={e => { setDragId(t.id); e.dataTransfer.setData(TAB_DRAG, t.id); e.dataTransfer.effectAllowed = 'move' }}
-          onDragEnd={() => { setDragId(''); setOver(null) }}
+          onDragStart={e => { setDragId(t.id); setDraggingTab(t.id); e.dataTransfer.setData(TAB_DRAG, t.id); e.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={() => { setDragId(''); setDraggingTab(''); setOver(null) }}
           onDragOver={e => {
             if (!dragId || dragId === t.id || !Array.from(e.dataTransfer.types).includes(TAB_DRAG)) return
             e.preventDefault()

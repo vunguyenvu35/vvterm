@@ -24,13 +24,13 @@ import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
 import {recordRecent} from './lib/hosts/recent'
-import {closePane, connectBlankTab, moveTab, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
+import {closePane, connectBlankTab, graftTab, moveTab, popPane, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
 import {useConfirm} from './lib/ui/Confirm'
 import {DragBar} from './lib/ui/DragBar'
-import type {Leaf} from './lib/layout'
+import type {DropSide, Leaf} from './lib/layout'
 import type {ForwardType, Group, PortForward, Host, Identity, Settings, Snippet, VaultStatus} from './lib/types'
 
 type Dialog =
@@ -187,6 +187,28 @@ export default function App({initial}: {/** an app window opened for this place 
     setTabs(ts => ts.map(t => (t.id === tabId ? {...connectBlankTab(t, h.id, uniqueTitle(ts.filter(x => x.id !== tabId), h.label), !!h.telnet_enabled || settings.ask_protocol)} : t)))
   }
   const localFromBlank = (tabId: string) => setTabs(ts => ts.map(t => (t.id === tabId ? connectBlankTab(t, 'local', uniqueTitle(ts.filter(x => x.id !== tabId), 'Local'), false) : t)))
+  // a tab dropped on a side of a pane: its panes join that tab as a split (new sessions to the same places)
+  const dropTab = (targetId: string, paneId: string, sourceId: string, side: DropSide) => {
+    const target = tabs.find(t => t.id === targetId), source = tabs.find(t => t.id === sourceId)
+    if (!target || !source) return
+    const joined = graftTab(target, paneId, source, side)
+    if (joined === target) return
+    setTabs(ts => ts.filter(t => t.id !== sourceId).map(t => (t.id === targetId ? joined : t)))
+    setActive(targetId)
+    if (lastTerm === sourceId) setLastTerm(targetId)
+  }
+  // a pane out of its split into a tab of its own (its session goes with it)
+  const popPaneOut = (tabId: string, paneId: string) => {
+    const tab = tabs.find(t => t.id === tabId)
+    const leaf = tab && leaves(tab.root).find(l => l.id === paneId)
+    if (!tab || !leaf) return
+    const host = hosts.find(h => h.id === (leaf.hostId.startsWith('telnet:') ? leaf.hostId.slice(7) : leaf.hostId))
+    const name = leaf.hostId === 'local' ? 'Local' : host?.label ?? leaf.hostId
+    const res = popPane(tab, paneId, uniqueTitle(tabs, name))
+    if (!res) return
+    setTabs(ts => { const i = ts.findIndex(t => t.id === tabId); return [...ts.slice(0, i), res.rest, res.popped, ...ts.slice(i + 1)] })
+    setActive(res.popped.id)
+  }
   const moveTabTo = (id: string, targetId: string, after: boolean) => setTabs(ts => moveTab(ts, id, targetId, after))
   const renameTab = (id: string, name: string) => {
     const title = name.trim().slice(0, MAX_TAB_TITLE)
@@ -393,7 +415,7 @@ export default function App({initial}: {/** an app window opened for this place 
           {dialog?.k === 'key' && <KeyPanel key={dialog.mode} mode={dialog.mode} onClose={close} onChanged={() => void refreshData()} onDraft={setDraft} />}
           {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
-        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
+        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onDropTab={dropTab} onPopPane={popPaneOut} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
         {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
           <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} snippets={snippets} settings={settings} appearance={appearance}
             onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings} />

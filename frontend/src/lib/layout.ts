@@ -165,3 +165,72 @@ export function moveTab(tabs: Tab[], id: string, targetId: string, after = false
   at = Math.max(at, rest.filter(t => t.pinned).length) // never before a pinned tab
   return [...rest.slice(0, at), tabs[from], ...rest.slice(at)]
 }
+
+export type DropSide = 'left' | 'right' | 'top' | 'bottom'
+
+/**
+ * A tab dropped on the side of a pane of another tab: its panes join that tab as a split next to the pane
+ * (left / right: side by side; top / bottom: one above the other). They are the very same panes (same ids), so
+ * their sessions go on without a reconnect. The focus goes to the first of them. Anything that is not two terminal tabs changes nothing.
+ */
+export function graftTab(target: Tab, paneId: string, source: Tab, side: DropSide): Tab {
+  if (!isTerminalTab(target) || !isTerminalTab(source) || target.id === source.id || !hasPane(target, paneId)) return target
+  const incoming = source.root
+  const dir: Dir = side === 'left' || side === 'right' ? 'row' : 'col'
+  const before = side === 'left' || side === 'top'
+  const walk = (n: Node): Node => {
+    if (n.type === 'leaf') return n.id === paneId ? {type: 'split', id: uid('split'), dir, a: before ? incoming : n, b: before ? n : incoming} : n
+    return {...n, a: walk(n.a), b: walk(n.b)}
+  }
+  return {...target, root: walk(target.root), activePane: leaves(incoming).find(l => l.id === source.activePane)?.id ?? leaves(incoming)[0].id, zoomPane: undefined}
+}
+
+/** What a dragged tab carries, and which tab it is (a drag cannot be read before it is dropped). */
+export const TAB_DRAG = 'application/x-vvterm-tab'
+let dragging = ''
+export const setDraggingTab = (id: string) => { dragging = id }
+export const draggingTab = () => dragging
+
+/** The side of a box a pointer is nearest to: where a dropped tab would split it. */
+export function sideOf(x: number, y: number, w: number, h: number): DropSide {
+  const d: [DropSide, number][] = [['left', x], ['right', w - x], ['top', y], ['bottom', h - y]]
+  return d.reduce((a, b) => (b[1] < a[1] ? b : a))[0]
+}
+
+export interface Rect {x: number; y: number; w: number; h: number}
+export interface Divider extends Rect {dir: Dir}
+
+/**
+ * Where each pane of a tab sits, as percentages of the area (every split halves its box), and the dividers
+ * between them. The workspace draws the panes of all tabs side by side in one flat list placed with these boxes,
+ * so a pane that moves to another place or another tab is the same element and its session never notices.
+ */
+export function paneRects(root: Node): {panes: Map<string, Rect>; dividers: Divider[]} {
+  const panes = new Map<string, Rect>()
+  const dividers: Divider[] = []
+  const walk = (n: Node, r: Rect) => {
+    if (n.type === 'leaf') { panes.set(n.id, r); return }
+    if (n.dir === 'row') {
+      const w = r.w / 2
+      dividers.push({x: r.x + w, y: r.y, w: 0, h: r.h, dir: 'row'})
+      walk(n.a, {...r, w})
+      walk(n.b, {...r, x: r.x + w, w})
+    } else {
+      const h = r.h / 2
+      dividers.push({x: r.x, y: r.y + h, w: r.w, h: 0, dir: 'col'})
+      walk(n.a, {...r, h})
+      walk(n.b, {...r, y: r.y + h, h})
+    }
+  }
+  walk(root, {x: 0, y: 0, w: 100, h: 100})
+  return {panes, dividers}
+}
+
+/** One pane taken out of a tab's split into a tab of its own; null when it is the tab's only pane. The pane keeps its id. */
+export function popPane(tab: Tab, paneId: string, title: string): {rest: Tab; popped: Tab} | null {
+  if (!isTerminalTab(tab) || leaves(tab.root).length < 2) return null
+  const leaf = leaves(tab.root).find(l => l.id === paneId)
+  const rest = leaf && closePane(tab, paneId)
+  if (!leaf || !rest) return null
+  return {rest, popped: {id: uid('tab'), title, root: leaf, activePane: leaf.id}}
+}

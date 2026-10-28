@@ -1109,3 +1109,54 @@ describe('App: an app window opened for a host', () => {
     expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'local')
   })
 })
+
+describe('App: dragging a tab onto a pane', () => {
+  const dt = () => {
+    const data: Record<string, string> = {}
+    return {data, types: [] as string[], effectAllowed: '', dropEffect: '', setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+  }
+
+  it('turns the two tabs into one tab with a split, the dragged tab joining as new sessions', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.dblClick(hostCard('db-1'))
+    expect(screen.getAllByTestId('terminal')).toHaveLength(2)
+    const before = screen.getAllByTestId('terminal') // the panes as they are now
+    const t = dt()
+    fireEvent.dragStart(screen.getByRole('tab', {name: /db-1/}), {dataTransfer: t})
+    const first = document.querySelector('.pane-wrap')! // the pane of web-1
+    fireEvent.dragOver(first, {dataTransfer: t})
+    expect(first.querySelector('.drop-hint')).not.toBeNull()
+    fireEvent.drop(first, {dataTransfer: t})
+    await waitFor(() => expect(screen.queryByRole('tab', {name: /db-1/})).toBeNull()) // its tab is gone
+    expect(screen.getByRole('tab', {name: /web-1/, selected: true})).toBeInTheDocument()
+    expect(screen.getAllByTestId('terminal').map(x => x.getAttribute('data-host')).sort()).toEqual(['h1', 'h2'])
+    expect(document.querySelectorAll('.divider-abs')).toHaveLength(1)
+    // the same panes, not new ones: they were not taken apart and built again, so their sessions never noticed
+    const after = screen.getAllByTestId('terminal')
+    expect(before.every(el => after.includes(el) && document.body.contains(el))).toBe(true)
+  })
+
+  it('a pane can be taken back out of the split into a tab of its own, again without a reconnect', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.dblClick(hostCard('db-1'))
+    const t = dt()
+    fireEvent.dragStart(screen.getByRole('tab', {name: /db-1/}), {dataTransfer: t})
+    const first = document.querySelector('.pane-wrap')!
+    fireEvent.dragOver(first, {dataTransfer: t})
+    fireEvent.drop(first, {dataTransfer: t})
+    await waitFor(() => expect(screen.queryByRole('tab', {name: /db-1/})).toBeNull())
+    const before = screen.getAllByTestId('terminal')
+    expect(screen.getAllByRole('button', {name: 'Move pane to its own tab'})).toHaveLength(2)
+    await userEvent.click(within(screen.getByRole('toolbar', {name: 'Pane db-1'})).getByRole('button', {name: 'Move pane to its own tab'}))
+    expect(await screen.findByRole('tab', {name: /db-1/, selected: true})).toBeInTheDocument()
+    expect(screen.getByRole('tab', {name: /web-1/})).toBeInTheDocument()
+    expect(document.querySelectorAll('.divider-abs')).toHaveLength(0)
+    const after = screen.getAllByTestId('terminal')
+    expect(before.every(el => after.includes(el) && document.body.contains(el))).toBe(true) // the same panes: no reconnect
+    void be
+  })
+})

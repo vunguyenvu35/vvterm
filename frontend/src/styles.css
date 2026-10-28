@@ -764,3 +764,18 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .topbar > .tab.drop-before { box-shadow: -2px 0 0 0 #2f7bf5; }
 .topbar > .tab.drop-after { box-shadow: 2px 0 0 0 #2f7bf5; }
 .topbar > .tab[draggable=true] { cursor: grab; }
+
+/* a tab dragged onto a pane: the half where the new split would go lights up */
+.pane-wrap { position: relative; }
+.drop-hint { position: absolute; z-index: 8; pointer-events: none; background: #2f7bf533; border: 2px solid #2f7bf5; border-radius: 6px; }
+.drop-hint.left { left: 0; top: 0; bottom: 0; width: 50%; }
+.drop-hint.right { right: 0; top: 0; bottom: 0; width: 50%; }
+.drop-hint.top { left: 0; right: 0; top: 0; height: 50%; }
+.drop-hint.bottom { left: 0; right: 0; bottom: 0; height: 50%; }
+
+/* all panes of all tabs are children of .panes, each placed by its box; the layers hold the other kinds of tab */
+.panes > .pane-layer { position: absolute; inset: 0; }
+.pane-wrap { position: absolute; }
+.divider-abs { position: absolute; background: var(--line); pointer-events: none; }
+.divider-abs.row { width: 1px; }
+.divider-abs.col { height: 1px; }

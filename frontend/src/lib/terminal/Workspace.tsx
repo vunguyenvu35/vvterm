@@ -1,9 +1,10 @@
-import {leaves, type Node, type Tab} from '../layout'
+import {draggingTab, isTerminalTab, leaves, paneRects, sideOf, TAB_DRAG, type DropSide, type Rect, type Tab} from '../layout'
+import {useState} from 'react'
 import {SftpBrowser} from '../sftp/SftpBrowser'
 import {writeToPane} from './panes'
 import {formatCombo} from '../shortcuts/shortcuts'
 import {OsIcon} from '../ui/OsIcon'
-import {IconBroadcast, IconClose, IconMaximizePane, IconMinimizePane} from '../ui/Icons'
+import {IconBroadcast, IconClose, IconMaximizePane, IconMinimizePane, IconPopOut} from '../ui/Icons'
 import {TerminalPane} from './TerminalPane'
 import {NewTabScreen} from '../shell/NewTabScreen'
 import {ProtocolScreen, type Protocol} from './ProtocolScreen'
@@ -29,6 +30,10 @@ interface Props {
   onToggleBroadcast?(tabId: string): void
   /** the maximise button of a pane header */
   onToggleZoom?(tabId: string, paneId: string): void
+  /** the button of a pane header that takes the pane out of its split into a tab of its own */
+  onPopPane?(tabId: string, paneId: string): void
+  /** a tab was dropped on a side of a pane: split the pane there */
+  onDropTab?(targetTabId: string, paneId: string, sourceTabId: string, side: DropSide): void
   /** a tab that asked which protocol to use got its answer */
   onProtocol?(tabId: string, protocol: Protocol): void
   /** a blank tab: a host was picked, or an open tab */
@@ -45,6 +50,8 @@ interface Props {
 
 /** Recursive split-pane tree per tab. Every tab stays mounted so its sessions keep running. */
 export function Workspace(p: Props) {
+  // a tab dragged over a pane shows where the split would go
+  const [dropAt, setDropAt] = useState<{pane: string; side: DropSide} | null>(null)
   const termTheme = resolveTerminalTheme(p.settings.terminal_theme, p.appearance).theme
   // a host's own theme wins; a Telnet pane ("telnet:<id>") belongs to the same host
   const themeFor = (hostId: string) => {
@@ -71,63 +78,90 @@ export function Workspace(p: Props) {
   }
   const hint = (id: string) => (p.shortcuts[id] ? ' (' + formatCombo(p.shortcuts[id]) + ')' : '')
 
-  const render = (tab: Tab, n: Node, visible: boolean): JSX.Element => {
+  /** One pane, placed at its box in the area. Every pane of every tab is a child of the same list, keyed by its id. */
+  const pane = (tab: Tab, leaf: {id: string; hostId: string}, box: Rect, shown: boolean): JSX.Element => {
     const all = leaves(tab.root)
     const many = all.length > 1
-    // zoom only hides what is not on the way to the zoomed pane: nothing is unmounted, so no session ends
     const zoom = tab.zoomPane
-    const hidden = (node: Node) => !!zoom && !leaves(node).some(l => l.id === zoom)
-    if (n.type === 'leaf') {
-      const d = describe(n.hostId)
-      const index = all.findIndex(l => l.id === n.id) + 1
-      return (
-        <div key={n.id} className={'pane-wrap' + (tab.broadcast ? ' broadcasting' : '')} style={hidden(n) ? {display: 'none'} : undefined} data-pane={n.id}>
-          <TerminalPane paneId={n.id} hostId={n.hostId} connect={{label: d.label, os: d.os, subtitle: connectLine(n.hostId)}} onShowLogs={p.onShowLogs} onCloseTab={() => p.onCloseTab?.(tab.id)} visible={visible && !hidden(n)} focused={tab.activePane === n.id}
-            fontSize={p.settings.font_size} fontFamily={p.settings.font_family} termTheme={themeFor(n.hostId)} searchCombo={p.shortcuts.terminal_search}
-            highlight={p.settings.highlight} copyOnSelect={p.settings.copy_on_select} rightClick={p.settings.right_click} copyCombo={p.shortcuts.terminal_copy} pasteCombo={p.shortcuts.terminal_paste}
-            cursorStyle={p.settings.cursor_style} cursorBlink={p.settings.cursor_blink} scrollback={p.settings.scrollback}
-            onTyped={tab.broadcast ? data => all.forEach(l => { if (l.id !== n.id) writeToPane(l.id, data) }) : undefined}
-            onFocus={() => p.onFocusPane(tab.id, n.id)} onExit={() => p.onPaneExit(tab.id, n.id)} />
-          {many && <div className="pane-head" role="toolbar" aria-label={'Pane ' + d.label}>
-            <span className="pane-label">
-              {d.os && <OsIcon os={d.os} size={14} />}
-              <b>{d.label} ({index})</b>
-              {d.detail && <span className="pane-detail">{d.detail}</span>}
-            </span>
-            <span className="spacer" />
-            {(
-              <>
-                <button className={'pane-btn' + (tab.broadcast ? ' on' : '')} aria-pressed={!!tab.broadcast} aria-label="Broadcast input"
-                  title={'Type in every pane of this tab at once' + hint('broadcast_input')} onClick={() => p.onToggleBroadcast?.(tab.id)}>
-                  <IconBroadcast size={14} /> Broadcast
-                </button>
-                <button className="pane-btn icon" aria-label={zoom === n.id ? 'Show all panes' : 'Maximize pane'} aria-pressed={zoom === n.id}
-                  title={zoom === n.id ? 'Show all panes' : 'Show only this pane'} onClick={() => p.onToggleZoom?.(tab.id, n.id)}>
-                  {zoom === n.id ? <IconMinimizePane size={14} /> : <IconMaximizePane size={14} />}
-                </button>
-                <button className="pane-btn icon" aria-label="Close pane" title="Close pane" onClick={() => p.onClosePane(tab.id, n.id)}><IconClose size={14} /></button>
-              </>
-            )}
-          </div>}
-        </div>
-      )
-    }
+    const n = leaf
+    const d = describe(n.hostId)
+    const index = all.findIndex(l => l.id === n.id) + 1
+    const zoomed = zoom === n.id
+    const rect = zoomed ? {x: 0, y: 0, w: 100, h: 100} : box
+    const hidden = !shown || (!!zoom && !zoomed)
     return (
-      <div key={n.id} className={'pane-split ' + n.dir} style={hidden(n) ? {display: 'none'} : undefined}>
-        {render(tab, n.a, visible)}
-        <div className="divider" style={zoom ? {display: 'none'} : undefined} />
-        {render(tab, n.b, visible)}
+      <div key={n.id} className={'pane-wrap' + (tab.broadcast ? ' broadcasting' : '')}
+        style={{position: 'absolute', left: rect.x + '%', top: rect.y + '%', width: rect.w + '%', height: rect.h + '%', display: hidden ? 'none' : undefined}} data-pane={n.id}
+        onDragOver={e => {
+          const from = draggingTab()
+          if (!p.onDropTab || !from || from === tab.id || !isTerminalTab(tab) || !Array.from(e.dataTransfer.types).includes(TAB_DRAG)) return
+          e.preventDefault()
+          const r = e.currentTarget.getBoundingClientRect()
+          setDropAt({pane: n.id, side: sideOf(e.clientX - r.left, e.clientY - r.top, r.width, r.height)})
+        }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDropAt(h => (h?.pane === n.id ? null : h)) }}
+        onDrop={e => {
+          const from = e.dataTransfer.getData(TAB_DRAG)
+          const r = e.currentTarget.getBoundingClientRect()
+          const side = sideOf(e.clientX - r.left, e.clientY - r.top, r.width, r.height)
+          setDropAt(null)
+          if (!p.onDropTab || !from || from === tab.id) return
+          e.preventDefault()
+          p.onDropTab(tab.id, n.id, from, side)
+        }}>
+        {dropAt?.pane === n.id && <div className={'drop-hint ' + dropAt.side} aria-hidden="true" data-side={dropAt.side} />}
+        <TerminalPane paneId={n.id} hostId={n.hostId} connect={{label: d.label, os: d.os, subtitle: connectLine(n.hostId)}} onShowLogs={p.onShowLogs} onCloseTab={() => p.onCloseTab?.(tab.id)} visible={!hidden} focused={tab.activePane === n.id}
+          fontSize={p.settings.font_size} fontFamily={p.settings.font_family} termTheme={themeFor(n.hostId)} searchCombo={p.shortcuts.terminal_search}
+          highlight={p.settings.highlight} copyOnSelect={p.settings.copy_on_select} rightClick={p.settings.right_click} copyCombo={p.shortcuts.terminal_copy} pasteCombo={p.shortcuts.terminal_paste}
+          cursorStyle={p.settings.cursor_style} cursorBlink={p.settings.cursor_blink} scrollback={p.settings.scrollback}
+          onTyped={tab.broadcast ? data => all.forEach(l => { if (l.id !== n.id) writeToPane(l.id, data) }) : undefined}
+          onFocus={() => p.onFocusPane(tab.id, n.id)} onExit={() => p.onPaneExit(tab.id, n.id)} />
+        {many && <div className="pane-head" role="toolbar" aria-label={'Pane ' + d.label}>
+          <span className="pane-label">
+            {d.os && <OsIcon os={d.os} size={14} />}
+            <b>{d.label} ({index})</b>
+            {d.detail && <span className="pane-detail">{d.detail}</span>}
+          </span>
+          <span className="spacer" />
+          <button className={'pane-btn' + (tab.broadcast ? ' on' : '')} aria-pressed={!!tab.broadcast} aria-label="Broadcast input"
+            title={'Type in every pane of this tab at once' + hint('broadcast_input')} onClick={() => p.onToggleBroadcast?.(tab.id)}>
+            <IconBroadcast size={14} /> Broadcast
+          </button>
+          {p.onPopPane && <button className="pane-btn icon" aria-label="Move pane to its own tab" title="Move this pane out of the split, into a tab of its own" onClick={() => p.onPopPane!(tab.id, n.id)}><IconPopOut size={14} /></button>}
+          <button className="pane-btn icon" aria-label={zoomed ? 'Show all panes' : 'Maximize pane'} aria-pressed={zoomed}
+            title={zoomed ? 'Show all panes' : 'Show only this pane'} onClick={() => p.onToggleZoom?.(tab.id, n.id)}>
+            {zoomed ? <IconMinimizePane size={14} /> : <IconMaximizePane size={14} />}
+          </button>
+          <button className="pane-btn icon" aria-label="Close pane" title="Close pane" onClick={() => p.onClosePane(tab.id, n.id)}><IconClose size={14} /></button>
+        </div>}
       </div>
     )
   }
 
+  // One flat list: the panes of every tab, the dividers, and the other kinds of tab as layers. A pane that moves to
+  // another place in the layout, or to another tab, keeps its key and parent, so it is not rebuilt and its session lives on.
+  const items: JSX.Element[] = []
+  for (const t of p.tabs) {
+    const active = t.id === p.activeTab
+    const layer = (node: JSX.Element) => items.push(<div key={'layer-' + t.id} className="pane-layer" style={{display: active ? 'block' : 'none'}}>{node}</div>)
+    if (t.kind === 'new') {
+      layer(<NewTabScreen hosts={p.hosts ?? []} groups={p.groups ?? []} tabs={p.tabs} onOpen={h => p.onOpenFromNewTab?.(t.id, h)} onSelectTab={id => p.onSelectTab?.(id)} onLocal={p.onLocalFromNewTab ? () => p.onLocalFromNewTab!(t.id) : undefined} />)
+    } else if (t.choose && hostOf(leaves(t.root)[0].hostId)) {
+      layer(<ProtocolScreen host={hostOf(leaves(t.root)[0].hostId)!} onContinue={proto => p.onProtocol?.(t.id, proto)} onClose={() => p.onCloseTab?.(t.id)} />)
+    } else if (t.kind === 'sftp') {
+      layer(<SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} />)
+    } else {
+      const {panes, dividers} = paneRects(t.root)
+      for (const l of leaves(t.root)) items.push(pane(t, l, panes.get(l.id)!, active))
+      if (!t.zoomPane) dividers.forEach((dv, k) => items.push(
+        <div key={'div-' + t.id + '-' + k} className={'divider-abs ' + dv.dir} aria-hidden="true"
+          style={{left: dv.x + '%', top: dv.y + '%', width: dv.dir === 'row' ? undefined : dv.w + '%', height: dv.dir === 'col' ? undefined : dv.h + '%', display: active ? undefined : 'none'}} />))
+    }
+  }
+
   return (
     <div className="panes" style={{display: p.activeTab ? 'block' : 'none', background: termTheme.background}}>
-      {p.tabs.map(t => (
-        <div key={t.id} style={{display: t.id === p.activeTab ? 'block' : 'none', height: '100%'}}>
-          {t.kind === 'new' ? <NewTabScreen hosts={p.hosts ?? []} groups={p.groups ?? []} tabs={p.tabs} onOpen={h => p.onOpenFromNewTab?.(t.id, h)} onSelectTab={id => p.onSelectTab?.(id)} onLocal={p.onLocalFromNewTab ? () => p.onLocalFromNewTab!(t.id) : undefined} /> : t.choose && hostOf(leaves(t.root)[0].hostId) ? <ProtocolScreen host={hostOf(leaves(t.root)[0].hostId)!} onContinue={proto => p.onProtocol?.(t.id, proto)} onClose={() => p.onCloseTab?.(t.id)} /> : t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
-        </div>
-      ))}
+      {items}
     </div>
   )
 }
