@@ -45,14 +45,14 @@ describe('terminal theme catalogue', () => {
 })
 
 describe('"Match app theme" looks like the app', () => {
-  it('the default dark and light themes use the app background and text colours from styles.css', async () => {
+  it('the default dark and light themes use the app background from styles.css and green text', async () => {
     const {readFileSync} = await import('node:fs')
     const {join} = await import('node:path')
     const css = readFileSync(join(__dirname, '../../styles.css'), 'utf8')
     const dark = css.match(/:root \{[^}]*--bg: (#[0-9a-f]{6});[^}]*--text: (#[0-9a-f]{6});/s)!
     const light = css.match(/:root\[data-theme='light'\] \{[^}]*--bg: (#[0-9a-f]{6});[^}]*--text: (#[0-9a-f]{6});/s)!
     const d = findTheme('vvterm-dark')!.theme, l = findTheme('vvterm-light')!.theme
-    expect([d.background, d.foreground]).toEqual([dark[1], dark[2]])
-    expect([l.background, l.foreground]).toEqual([light[1], light[2]])
+    expect([d.background, d.foreground]).toEqual([dark[1], '#3ecf8e'])
+    expect([l.background, l.foreground]).toEqual([light[1], '#1a7f4b'])
   })
 })

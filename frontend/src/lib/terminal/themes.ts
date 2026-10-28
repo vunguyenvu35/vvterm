@@ -35,8 +35,8 @@ function make(id: string, name: string, dark: boolean, s: Spec): TermTheme {
 
 export const TERMINAL_THEMES: TermTheme[] = [
   // the two themes "Match app theme" resolves to take the app's own background and text colours (styles.css), so a terminal sits in the window instead of looking like a black hole in it
-  make('vvterm-dark', 'VVTerm Dark', true, {bg: '#1b1e2d', fg: '#e9ebf5', cursor: '#3a82f7', sel: '#34406a', red: '#ef5b5b', green: '#3ecf8e', yellow: '#f0b429', blue: '#5b8cff', magenta: '#a78bfa', cyan: '#22d3ee'}),
-  make('vvterm-light', 'VVTerm Light', false, {bg: '#f3f5fa', fg: '#1b2033', cursor: '#2f6fe4', sel: '#cfdcff', red: '#d1242f', green: '#1a7f4b', yellow: '#9a6700', blue: '#2f62e0', magenta: '#7c4dff', cyan: '#0e7490'}),
+  make('vvterm-dark', 'VVTerm Dark', true, {bg: '#1b1e2d', fg: '#3ecf8e', cursor: '#3a82f7', sel: '#34406a', red: '#ef5b5b', green: '#3ecf8e', yellow: '#f0b429', blue: '#5b8cff', magenta: '#a78bfa', cyan: '#22d3ee'}),
+  make('vvterm-light', 'VVTerm Light', false, {bg: '#f3f5fa', fg: '#1a7f4b', cursor: '#2f6fe4', sel: '#cfdcff', red: '#d1242f', green: '#1a7f4b', yellow: '#9a6700', blue: '#2f62e0', magenta: '#7c4dff', cyan: '#0e7490'}),
   make('dracula', 'Dracula', true, {bg: '#282a36', fg: '#f8f8f2', cursor: '#f8f8f2', sel: '#44475a', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd'}),
   make('nord', 'Nord', true, {bg: '#2e3440', fg: '#d8dee9', cursor: '#d8dee9', sel: '#434c5e', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0'}),
   make('tokyo-night', 'Tokyo Night', true, {bg: '#1a1b26', fg: '#c0caf5', cursor: '#c0caf5', sel: '#283457', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff'}),
