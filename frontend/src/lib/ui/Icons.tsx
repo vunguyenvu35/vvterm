@@ -65,3 +65,4 @@ export const IconSidebar = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" h
 export const IconChevronDown = (p: P) => <Icon {...p}><path d="m6 9 6 6 6-6" /></Icon>
 export const IconPlug = (p: P) => <Icon {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4" /></Icon>
 export const IconPopOut = (p: P) => <Icon {...p}><path d="M14 4h6v6M20 4l-8 8M10 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" /></Icon>
+export const IconTag = (p: P) => <Icon {...p}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9zM8 8h.01" /></Icon>

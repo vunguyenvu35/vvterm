@@ -98,6 +98,7 @@ function HostsTab({hosts, onConnect}: {hosts: Host[]; onConnect?(h: Host): void}
 function SnippetsTab({snippets, onInsert, onNew}: {snippets: Snippet[]; onInsert(text: string, run: boolean): void; onNew?(): void}) {
   const [q, setQ] = useState('')
   const [searching, setSearching] = useState(false)
+  const [open, setOpen] = useState<string | null>(null) // the snippet shown in full
   const shown = snippets.filter(s => `${s.label} ${s.script}`.toLowerCase().includes(q.trim().toLowerCase()))
   return (
     <>
@@ -108,13 +109,23 @@ function SnippetsTab({snippets, onInsert, onNew}: {snippets: Snippet[]; onInsert
         <button className="icon ghost" aria-label={searching ? 'Close search' : 'Search snippets'} onClick={() => { setSearching(!searching); setQ('') }}><IconSearch size={16} /></button>
       </div>
       <div className="side-list" role="list" aria-label="Snippets">
-        {shown.map(s => (
-          <button key={s.id} className="side-item col" onClick={() => onInsert(s.script, false)} onDoubleClick={() => onInsert(s.script, true)}
-            title="Click to type it, double-click to run it">
-            <span className="side-title"><IconBraces size={13} /> {s.label}</span>
-            <code>{s.script.replace(/\s+/g, ' ')}</code>
-          </button>
-        ))}
+        {shown.map(s => {
+          const full = open === s.id
+          return (
+            <div key={s.id} role="listitem" className={'side-snippet' + (full ? ' open' : '')}>
+              <div className="side-snippet-head">
+                <button className="side-snippet-title" aria-expanded={full} aria-label={s.label} onClick={() => setOpen(full ? null : s.id)}>
+                  <IconBraces size={13} /> <span>{s.label}</span>
+                </button>
+                {full && <>
+                  <button className="side-act" aria-label={'Run ' + s.label} onClick={() => onInsert(s.script, true)}>Run</button>
+                  <button className="side-act" aria-label={'Paste ' + s.label} onClick={() => onInsert(s.script, false)}>Paste</button>
+                </>}
+              </div>
+              {full ? <pre className="side-snippet-code">{s.script}</pre> : <code className="side-snippet-peek" onClick={() => setOpen(s.id)}>{s.script.replace(/\s+/g, ' ')}</code>}
+            </div>
+          )
+        })}
         {shown.length === 0 && <div className="side-empty">{snippets.length ? 'No snippets match.' : 'No snippets yet.'}</div>}
       </div>
     </>

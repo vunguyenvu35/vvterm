@@ -37,18 +37,33 @@ describe('TerminalSidebar', () => {
     expect(cb.onConnect).toHaveBeenCalledWith(expect.objectContaining({id: 'h2'}))
   })
 
-  it('Snippets: click types it, double-click runs it, New Snippet and search work', async () => {
+  it('Snippets: one line each; a click shows the whole script with Run and Paste', async () => {
     const cb = setup('snippets')
-    await userEvent.click(screen.getByRole('button', {name: /Disk/}))
-    expect(cb.onInsert).toHaveBeenLastCalledWith('df -h', false)
-    await userEvent.dblClick(screen.getByRole('button', {name: /Disk/}))
+    expect(screen.queryByRole('button', {name: 'Run Disk'})).toBeNull() // nothing to run until it is opened
+    expect(screen.getByText('df -h')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', {name: 'Disk'}))
+    expect(screen.getByRole('button', {name: 'Disk'})).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(screen.getByRole('button', {name: 'Run Disk'}))
     expect(cb.onInsert).toHaveBeenLastCalledWith('df -h', true)
+    await userEvent.click(screen.getByRole('button', {name: 'Paste Disk'}))
+    expect(cb.onInsert).toHaveBeenLastCalledWith('df -h', false)
+    // opening another one closes the first; a second click folds it again
+    await userEvent.click(screen.getByRole('button', {name: 'Docker Full clean'}))
+    expect(document.querySelector('.side-snippet-code')).toHaveTextContent('docker stop $(docker ps -aq)')
+    expect(screen.queryByRole('button', {name: 'Run Disk'})).toBeNull()
+    await userEvent.click(screen.getByRole('button', {name: 'Docker Full clean'}))
+    expect(document.querySelector('.side-snippet-code')).toBeNull()
+  })
+
+  it('Snippets: no tooltip that explains clicking; New Snippet and search work', async () => {
+    const cb = setup('snippets')
+    expect(document.querySelectorAll('.side-snippet [title]')).toHaveLength(0)
     await userEvent.click(screen.getByRole('button', {name: 'New Snippet'}))
     expect(cb.onNewSnippet).toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', {name: 'Search snippets'}))
     await userEvent.type(screen.getByLabelText('Search snippets in the sidebar'), 'docker')
-    expect(screen.queryByRole('button', {name: /Disk/})).toBeNull()
-    expect(screen.getByRole('button', {name: /Docker Full clean/})).toBeInTheDocument()
+    expect(screen.queryByRole('button', {name: 'Disk'})).toBeNull()
+    expect(screen.getByRole('button', {name: 'Docker Full clean'})).toBeInTheDocument()
   })
 
   it('History: lists typed commands, filters, types and clears them', async () => {

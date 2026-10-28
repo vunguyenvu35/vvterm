@@ -291,14 +291,15 @@ describe('App snippets', () => {
     expect(typed.text).toEqual([])
   })
 
-  it('reports a terminal that is not connected yet', async () => {
+  it('says nothing about a terminal that is not connected yet', async () => {
     const be = setup({snippets: [snip]})
     await unlock(be)
     await userEvent.dblClick(hostCard('web-1'))
     typed.ready = false
     await userEvent.click(screen.getByRole('button', {name: 'Run snippet'}))
     await userEvent.click(await screen.findByRole('menuitem', {name: /Disk/}).then(el => el.querySelector('button')!))
-    expect(await screen.findByRole('status')).toHaveTextContent('not connected')
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(typed.text).toEqual([])
   })
 
   it('the title-bar picker runs a snippet inside the terminal view', async () => {
@@ -711,7 +712,7 @@ describe('App: Hosts toolbar order', () => {
     const be = setup()
     await unlock(be)
     const bar = document.querySelector('.toolbar') as HTMLElement
-    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'More ways to add hosts', 'Terminal', 'Serial', 'View'])
+    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'More ways to add hosts', 'Terminal', 'Serial', 'View', 'Filter by tag'])
   })
 })
 

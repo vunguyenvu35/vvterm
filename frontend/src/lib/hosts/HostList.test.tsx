@@ -291,3 +291,56 @@ describe('HostList: drag a host onto a group', () => {
     expect(card('db-1')).not.toHaveAttribute('draggable', 'true')
   })
 })
+
+describe('HostList: tag filter', () => {
+  const tagged = [
+    host({id: 'a', label: 'web-1', tags: ['nginx', 'prod']}),
+    host({id: 'b', label: 'db-1', tags: ['mariadb']}),
+    host({id: 'c', label: 'box', tags: ['prod']}),
+    host({id: 'd', label: 'plain'}),
+  ]
+  const open = () => userEvent.click(screen.getByRole('button', {name: 'Filter by tag'}))
+
+  it('lists every tag once, sorted, and keeps the hosts that have any ticked tag', async () => {
+    setup({hosts: tagged, groups: []})
+    await open()
+    const dialog = screen.getByRole('dialog', {name: 'Filter by tag'})
+    expect(within(dialog).getAllByRole('checkbox').map(c => c.textContent?.trim())).toEqual(['mariadb', 'nginx', 'prod'])
+    await userEvent.click(within(dialog).getByRole('checkbox', {name: 'prod'}))
+    expect(labels().sort()).toEqual(['box', 'web-1'])
+    await userEvent.click(within(dialog).getByRole('checkbox', {name: 'mariadb'}))
+    expect(labels().sort()).toEqual(['box', 'db-1', 'web-1']) // any of the ticked tags
+    expect(screen.getByRole('button', {name: 'Filter by tag'})).toHaveAttribute('title', 'Tags: prod, mariadb')
+  })
+
+  it('searches the tags, and Clear selection brings every host back', async () => {
+    setup({hosts: tagged, groups: []})
+    await open()
+    const dialog = screen.getByRole('dialog', {name: 'Filter by tag'})
+    await userEvent.type(within(dialog).getByLabelText('Search tags'), 'ng')
+    expect(within(dialog).getAllByRole('checkbox').map(c => c.textContent?.trim())).toEqual(['nginx'])
+    await userEvent.click(within(dialog).getByRole('checkbox', {name: 'nginx'}))
+    expect(labels()).toEqual(['web-1'])
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Clear selection'}))
+    expect(labels().sort()).toEqual(['box', 'db-1', 'plain', 'web-1'])
+    expect(within(dialog).getByRole('button', {name: 'Clear selection'})).toBeDisabled()
+  })
+
+  it('combines with the search box, and reaches hosts inside groups too', async () => {
+    setup({hosts: [...tagged, host({id: 'e', label: 'cdn-1', tags: ['prod'], group_id: 'g1'})], groups})
+    await userEvent.type(screen.getByLabelText('Search hosts'), 'box')
+    await open()
+    await userEvent.click(within(screen.getByRole('dialog', {name: 'Filter by tag'})).getByRole('checkbox', {name: 'prod'}))
+    expect(labels()).toEqual(['box'])
+    await userEvent.clear(screen.getByLabelText('Search hosts'))
+    expect(labels().sort()).toEqual(['box', 'cdn-1', 'web-1']) // a filter lists matching hosts from every group
+  })
+
+  it('says so when there are no tags yet, and closes on Escape', async () => {
+    setup({hosts: [host({id: 'p', label: 'plain'})], groups: []})
+    await open()
+    expect(screen.getByText(/No tags yet/)).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', {name: 'Filter by tag'})).toBeNull()
+  })
+})

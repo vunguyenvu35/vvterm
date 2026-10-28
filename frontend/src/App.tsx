@@ -268,14 +268,12 @@ export default function App({initial}: {/** an app window opened for this place 
   const insertIntoTerminal = (text: string, run: boolean) => {
     const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
     if (!tab || !isTerminalTab(tab)) return toast.error('Open a terminal first.')
-    if (!writeToPane(tab.activePane, toTerminalInput(text, run))) toast.error('The focused terminal is not connected yet.')
+    writeToPane(tab.activePane, toTerminalInput(text, run)) // a terminal that is still connecting takes nothing: no message for that
   }
   const runSnippet = (s: Snippet, execute: boolean) => {
     const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
     if (!tab) return toast.error('Open a terminal first: the snippet is typed into the focused pane.')
-    if (!writeToPane(tab.activePane, toTerminalInput(s.script, execute))) {
-      return toast.error('The focused terminal is not connected yet.')
-    }
+    if (!writeToPane(tab.activePane, toTerminalInput(s.script, execute))) return // still connecting: nothing to say about it
     setActive(tab.id)
     toast.info(execute ? `Ran “${s.label}”` : `Pasted “${s.label}”`)
   }

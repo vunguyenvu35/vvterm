@@ -1,5 +1,6 @@
 import {OS_INFO, OsIcon, osName} from '../ui/OsIcon'
 import {loadView, saveView, ViewMenu, ViewMode} from './ViewMenu'
+import {TagMenu} from './TagMenu'
 import {DragEvent, ReactNode, useMemo, useState} from 'react'
 import type {Env, Group, Host} from '../types'
 import {formatAddr} from '../util'
@@ -61,6 +62,10 @@ export function HostList(p: Props) {
   const [view, setView] = useState<ViewMode>(loadView)
   const changeView = (v: ViewMode) => { setView(v); saveView(v) }
   const [groupId, setGroupId] = useState('')
+  const [tagFilter, setTagFilter] = useState<string[]>([])
+  const allTags = useMemo(() => Array.from(new Set(p.hosts.flatMap(h => h.tags ?? []))).sort((a, b) => a.localeCompare(b)), [p.hosts])
+  // a tag that no host has any more (deleted elsewhere) is dropped from the filter
+  const activeTags = tagFilter.filter(t => allTags.includes(t))
   const [dropOn, setDropOn] = useState<string | null>(null) // the group (or '' for All hosts) a host is being dragged over
   /** drop target props: a host card dragged over turns the target on, dropping it moves the host */
   const target = (gid: string) => ({
@@ -79,16 +84,17 @@ export function HostList(p: Props) {
   const groupIds = useMemo(() => new Set(p.groups.map(g => g.id)), [p.groups])
   // a group whose id vanished (deleted elsewhere) falls back to the root
   const current = groupId && groupIds.has(groupId) ? groupId : ''
-  const filtering = q.trim() !== '' || env !== ''
+  const filtering = q.trim() !== '' || env !== '' || activeTags.length > 0
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase().replace(/^ssh\s+/, '')
     return p.hosts.filter(h => {
       if (env && h.env !== env) return false
+      if (activeTags.length && !(h.tags ?? []).some(t => activeTags.includes(t))) return false
       if (!needle) return true
       return `${h.label} ${h.hostname} ${h.username} ${h.username}@${h.hostname} ${h.username}@${h.hostname}:${h.port} ${(h.tags ?? []).join(' ')}`.toLowerCase().includes(needle)
     })
-  }, [p.hosts, q, env])
+  }, [p.hosts, q, env, activeTags.join('\u0000')])
 
   const subgroups = useMemo(
     () => p.groups.filter(g => (g.parent_id && groupIds.has(g.parent_id) ? g.parent_id : '') === current),
@@ -156,6 +162,7 @@ export function HostList(p: Props) {
         {p.toolbar}
         <div className="spacer" />
         <ViewMenu value={view} onChange={changeView} />
+        <TagMenu tags={allTags} selected={activeTags} onChange={setTagFilter} />
         <div className="chips">
           {ENVS.map(e => (
             <span key={e} role="button" aria-pressed={env === e} tabIndex={0} className={'chip' + (env === e ? ' on' : '')}
