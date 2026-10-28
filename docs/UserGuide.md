@@ -31,7 +31,7 @@ On first launch choose a master password (at least 12 characters). It protects y
 
 Next time, or after auto-lock, enter it to unlock. A wrong password never unlocks anything.
 
-![Wrong password](screenshots/49-unlock-wrong-password.png)
+![Wrong password](screenshots/55-unlock-wrong-password.png)
 
 ## 2. The main window
 
@@ -96,11 +96,11 @@ Groups appear as cards with their host count. Click one to open it (a breadcrumb
 
 **Search** matches label, hostname, user and tags across all groups; the environment chips filter further.
 
-![Search](screenshots/35-search-filter.png)
+![Search](screenshots/40-search-filter.png)
 
 **Quick connect:** type `ssh user@host:port` and press Enter. If it matches a saved host you connect; otherwise *New host* opens pre-filled so you can save it.
 
-![Quick connect](screenshots/36-quick-connect.png)
+![Quick connect](screenshots/41-quick-connect.png)
 
 ## 6. Connect
 
@@ -189,35 +189,35 @@ Anything unsupported (for example `ProxyCommand`) is listed as a warning instead
 
 Open **Settings** from the navigation, the gear in the title bar, or **⌘/Ctrl + ,** (it works from a terminal tab too). It opens as **a window of its own** (with the usual red, yellow and green buttons): move it anywhere, resize it, or use the green button for macOS full screen. Opening it again brings the existing window to the front, and it closes when you quit VVTerm. (Screenshots below show the same content in the in-app variant that the test run uses.)
 
-![Settings window](screenshots/38-settings-general.png)
+![Settings window](screenshots/44-settings-general.png)
 
 The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts**, then **Theme**, help links (documentation, feature requests, bug reports, release notes, Ko-fi) and the **version**. Changes apply immediately.
 
 - **General:** **Zoom** makes the whole interface larger or smaller (80 % to 160 %, also with the zoom shortcuts), **Reduce motion** turns animations off, and **Confirm before closing a tab** asks before ending a terminal or SFTP connection.
 - **Account:** a local profile (display name and email, stored only in your settings file), your plan, and a disabled **Sign in** for the cloud features planned for later. Nothing is sent anywhere.
 
-![Account](screenshots/39-settings-account.png)
+![Account](screenshots/45-settings-account.png)
 
-![Maximised settings](screenshots/40-settings-maximized.png)
+![Maximised settings](screenshots/46-settings-maximized.png)
 
 - **Shortcuts:** every action has a default, shown as a key chip. Click a chip, press the new combination and it is saved. A combination already in use is refused and tells you which action owns it; plain keys are refused (add Ctrl, Alt or ⌘; F-keys are allowed). *Reset* returns one action to its default, *Reset all* all of them. Esc and a few terminal keys are fixed and listed below the table.
 
-![Shortcuts](screenshots/44-settings-shortcuts.png)
+![Shortcuts](screenshots/50-settings-shortcuts.png)
 
 - **Terminal theme:** 26 colour themes with live swatches (Dracula, Nord, Tokyo Night, Solarized, Gruvbox, Kanagawa, Rosé Pine…), filterable by dark/light, or *Match app theme*. A preview shows your font, size, cursor and colours.
 - **Font, size, cursor** (block, bar, underline), blinking, **scrollback**.
 
-![Terminal themes](screenshots/41-settings-terminal-theme.png)
+![Terminal themes](screenshots/47-settings-terminal-theme.png)
 
 - **Theme (sidebar):** *Auto* follows your Mac's light/dark mode, or force *Light* or *Dark*.
 
-![Theme dropdown](screenshots/45-theme-dropdown.png)
+![Theme dropdown](screenshots/51-theme-dropdown.png)
 
-![Light theme](screenshots/46-light-theme.png)
+![Light theme](screenshots/52-light-theme.png)
 
 - **Security:** auto-lock after N idle minutes (default 15; the key is wiped from memory), unlock with the macOS Keychain (anyone who can unlock your Keychain can then open the vault), change the master password.
 
-![Security](screenshots/42-settings-security.png)
+![Security](screenshots/48-settings-security.png)
 
 ## 13. Sync between Macs
 
@@ -229,17 +229,17 @@ Open **Settings → Sync**.
 
 The repository only holds `bundle.enc` and `vault-header.json`, both encrypted: hostnames and IPs are not visible. Conflicts are merged per record (newest edit wins; a newer edit beats an older delete and the reverse).
 
-![Sync](screenshots/43-sync.png)
+![Sync](screenshots/49-sync.png)
 
 ## 14. Forgot your master password
 
 **It cannot be recovered.** The password never leaves your Mac, so nobody can reset it for you. On the unlock screen choose **Forgot password?**:
 
-![Forgot password](screenshots/51-forgot-password.png)
+![Forgot password](screenshots/57-forgot-password.png)
 
 You can **reset the vault**. Type `RESET` to confirm. This permanently erases every saved key and password, and **keeps** your hosts, groups, snippets and port forwards. Hosts that used a saved credential need new ones. Then create a new master password:
 
-![Vault reset](screenshots/52-vault-reset.png)
+![Vault reset](screenshots/58-vault-reset.png)
 
 If you have an **encrypted backup**, restore it from **Import / Export** after unlocking the new vault to bring your keys back. If you synced with Git, the repository still holds the *old* vault: use a new repository for the new vault.
 
@@ -256,13 +256,13 @@ If you have an **encrypted backup**, restore it from **Import / Export** after u
 | Sync error *encrypted with a different vault key* | The repository belongs to another vault. Use a new repository, or restore from it on a fresh install. |
 | Old icon in the Dock | macOS caches icons. Restart the Dock (`killall Dock`) or move the app to refresh it. |
 
-![Connection lost](screenshots/47-connection-lost.png)
+![Connection lost](screenshots/53-connection-lost.png)
 
-![Host key changed](screenshots/48-host-key-changed.png)
+![Host key changed](screenshots/54-host-key-changed.png)
 
 In a narrow window the layout adapts: the navigation becomes icons and the New host panel floats over the list instead of squeezing it.
 
-![Narrow window](screenshots/53-narrow-window.png)
+![Narrow window](screenshots/59-narrow-window.png)
 
 ## 16. Where your data lives
 

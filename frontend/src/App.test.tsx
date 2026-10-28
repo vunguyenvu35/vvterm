@@ -190,12 +190,56 @@ describe('App navigation and quick connect', () => {
     expect(be.state.hosts).toHaveLength(3)
   })
 
-  it('the + tab returns home and focuses the search box', async () => {
+  it('the + opens a New Tab with a search box and the recent connections; picking a host turns it into that connection', async () => {
+    localStorage.removeItem('vvterm.recent')
     const be = setup()
     await unlock(be)
     await userEvent.dblClick(hostCard('web-1'))
     await userEvent.click(screen.getByLabelText('New connection'))
-    expect(screen.getByRole('tab', {name: 'Vaults', selected: true})).toBeInTheDocument()
+    expect(screen.getByRole('tab', {name: 'New Tab', selected: true})).toBeInTheDocument()
+    expect(screen.getByLabelText('Search hosts or tabs')).toHaveFocus()
+    const recent = screen.getByRole('listbox', {name: 'Recent connections'})
+    expect(within(recent).getAllByRole('option').map(o => o.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('web-1')]))
+    expect(within(recent).getAllByRole('option')[0]).toHaveTextContent('web-1') // the one used just now comes first
+    await userEvent.type(screen.getByLabelText('Search hosts or tabs'), 'db')
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findAllByTestId('terminal')).toHaveLength(2)
+    expect(screen.getByRole('tab', {name: /db-1/, selected: true})).toBeInTheDocument()
+    expect(screen.queryByRole('tab', {name: 'New Tab'})).toBeNull() // the blank tab became the connection
+  })
+
+  it('the New Tab also finds open tabs and switches to them', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByLabelText('New connection'))
+    await userEvent.click(screen.getByLabelText('New connection'))
+    expect(screen.getByRole('tab', {name: 'New Tab (2)', selected: true})).toBeInTheDocument()
+    await userEvent.type(screen.getAllByLabelText('Search hosts or tabs').at(-1)!, 'web')
+    await userEvent.click(within(screen.getByRole('listbox', {name: 'Results'})).getByRole('option', {name: /Open tab/}))
+    expect(screen.getByRole('tab', {name: /web-1/, selected: true})).toBeInTheDocument()
+  })
+
+  it('a host that also has Telnet first asks which protocol to use', async () => {
+    const be = setup({hosts: [host({id: 'h1', label: 'switch', hostname: '10.0.0.2', telnet_enabled: true, telnet_port: 23} as never)]})
+    await unlock(be)
+    await userEvent.dblClick(hostCard('switch'))
+    expect(screen.getByRole('radiogroup', {name: 'Protocol'})).toBeInTheDocument()
+    expect(screen.queryByTestId('terminal')).toBeNull()
+    await userEvent.click(screen.getByRole('radio', {name: /Telnet/}))
+    expect(screen.getByRole('note')).toHaveTextContent(/not encrypted/)
+    await userEvent.click(screen.getByRole('button', {name: 'Continue'}))
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'telnet:h1')
+    expect(screen.getByRole('tab', {name: /switch \(Telnet\)/, selected: true})).toBeInTheDocument()
+  })
+
+  it('Close on the protocol screen closes the tab', async () => {
+    const be = setup({hosts: [host({id: 'h1', label: 'switch', telnet_enabled: true} as never)]})
+    await unlock(be)
+    await userEvent.dblClick(hostCard('switch'))
+    await userEvent.click(screen.getByRole('button', {name: /^Close$/}))
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.queryByRole('tab', {name: /switch/})).toBeNull()
   })
 })
 
@@ -401,13 +445,14 @@ describe('App: panels belong to the page they were opened on', () => {
     expect(panelOpen('New host')).toBeNull()
   })
 
-  it('staying on the same page keeps the panel (the + tab does not discard typed work)', async () => {
+  it('the + tab leaves the Vaults page, so an open panel closes like on any other move', async () => {
     const be = setup()
     await unlock(be)
     await userEvent.click(screen.getByLabelText('New host'))
     await userEvent.type(screen.getByLabelText('Hostname'), 'keep.me')
     await userEvent.click(screen.getByLabelText('New connection'))
-    expect(screen.getByLabelText('Hostname')).toHaveValue('keep.me')
+    expect(screen.queryByLabelText('Hostname')).toBeNull()
+    expect(screen.getByRole('tab', {name: 'New Tab', selected: true})).toBeInTheDocument()
   })
 })
 
@@ -994,5 +1039,20 @@ describe('App: New host and local terminal shortcuts', () => {
     const term = await screen.findByTestId('terminal')
     expect(term).toHaveAttribute('data-host', 'local')
     expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('Local')
+  })
+})
+
+describe('App: moving a host into a group by dragging', () => {
+  it('saves the host with the group and says so', async () => {
+    const be = setup({groups: [{id: 'g1', name: 'Gitechvn', sort_order: 0}] as never})
+    await unlock(be)
+    const data: Record<string, string> = {}
+    const dt = {types: [] as string[], effectAllowed: '', dropEffect: '', setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+    fireEvent.dragStart(screen.getByText('web-1', {selector: '.label'}).closest('.host')!, {dataTransfer: dt})
+    const group = screen.getByRole('button', {name: 'Open group Gitechvn'})
+    fireEvent.dragOver(group, {dataTransfer: dt})
+    fireEvent.drop(group, {dataTransfer: dt})
+    await waitFor(() => expect(be.state.hosts.find(h => h.id === 'h1')?.group_id).toBe('g1'))
+    expect(await screen.findByText(/Moved web-1 to Gitechvn/)).toBeInTheDocument()
   })
 })

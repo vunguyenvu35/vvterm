@@ -56,3 +56,4 @@ mkdir -p "$ROOT/docs/screenshots"
 rm -f "$ROOT"/docs/screenshots/*.png # numbering changes between runs: drop stale shots
 cp "$WORK"/shots/*.png "$ROOT/docs/screenshots/"
 echo "screenshots copied to docs/screenshots"
+"$ROOT/scripts/check-doc-links.sh" || echo "WARNING: the docs link to screenshots that are gone (numbers shift when a step is added): fix the links"

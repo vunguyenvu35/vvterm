@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
 import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSidebar, IconSplitH, IconSplitV} from '../ui/Icons'
-import type {Tab} from '../layout'
+import {isTerminalTab, type Tab} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
 import type {Snippet} from '../types'
 
@@ -50,7 +50,7 @@ export function TopBar(p: Props) {
     setEditing(null)
   }
   const current = p.tabs.find(t => t.id === p.active)
-  const inTerminal = !!current && current.kind !== 'sftp'
+  const inTerminal = !!current && isTerminalTab(current)
   return (
     <div className="topbar" role="tablist" aria-label="Open tabs" onDoubleClick={e => {
       if (!(e.target as HTMLElement).closest('.tab, button, .top-tools, .snippet-picker, [role="menu"]')) p.onToggleMaximise?.()
@@ -62,14 +62,14 @@ export function TopBar(p: Props) {
       {p.tabs.map(t => (
         <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
           onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
-          {t.kind === 'sftp' ? <IconFolder size={15} /> : <IconTerminal />}
+          {t.kind === 'sftp' ? <IconFolder size={15} /> : t.kind === 'new' ? <IconPlus size={15} /> : <IconTerminal />}
           {editing?.id === t.id ? (
             <input className="tab-rename" aria-label="Tab name" autoFocus value={editing.value} maxLength={60}
               onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} onChange={e => setEditing({id: t.id, value: e.target.value})}
               onFocus={e => e.currentTarget.select()} onBlur={commit}
               onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') commit(); else if (e.key === 'Escape') setEditing(null) }} />
           ) : (
-            <span className="tab-title" title={t.pinned ? undefined : 'Double-click to rename'} onDoubleClick={() => { if (!t.pinned && p.onRename) setEditing({id: t.id, value: t.title}) }}>{t.title}</span>
+            <span className="tab-title" title={t.pinned ? t.title : t.title + ' (double-click to rename)'} onDoubleClick={() => { if (!t.pinned && p.onRename) setEditing({id: t.id, value: t.title}) }}>{t.title}</span>
           )}
           {!t.pinned && (
             <span className="x" role="button" aria-label={`Close ${t.title}`} onClick={e => { e.stopPropagation(); p.onClose(t.id) }}>
@@ -80,11 +80,11 @@ export function TopBar(p: Props) {
       ))}
       {menu && menuTab && (
         <div className="ctx-menu" role="menu" aria-label={'Tab ' + menuTab.title} style={{left: menu.x, top: menu.y}} onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
-          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onDuplicate} onClick={() => { setMenu(null); p.onDuplicate?.(menuTab.id) }}>Duplicate</button>
-          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onDuplicateWindow} onClick={() => { setMenu(null); p.onDuplicateWindow?.(menuTab.id) }}>Duplicate in new window</button>
+          <button role="menuitem" disabled={!isTerminalTab(menuTab) || !p.onDuplicate} onClick={() => { setMenu(null); p.onDuplicate?.(menuTab.id) }}>Duplicate</button>
+          <button role="menuitem" disabled={!isTerminalTab(menuTab) || !p.onDuplicateWindow} onClick={() => { setMenu(null); p.onDuplicateWindow?.(menuTab.id) }}>Duplicate in new window</button>
           <button role="menuitem" disabled={!p.onRename} onClick={() => { setMenu(null); setEditing({id: menuTab.id, value: menuTab.title}) }}>Rename</button>
-          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'row') }}>Split right</button>
-          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'col') }}>Split down</button>
+          <button role="menuitem" disabled={!isTerminalTab(menuTab) || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'row') }}>Split right</button>
+          <button role="menuitem" disabled={!isTerminalTab(menuTab) || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'col') }}>Split down</button>
           <div className="ctx-sep" role="separator" />
           <button role="menuitem" onClick={() => { setMenu(null); p.onClose(menuTab.id) }}>Close</button>
         </div>

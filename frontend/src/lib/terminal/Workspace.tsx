@@ -5,7 +5,9 @@ import {formatCombo} from '../shortcuts/shortcuts'
 import {OsIcon} from '../ui/OsIcon'
 import {IconBroadcast, IconClose, IconMaximizePane, IconMinimizePane} from '../ui/Icons'
 import {TerminalPane} from './TerminalPane'
-import type {Host, Settings} from '../types'
+import {NewTabScreen} from '../shell/NewTabScreen'
+import {ProtocolScreen, type Protocol} from './ProtocolScreen'
+import type {Group, Host, Settings} from '../types'
 import {resolveTerminalTheme} from './themes'
 import type {Appearance} from '../settings/appearance'
 
@@ -27,6 +29,16 @@ interface Props {
   onToggleBroadcast?(tabId: string): void
   /** the maximise button of a pane header */
   onToggleZoom?(tabId: string, paneId: string): void
+  /** a tab that asked which protocol to use got its answer */
+  onProtocol?(tabId: string, protocol: Protocol): void
+  /** a blank tab: a host was picked, or an open tab */
+  onOpenFromNewTab?(tabId: string, h: Host): void
+  onSelectTab?(id: string): void
+  groups?: Group[]
+  /** close a whole tab (the Close button of the connecting / protocol screens) */
+  onCloseTab?(tabId: string): void
+  /** the Show logs button of the connecting screen */
+  onShowLogs?(): void
 }
 
 /** Recursive split-pane tree per tab. Every tab stays mounted so its sessions keep running. */
@@ -48,6 +60,13 @@ export function Workspace(p: Props) {
     if (hostId.startsWith('telnet:')) return {label: h.label, detail: ['telnet', h.username].filter(Boolean).join(', '), os: h.os}
     return {label: h.label, detail: ['ssh', h.telnet_enabled ? 'telnet' : '', h.username].filter(Boolean).join(', '), os: h.os}
   }
+  /** "SSH host:port", "Telnet host:port", "this computer" */
+  const connectLine = (hostId: string) => {
+    const h = hostOf(hostId)
+    if (hostId === 'local') return 'local shell'
+    if (!h) return hostId.startsWith('serial:') ? 'serial' : ''
+    return hostId.startsWith('telnet:') ? `Telnet ${h.hostname}:${h.telnet_port || 23}` : `SSH ${h.hostname}:${h.port}`
+  }
   const hint = (id: string) => (p.shortcuts[id] ? ' (' + formatCombo(p.shortcuts[id]) + ')' : '')
 
   const render = (tab: Tab, n: Node, visible: boolean): JSX.Element => {
@@ -61,7 +80,7 @@ export function Workspace(p: Props) {
       const index = all.findIndex(l => l.id === n.id) + 1
       return (
         <div key={n.id} className={'pane-wrap' + (tab.broadcast ? ' broadcasting' : '')} style={hidden(n) ? {display: 'none'} : undefined} data-pane={n.id}>
-          <TerminalPane paneId={n.id} hostId={n.hostId} visible={visible && !hidden(n)} focused={tab.activePane === n.id}
+          <TerminalPane paneId={n.id} hostId={n.hostId} connect={{label: d.label, os: d.os, subtitle: connectLine(n.hostId)}} onShowLogs={p.onShowLogs} onCloseTab={() => p.onCloseTab?.(tab.id)} visible={visible && !hidden(n)} focused={tab.activePane === n.id}
             fontSize={p.settings.font_size} fontFamily={p.settings.font_family} termTheme={themeFor(n.hostId)} searchCombo={p.shortcuts.terminal_search}
             highlight={p.settings.highlight} copyOnSelect={p.settings.copy_on_select} rightClick={p.settings.right_click} copyCombo={p.shortcuts.terminal_copy} pasteCombo={p.shortcuts.terminal_paste}
             cursorStyle={p.settings.cursor_style} cursorBlink={p.settings.cursor_blink} scrollback={p.settings.scrollback}
@@ -104,7 +123,7 @@ export function Workspace(p: Props) {
     <div className="panes" style={{display: p.activeTab ? 'block' : 'none', background: termTheme.background}}>
       {p.tabs.map(t => (
         <div key={t.id} style={{display: t.id === p.activeTab ? 'block' : 'none', height: '100%'}}>
-          {t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
+          {t.kind === 'new' ? <NewTabScreen hosts={p.hosts ?? []} groups={p.groups ?? []} tabs={p.tabs} onOpen={h => p.onOpenFromNewTab?.(t.id, h)} onSelectTab={id => p.onSelectTab?.(id)} /> : t.choose && hostOf(leaves(t.root)[0].hostId) ? <ProtocolScreen host={hostOf(leaves(t.root)[0].hostId)!} onContinue={proto => p.onProtocol?.(t.id, proto)} onClose={() => p.onCloseTab?.(t.id)} /> : t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
         </div>
       ))}
     </div>

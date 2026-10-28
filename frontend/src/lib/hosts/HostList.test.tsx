@@ -246,3 +246,48 @@ describe('HostList: Grid / List view', () => {
     get.mockRestore(); set.mockRestore()
   })
 })
+
+describe('HostList: drag a host onto a group', () => {
+  const dt = () => {
+    const data: Record<string, string> = {}
+    return {data, types: [] as string[], effectAllowed: '', dropEffect: '',
+      setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+  }
+  const card = (name: string) => within(screen.getByRole('list', {name: 'Hosts'})).getAllByRole('listitem').find(e => e.querySelector('.label')?.textContent === name)!
+
+  it('dropping a host card on a group card moves the host there', async () => {
+    const onMoveHost = vi.fn()
+    setup({onMoveHost})
+    const {fireEvent} = await import('@testing-library/react')
+    const t = dt()
+    fireEvent.dragStart(card('db-1'), {dataTransfer: t})
+    const group = screen.getByRole('button', {name: 'Open group prod-cluster'})
+    fireEvent.dragOver(group, {dataTransfer: t})
+    expect(group).toHaveClass('drop-over')
+    fireEvent.drop(group, {dataTransfer: t})
+    expect(onMoveHost).toHaveBeenCalledWith(expect.objectContaining({id: 'b'}), 'g1')
+    expect(group).not.toHaveClass('drop-over')
+  })
+
+  it('inside a group, a host can go into a sub-group or out through "All hosts"', async () => {
+    const onMoveHost = vi.fn()
+    setup({onMoveHost})
+    const {fireEvent} = await import('@testing-library/react')
+    await userEvent.click(screen.getByRole('button', {name: 'Open group prod-cluster'}))
+    const t = dt()
+    fireEvent.dragStart(card('web-1'), {dataTransfer: t})
+    const edge = screen.getByRole('button', {name: 'Open group edge'})
+    fireEvent.dragOver(edge, {dataTransfer: t})
+    fireEvent.drop(edge, {dataTransfer: t})
+    expect(onMoveHost).toHaveBeenLastCalledWith(expect.objectContaining({id: 'a'}), 'g2')
+    const all = screen.getByRole('button', {name: 'All hosts'})
+    fireEvent.dragOver(all, {dataTransfer: t})
+    fireEvent.drop(all, {dataTransfer: t})
+    expect(onMoveHost).toHaveBeenLastCalledWith(expect.objectContaining({id: 'a'}), '')
+  })
+
+  it('cards are not draggable without a handler, and other drags are ignored', async () => {
+    setup()
+    expect(card('db-1')).not.toHaveAttribute('draggable', 'true')
+  })
+})

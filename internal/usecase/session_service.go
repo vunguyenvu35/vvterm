@@ -149,13 +149,15 @@ func (s *SessionService) run(sess *session) {
 	sess.mu.Unlock()
 
 	go sshx.Keepalive(cl, time.Duration(host.KeepaliveSec)*time.Second, 3, stop, nil)
-	s.c.learnOS(host, cl)
-	s.f.autoStart(sid, cl, host.ID)
+	// the terminal is ready as soon as the shell is open: what follows (the log line, the server type, the
+	// forwards that start with the terminal) must not keep the connecting screen waiting
 	sess.mu.Lock()
 	sess.state, sess.ready = "ready", map[string]any{"host": host.Label}
-	s.c.record(domain.ActConnect, host.ID, host.Label, fmt.Sprintf("Connected to %s:%d", host.Hostname, host.Port), true)
 	s.c.emit("term:ready:"+sid, sess.ready)
 	sess.mu.Unlock()
+	s.c.record(domain.ActConnect, host.ID, host.Label, fmt.Sprintf("Connected to %s:%d", host.Hostname, host.Port), true)
+	s.c.learnOS(host, cl)
+	s.f.autoStart(sid, cl, host.ID)
 
 	<-sh.Done()
 	err = sh.Err()

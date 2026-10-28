@@ -21,11 +21,19 @@ describe('SettingsApp (the Settings window process)', () => {
     expect(screen.queryByRole('button', {name: /Maximize|Minimize|Close settings/})).toBeNull()
   })
 
-  it('Esc does not close it (a real window is closed with its own button)', async () => {
+  it('Esc closes the window', async () => {
+    const quit = vi.fn()
+    ;(window as any).runtime = {EventsOn: () => () => {}, Quit: quit}
     setup()
     await screen.findByRole('dialog', {name: 'Settings'})
     await userEvent.keyboard('{Escape}')
-    expect(screen.getByRole('dialog', {name: 'Settings'})).toBeInTheDocument()
+    expect(quit).toHaveBeenCalledTimes(1)
+    delete (window as any).runtime
+  })
+
+  it('the title is centred between the macOS buttons and the right edge', () => {
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../styles.css'), 'utf8') as string
+    expect(css).toMatch(/\.win\.native \.win-title \{[^}]*padding: 0 84px;[^}]*justify-content: center/)
   })
 
   it('applies the saved theme, zoom and motion to its own page, and saves changes', async () => {

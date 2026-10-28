@@ -462,7 +462,7 @@ button.on-banner { background: #ffffff33; color: #fff; }
 /* Settings in its own native window: fills the window; the title bar starts after the macOS buttons and drags the window */
 .win-back.native { position: fixed; inset: 0; display: block; padding: 0; background: var(--bg); }
 .win.native { width: 100vw; height: 100vh; max-width: none; max-height: none; resize: none; border: 0; border-radius: 0; box-shadow: none; transform: none; }
-.win-title.native, .win.native .win-title { padding-left: 84px; cursor: default; --wails-draggable: drag; }
+.win-title.native, .win.native .win-title { padding: 0 84px; justify-content: center; cursor: default; --wails-draggable: drag; }
 .win.native .win-title button { --wails-draggable: no-drag; }
 
 /* Keychain: key cards and the docked New key panel */
@@ -655,3 +655,70 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .perm-octal { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .perm-octal input { width: 64px; text-align: center; margin-left: 8px; }
 .ctx-menu .danger-item { color: var(--danger, #ef5b5b); }
+
+/* dragging a host onto a group */
+.card.drop-over { border-color: var(--accent); background: var(--accent-soft); }
+.crumbs .link.drop-over { color: var(--accent); text-decoration: underline; }
+.host.card[draggable=true] { cursor: grab; }
+
+/* many tabs: they shrink (down to the icon and the close button) instead of pushing the tools off the bar */
+.topbar > .tab { flex: 0 1 190px; min-width: 52px; }
+.topbar > .tab.active { min-width: 96px; }
+.topbar > .tab.tab-home, .topbar > .tab.add { flex: none; min-width: 0; }
+.topbar .spacer { flex: 1 1 0; min-width: 0; }
+.topbar .top-tools { flex: none; }
+.topbar .tab > svg { flex: none; }
+.topbar .tab .x { flex: none; }
+.topbar .tab-title { min-width: 0; }
+
+/* ---- connecting screen and "Choose protocol" ---- */
+.connect-screen { display: flex; justify-content: center; align-items: flex-start; height: 100%; padding-top: 12vh; background: var(--bg); }
+.connect-over { position: absolute; inset: 0; z-index: 6; }
+.connect-card { width: min(400px, 90vw); display: flex; flex-direction: column; gap: 18px; }
+.connect-head { display: flex; align-items: center; gap: 14px; }
+.connect-head .os-tile, .connect-os { width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-3); flex: none; }
+.connect-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.connect-name small { color: var(--muted); font-size: 12px; }
+.connect-track { display: flex; align-items: center; }
+.connect-track .line { flex: 1; height: 3px; background: var(--line); border-radius: 2px; }
+.connect-track .node { position: relative; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-3); color: var(--text); flex: none; }
+.connect-track .node.start { background: #2f7bf5; color: #fff; }
+.connect-track.failed .node.start { background: var(--danger, #ef5b5b); }
+.connect-track .ring { position: absolute; inset: -5px; border-radius: 50%; border: 3px solid transparent; border-top-color: #2f7bf5; border-right-color: #2f7bf5; animation: connect-spin 1s linear infinite; }
+@keyframes connect-spin { to { transform: rotate(360deg); } }
+[data-motion=reduced] .connect-track .ring { animation: none; }
+.connect-title { margin: 6px 0 0; font-weight: 500; font-size: 17px; }
+.connect-msg { color: var(--muted); }
+.connect-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.proto-list { display: flex; flex-direction: column; gap: 12px; }
+.proto { display: flex; justify-content: space-between; align-items: center; text-align: left; padding: 14px 16px; background: var(--bg-3); border: 2px solid transparent; border-left: 5px solid #2f7bf5; border-radius: 10px; color: var(--text); }
+.proto.telnet { border-left-color: #7c5cd6; }
+.proto.ssh { border-left-color: #1f9d55; }
+.proto.on { border-color: #1f9d55; border-left-width: 5px; }
+.proto.telnet.on { border-color: #7c5cd6; }
+.proto-main { display: flex; flex-direction: column; gap: 3px; }
+.proto-main em { color: var(--muted); font-size: 12.5px; }
+.proto-port u { text-underline-offset: 3px; margin-left: 4px; }
+.topbar .tab-title { flex: 1 1 auto; }
+.topbar .tab .x { margin-left: auto; }
+
+/* ---- New Tab: search and recent connections ---- */
+.newtab { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8vh 24px 0; height: 100%; background: var(--bg); }
+.newtab-search { display: flex; align-items: center; gap: 10px; width: min(720px, 100%); height: 42px; padding: 0 14px; background: var(--bg-2); border: 1px solid #2f7bf5; border-radius: 10px; color: var(--muted); }
+.newtab-search input { flex: 1; min-width: 0; height: 100%; padding: 0; background: transparent; border: none; outline: none; color: var(--text); }
+.newtab-search kbd { font: inherit; font-size: 12px; color: var(--muted); }
+.newtab-card { width: min(720px, 100%); background: var(--card); border-radius: 14px; padding: 12px 14px 14px; }
+.newtab-head { display: flex; align-items: center; padding: 6px 2px 10px; }
+.newtab-list { display: flex; flex-direction: column; gap: 2px; }
+.newtab-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; text-align: left; background: transparent; border: none; border-radius: 8px; color: var(--text); }
+.newtab-row.on, .newtab-row:hover { background: var(--bg-3); }
+.newtab-os { width: 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-3); flex: none; }
+.newtab-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.newtab-where { color: var(--muted); font-size: 12px; }
+.newtab-empty { color: var(--muted); padding: 14px 4px; }
+
+/* the active tab shows its whole name; the others shrink to make room */
+.topbar > .tab { flex: 0 1 120px; }
+.topbar > .tab.active { flex: 0 0 auto; min-width: 120px; max-width: 260px; }
+.topbar > .tab:not(.active):not(.tab-home):not(.add) .x { opacity: 0; }
+.topbar > .tab:not(.active):hover .x { opacity: .55; }

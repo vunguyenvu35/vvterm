@@ -30,7 +30,7 @@
   </tr>
   <tr>
     <td><img src="docs/screenshots/11-test-connection-ok.png" alt="New host with a successful connection test"><br><sub>New host: Test connection, Save or Connect</sub></td>
-    <td><img src="docs/screenshots/41-settings-terminal-theme.png" alt="Settings window with terminal themes"><br><sub>Settings window and terminal themes</sub></td>
+    <td><img src="docs/screenshots/47-settings-terminal-theme.png" alt="Settings window with terminal themes"><br><sub>Settings window and terminal themes</sub></td>
   </tr>
 </table>
 

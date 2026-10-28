@@ -499,6 +499,14 @@ try {
     assert.equal(await page.getByRole('alertdialog').count(), 0, 'closing a tab does not ask')
     await page.getByRole('tab', {name, exact: true}).waitFor({state: 'detached'})
   }
+  // the + tab: a blank tab with a search box and the recent connections
+  await page.getByLabel('New connection').click()
+  await page.getByRole('tab', {name: 'New Tab', selected: true}).waitFor()
+  await page.getByRole('listbox', {name: 'Recent connections'}).getByRole('option').first().waitFor()
+  await shot(page, 'new-tab')
+  await page.getByLabel('Search hosts or tabs').fill('no-such-host-anywhere')
+  await page.getByText('Nothing matches.').waitFor()
+  await page.getByRole('button', {name: 'Close New Tab', exact: true}).click()
   await goHome()
 
   step('Find, filter and quick connect')

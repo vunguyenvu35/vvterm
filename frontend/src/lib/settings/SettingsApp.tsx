@@ -38,6 +38,6 @@ export default function SettingsApp() {
   if (!vault) return <div className="gate"><div className="muted">Loading…</div></div>
   return (
     <SettingsWindow native settings={settings} appearance={appearance} vault={vault} onSettings={setSettings}
-      onVault={() => void refresh()} onChanged={() => void refresh()} onClose={() => {}} />
+      onVault={() => void refresh()} onChanged={() => void refresh()} onClose={() => window.runtime?.Quit?.()} />
   )
 }

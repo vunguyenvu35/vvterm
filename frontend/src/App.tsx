@@ -23,7 +23,8 @@ import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
-import {closePane, duplicateOf, hasPane, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
+import {recordRecent} from './lib/hosts/recent'
+import {closePane, connectBlankTab, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
@@ -144,9 +145,34 @@ export default function App() {
 
   // a second tab on the same host is numbered ("web", "web (2)"…); double-click a tab to give it any name
   const connect = (h: Host) => {
+    recordRecent(h.id)
     const t = newTab(h.id, '')
-    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, h.label)}])
+    // a host that also has Telnet first asks which protocol to use
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, h.label), choose: !!h.telnet_enabled}])
     setActive(t.id)
+  }
+  // a host card dropped on a group card
+  const moveHost = (h: Host, groupId: string) => {
+    be.hosts.saveHost({...h, group_id: groupId})
+      .then(() => { void refreshData(); toast.info(groupId ? 'Moved ' + h.label + ' to ' + (groups.find(g => g.id === groupId)?.name ?? 'the group') : 'Moved ' + h.label + ' out of its group') })
+      .catch(e => toast.error(errMsg(e)))
+  }
+  // the answer of a tab that asked which protocol to use: the same tab goes on with it
+  const chooseProtocol = (tabId: string, proto: 'ssh' | 'telnet') => setTabs(ts => ts.map(t => {
+    if (t.id !== tabId || t.root.type !== 'leaf') return t
+    const h = hosts.find(x => x.id === (t.root as Leaf).hostId)
+    const title = proto === 'telnet' && h ? uniqueTitle(ts.filter(x => x.id !== tabId), h.label + ' (Telnet)') : t.title
+    return {...t, choose: false, title, root: proto === 'telnet' ? {...t.root, hostId: 'telnet:' + t.root.hostId} : t.root}
+  }))
+  // the + tab: a blank tab with a search box and the recent connections
+  const openBlankTab = () => {
+    const t = newBlankTab('')
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, 'New Tab')}])
+    setActive(t.id)
+  }
+  const openFromBlank = (tabId: string, h: Host) => {
+    recordRecent(h.id)
+    setTabs(ts => ts.map(t => (t.id === tabId ? {...connectBlankTab(t, h.id, uniqueTitle(ts.filter(x => x.id !== tabId), h.label), !!h.telnet_enabled)} : t)))
   }
   const renameTab = (id: string, name: string) => {
     const title = name.trim().slice(0, MAX_TAB_TITLE)
@@ -205,7 +231,7 @@ export default function App() {
   /** types text into the focused pane (the sidebar's snippets and history); `run` presses Enter too */
   const insertIntoTerminal = (text: string, run: boolean) => {
     const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
-    if (!tab || tab.kind === 'sftp') return toast.error('Open a terminal first.')
+    if (!tab || !isTerminalTab(tab)) return toast.error('Open a terminal first.')
     if (!writeToPane(tab.activePane, toTerminalInput(text, run))) toast.error('The focused terminal is not connected yet.')
   }
   const runSnippet = (s: Snippet, execute: boolean) => {
@@ -240,7 +266,7 @@ export default function App() {
   const termActive = tabs.some(t => t.id === active) ? active : ''
   const onHome = active === 'home' || !termActive
   const activeTabObj = tabs.find(t => t.id === termActive)
-  if (termActive && activeTabObj?.kind !== 'sftp' && lastTerm !== termActive) setLastTerm(termActive)
+  if (termActive && activeTabObj && isTerminalTab(activeTabObj) && lastTerm !== termActive) setLastTerm(termActive)
 
   const saveSettings = (patch: Partial<Settings>) => {
     // optimistic and serialised, so quick repeats (holding a zoom shortcut) build on each other
@@ -259,10 +285,10 @@ export default function App() {
     const at = onHome ? 0 : Math.max(0, ids.indexOf(termActive))
     setActive(ids[(at + dir + ids.length) % ids.length])
   }
-  const inTerminalTab = !!activeTabObj && activeTabObj.kind !== 'sftp'
+  const inTerminalTab = !!activeTabObj && isTerminalTab(activeTabObj)
   act.current = {
     open_settings: () => openSettings(true),
-    new_connection: () => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) },
+    new_connection: openBlankTab,
     new_host: () => { goHome('hosts'); setDialog({k: 'host'}) },
     new_local_terminal: () => openDevice('local', 'Local'),
     lock_vault: () => { void be.vault.lock().then(refreshVault) },
@@ -294,7 +320,7 @@ export default function App() {
   return (
     <div className="shell">
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
-        onNew={() => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) }}
+        onNew={openBlankTab}
         onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} onRunSnippet={runSnippet}
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <div className="body">
@@ -302,7 +328,7 @@ export default function App() {
           <Nav page={page} onPage={changePage} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
           <main className="main">
             {page === 'hosts' && (
-              <HostList groups={groups} hosts={hosts} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
+              <HostList groups={groups} hosts={hosts} onMoveHost={moveHost} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
                 toolbar={<>
                   <span className="split-wrap">
                     <button className="split-btn" aria-label="New host" onClick={() => setDialog({k: 'host'})}><IconPlus size={14} /> New host</button>
@@ -320,7 +346,7 @@ export default function App() {
                 onNew={mode => { setDraft(''); setDialog({k: 'key', mode}) }} onChanged={() => void refreshData()} />
             )}
             {page === 'snippets' && (
-              <SnippetsPage snippets={snippets} canRun={tabs.some(t => t.kind !== 'sftp')} onNew={() => setDialog({k: 'snippet'})}
+              <SnippetsPage snippets={snippets} canRun={tabs.some(isTerminalTab)} onNew={() => setDialog({k: 'snippet'})}
                 onRun={runSnippet} onEdit={s => setDialog({k: 'snippet', snippet: s})} onDelete={delSnippet} />
             )}
             {page === 'knownhosts' && <KnownHostsPage />}
@@ -347,8 +373,8 @@ export default function App() {
           {dialog?.k === 'key' && <KeyPanel key={dialog.mode} mode={dialog.mode} onClose={close} onChanged={() => void refreshData()} onDraft={setDraft} />}
           {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
-        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} />
-        {sidebarOpen && !onHome && activeTabObj && activeTabObj.kind !== 'sftp' && (
+        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
+        {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
           <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} snippets={snippets} settings={settings} appearance={appearance}
             onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings} />
         )}

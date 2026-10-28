@@ -74,7 +74,6 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   useEffect(() => { void be.system.info().then(i => setVersion(i.version)).catch(() => {}) }, [be])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (native) return // a real window is closed with its own red button
       if (e.key === 'Escape' && !document.querySelector('.select-menu') && !document.querySelector('.key-capture')) onClose() // a dropdown or a recording eats its own Esc
     }
     window.addEventListener('keydown', onKey)

@@ -1,6 +1,6 @@
 import {OS_INFO, OsIcon, osName} from '../ui/OsIcon'
 import {loadView, saveView, ViewMenu, ViewMode} from './ViewMenu'
-import {ReactNode, useMemo, useState} from 'react'
+import {DragEvent, ReactNode, useMemo, useState} from 'react'
 import type {Env, Group, Host} from '../types'
 import {formatAddr} from '../util'
 import {IconChevron, IconEdit, IconFolder, IconForward, IconPlay, IconSearch, IconServer, IconTerminal, IconTrash} from '../ui/Icons'
@@ -22,6 +22,8 @@ interface Props {
   onForwards(h: Host): void
   /** open the host with Telnet (only offered for hosts that have it enabled) */
   onTelnet?(h: Host): void
+  /** a host card was dropped on a group card (or on "All hosts", groupId ''): put the host there */
+  onMoveHost?(h: Host, groupId: string): void
   onEditGroup(g: Group): void
   onDeleteGroup(g: Group): void
   /** Text being typed in the New host panel: shown as a highlighted draft card. `undefined` = no draft. */
@@ -31,6 +33,7 @@ interface Props {
 }
 
 const ENVS: Env[] = ['prod', 'staging', 'dev']
+export const HOST_DRAG = 'application/x-vvterm-host'
 
 /** Parses "ssh user@host:2222", "user@host" or "host". */
 export function parseQuickConnect(text: string): QuickConnect | null {
@@ -58,6 +61,20 @@ export function HostList(p: Props) {
   const [view, setView] = useState<ViewMode>(loadView)
   const changeView = (v: ViewMode) => { setView(v); saveView(v) }
   const [groupId, setGroupId] = useState('')
+  const [dropOn, setDropOn] = useState<string | null>(null) // the group (or '' for All hosts) a host is being dragged over
+  /** drop target props: a host card dragged over turns the target on, dropping it moves the host */
+  const target = (gid: string) => ({
+    onDragOver: (e: DragEvent) => { if (p.onMoveHost && Array.from(e.dataTransfer.types).includes(HOST_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropOn(gid) } },
+    onDragLeave: () => setDropOn(d => (d === gid ? null : d)),
+    onDrop: (e: DragEvent) => {
+      setDropOn(null)
+      const id = e.dataTransfer.getData(HOST_DRAG)
+      const h = p.hosts.find(x => x.id === id)
+      if (!id || !h || !p.onMoveHost) return
+      e.preventDefault()
+      if ((h.group_id || '') !== gid) p.onMoveHost(h, gid)
+    },
+  })
 
   const groupIds = useMemo(() => new Set(p.groups.map(g => g.id)), [p.groups])
   // a group whose id vanished (deleted elsewhere) falls back to the root
@@ -102,7 +119,7 @@ export function HostList(p: Props) {
   }
 
   const hostCard = (h: Host) => (
-    <div key={h.id} className="host card" role="listitem" onDoubleClick={() => p.onConnect(h)} title={`Double-click to connect to ${h.label}`}>
+    <div key={h.id} className="host card" role="listitem" draggable={!!p.onMoveHost} onDragStart={e => { e.dataTransfer.setData(HOST_DRAG, h.id); e.dataTransfer.effectAllowed = 'move' }} onDoubleClick={() => p.onConnect(h)} title={`Double-click to connect to ${h.label}`}>
       {osName(h.os)
         ? (
           <span className="tile os-tile" style={{background: OS_INFO[h.os!].color}} title={`${osName(h.os)}${h.env ? ' · ' + h.env : ''}`} data-os={h.os}>
@@ -150,7 +167,7 @@ export function HostList(p: Props) {
 
       {!filtering && current && (
         <nav className="crumbs" aria-label="Group path">
-          <button className="link" onClick={() => setGroupId('')}>All hosts</button>
+          <button className={'link' + (dropOn === '' ? ' drop-over' : '')} onClick={() => setGroupId('')} {...target('')}>All hosts</button>
           {trail.map((g, i) => (
             <span key={g.id}><IconChevron size={12} /> {i === trail.length - 1 ? <b>{g.name}</b> : <button className="link" onClick={() => setGroupId(g.id)}>{g.name}</button>}</span>
           ))}
@@ -162,7 +179,7 @@ export function HostList(p: Props) {
           <h3 className="sec-title">Groups</h3>
           <div className={'cards' + (view === 'list' ? ' as-list' : '')}>
             {subgroups.map(g => (
-              <div key={g.id} className="group card" role="button" tabIndex={0} aria-label={`Open group ${g.name}`}
+              <div key={g.id} className={'group card' + (dropOn === g.id ? ' drop-over' : '')} role="button" tabIndex={0} aria-label={`Open group ${g.name}`} {...target(g.id)}
                 onClick={() => setGroupId(g.id)} onKeyDown={e => e.key === 'Enter' && setGroupId(g.id)}>
                 <span className="tile group-tile" style={g.color ? {background: g.color} : undefined}><IconFolder size={20} /></span>
                 <div className="meta">

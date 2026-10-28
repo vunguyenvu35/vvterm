@@ -1,4 +1,5 @@
 import {createLineTracker, recordCommand} from './history'
+import {ConnectScreen} from './ConnectScreen'
 import {useEffect, useRef, useState} from 'react'
 import {ITheme, Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -36,6 +37,11 @@ interface Props {
   /** key combinations for Copy and Paste (platform defaults when not given) */
   copyCombo?: string
   pasteCombo?: string
+  /** who this pane connects to: drawn on the connecting screen */
+  connect?: {label: string; os?: string; subtitle: string}
+  onShowLogs?(): void
+  /** the Close button of the connecting screen */
+  onCloseTab?(): void
   /** what the user typed in this pane (the Workspace sends it to the other panes while broadcasting) */
   onTyped?(data: string): void
   onFocus(): void
@@ -203,7 +209,11 @@ export function TerminalPane(p: Props) {
         const id = await be.session.open(p.hostId, t.cols || 80, t.rows || 24)
         if (disposed) { void be.session.close(id).catch(() => {}); return }
         sid.current = id
-        offs.push(be.on(`term:data:${id}`, (b64: string) => t.write(b64ToBytes(b64))))
+        offs.push(be.on(`term:data:${id}`, (b64: string) => {
+          t.write(b64ToBytes(b64))
+          // output can only come from a live shell: do not keep the connecting screen up until the ready event
+          if (stateRef.current === 'connecting') setSt('ready')
+        }))
         offs.push(be.on(`term:ready:${id}`, () => { setPrompt(null); setClosed(null); setSt('ready') }))
         offs.push(be.on(`term:hostkey:${id}`, (hk: HostKeyPrompt) => setPrompt(hk)))
         offs.push(be.on(`term:closed:${id}`, (c: ClosedInfo) => {
@@ -313,7 +323,17 @@ export function TerminalPane(p: Props) {
           <button className="icon" aria-label="Next match" onClick={() => search.current?.findNext(needle)}><IconArrowDown size={15} /></button>
         </div>
       )}
-      {state === 'connecting' && !prompt && <div className="banner info">Connecting…</div>}
+      {state === 'connecting' && !prompt && (p.connect
+        ? (
+          <div className="connect-over" role="status" aria-label="Connecting" style={{background: p.termTheme.background}}>
+            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting"
+              headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
+              footer={p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : undefined}>
+              <div className="connect-msg">Connecting…</div>
+            </ConnectScreen>
+          </div>
+        )
+        : <div className="banner info">Connecting…</div>)}
       {state === 'closed' && closed && (
         <div className="banner" role="alert">
           <span>{closed.reason}</span>
