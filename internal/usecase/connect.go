@@ -76,6 +76,12 @@ func vaultErr(err error) error {
 	return err
 }
 
+// progress tells the connecting screen how far a connection got: term:progress:<sid> with the stage
+// "connecting" (dialling, key exchange, login), then "authenticated"; term:ready follows the opened shell.
+func (c *Core) progress(sid, stage string) {
+	c.emit("term:progress:"+sid, map[string]any{"stage": stage})
+}
+
 // hostKeyTimeout bounds how long a connection waits for the user to answer a fingerprint prompt.
 const hostKeyTimeout = 2 * time.Minute
 
@@ -93,7 +99,11 @@ func (c *Core) connect(hostID, promptKey string, abort <-chan struct{}) (*sshx.C
 			return nil, target, err
 		}
 	}
+	c.progress(promptKey, "connecting")
 	cl, err := c.dialHops(hops, promptKey, abort)
+	if err == nil {
+		c.progress(promptKey, "authenticated") // the key exchange and the login are done
+	}
 	if errors.Is(err, sshx.ErrHostKeyChanged) {
 		c.record(domain.ActHostKey, target.ID, target.Label, "HOST KEY CHANGED: connection blocked (possible man-in-the-middle)", false)
 	}

@@ -340,8 +340,10 @@ describe('TerminalPane: the connecting screen', () => {
     expect(within(screenEl).getByText('SSH w1.example.com:22')).toBeInTheDocument()
     expect(within(screenEl).getByRole('button', {name: 'Show logs'})).toBeInTheDocument()
     expect(within(screenEl).getByRole('button', {name: 'Close'})).toBeInTheDocument()
-    expect(bar()).toHaveAttribute('data-progress', '0.9')
-    await waitFor(() => expect(bar()!.style.width).toBe('90%'))
+    // it waits slowly: a third of the way over several seconds
+    expect(bar()).toHaveAttribute('data-progress', '0.3')
+    expect(bar()!.style.transitionDuration).toBe('6000ms')
+    await waitFor(() => expect(bar()!.style.width).toBe('30.0%'))
   })
 
   it('when the session is ready the line runs to its end, and only then does the terminal show', async () => {
@@ -357,5 +359,38 @@ describe('TerminalPane: the connecting screen', () => {
     act(() => be.emit(`term:closed:${sid}`, {reason: 'connection refused', clean: false}))
     await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull())
     expect(await screen.findByRole('alert')).toHaveTextContent('connection refused')
+  })
+
+  it('moves faster when the backend says the login is done, and fastest at the end', async () => {
+    const {be, sid} = await mountWith()
+    act(() => be.emit('term:progress:' + sid, {stage: 'authenticated'}))
+    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '0.92'))
+    expect(bar()!.style.transitionDuration).toBe('3000ms')
+    act(() => be.emit('term:ready:' + sid, {}))
+    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '1'))
+    expect(bar()!.style.transitionDuration).toBe('220ms')
+  })
+
+  it('a failure turns the screen into the error: red line, the reason, Retry, Show logs and Close', async () => {
+    const {be, sid} = await mountWith()
+    act(() => be.emit('term:closed:' + sid, {reason: 'ssh: handshake failed: unable to authenticate', clean: false}))
+    const failed = await screen.findByLabelText('Connection failed')
+    expect(within(failed).getByRole('alert')).toHaveTextContent('unable to authenticate')
+    expect(failed.querySelector('.connect-track')).toHaveClass('failed')
+    expect(within(failed).getByRole('button', {name: 'Show logs'})).toBeInTheDocument()
+    expect(within(failed).getByRole('button', {name: 'Close'})).toBeInTheDocument()
+    await userEvent.click(within(failed).getByRole('button', {name: 'Retry'}))
+    expect(be.state.calls.some(c => c[0] === 'session.reconnect')).toBe(true)
+    expect(await screen.findByRole('status', {name: 'Connecting'})).toBeInTheDocument()
+    expect(screen.queryByLabelText('Connection failed')).toBeNull()
+  })
+
+  it('a connection lost after it was up keeps the old banner, not the connecting screen', async () => {
+    const {be, sid} = await mountWith()
+    act(() => be.emit('term:ready:' + sid, {}))
+    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 1500})
+    act(() => be.emit('term:closed:' + sid, {reason: 'connection lost: EOF', clean: false}))
+    expect(await screen.findByText('Press Enter to reconnect')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Connection failed')).toBeNull()
   })
 })

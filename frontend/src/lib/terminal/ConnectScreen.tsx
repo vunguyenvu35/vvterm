@@ -12,6 +12,8 @@ interface Props {
   step: ConnectStep
   /** how far along the line the connection is (0..1); it fills the line from the plug to the terminal */
   progress?: number
+  /** how long the line takes to get there (ms): slow while waiting, quick when something happened */
+  duration?: number
   /** a button at the right of the header, e.g. Show logs */
   headerAction?: ReactNode
   children?: ReactNode
@@ -22,7 +24,7 @@ interface Props {
  * The screen of a tab that is not connected yet, like Termius: who we are connecting to, a line from "plug"
  * to "terminal" that shows how far it got, and room below for the protocol choice, the message or the buttons.
  */
-export function ConnectScreen({label, os, subtitle, step, progress, headerAction, children, footer}: Props) {
+export function ConnectScreen({label, os, subtitle, step, progress, duration, headerAction, children, footer}: Props) {
   // the line starts empty and then moves to where it should be, so that the move is seen
   const [shown, setShown] = useState(0)
   useEffect(() => {
@@ -39,7 +41,7 @@ export function ConnectScreen({label, os, subtitle, step, progress, headerAction
         </div>
         <div className={'connect-track ' + step} aria-hidden="true">
           <span className="node start">{step === 'connecting' && <i className="ring" />}<IconPlug size={14} /></span>
-          <span className={'line' + (progress !== undefined && progress >= 1 ? ' full' : '')}>{progress !== undefined && <i style={{width: Math.round(shown * 100) + '%'}} data-progress={progress} />}</span>
+          <span className={'line' + (progress !== undefined && progress >= 1 ? ' full' : '')}>{progress !== undefined && <i style={{width: (shown * 100).toFixed(1) + '%', transitionDuration: duration !== undefined ? duration + 'ms' : undefined}} data-progress={progress} />}</span>
           <span className="node end"><IconTerminal size={13} /></span>
         </div>
         {children}

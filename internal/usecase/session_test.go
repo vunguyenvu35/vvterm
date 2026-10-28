@@ -53,6 +53,72 @@ func TestSessionFullLifecycle(t *testing.T) {
 	}
 }
 
+func TestAConnectionReportsHowFarItGotBeforeItIsReady(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv := startServer(t)
+	host := h.sshHost(t, "web", srv, "")
+	sid, err := h.open(host.ID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.trust(t, sid)
+	h.rec.wait(t, "term:ready:"+sid)
+	var stages []string
+	for _, n := range h.rec.names() {
+		if n == "term:progress:"+sid {
+			stages = append(stages, "progress")
+		}
+		if n == "term:ready:"+sid {
+			stages = append(stages, "ready")
+		}
+	}
+	if len(stages) != 3 || stages[0] != "progress" || stages[1] != "progress" || stages[2] != "ready" {
+		t.Fatalf("connecting, authenticated, then ready: %v", stages)
+	}
+	h.rec.mu.Lock()
+	var got []string
+	for _, e := range h.rec.events {
+		if e.name == "term:progress:"+sid {
+			got = append(got, e.data.(map[string]any)["stage"].(string))
+		}
+	}
+	h.rec.mu.Unlock()
+	if got[0] != "connecting" || got[1] != "authenticated" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestAConnectionThatFailsReportsNoSuchProgressAsDone(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	host := h.sshHost(t, "web", startServer(t), "")
+	host.Hostname, host.Port = "127.0.0.1", 1 // nothing listens there
+	saved, err := h.app.Host.SaveHost(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := h.open(saved.ID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := h.rec.wait(t, "term:closed:"+sid)
+	if e.data.(map[string]any)["clean"].(bool) {
+		t.Fatal("a refused connection is not a clean end")
+	}
+	for _, n := range h.rec.names() {
+		if n == "term:ready:"+sid {
+			t.Fatal("ready after a failure")
+		}
+	}
+	h.rec.mu.Lock()
+	for _, e := range h.rec.events {
+		if e.name == "term:progress:"+sid && e.data.(map[string]any)["stage"] == "authenticated" {
+			h.rec.mu.Unlock()
+			t.Fatal("authenticated reported for a connection that never came up")
+		}
+	}
+	h.rec.mu.Unlock()
+}
+
 func TestHostKeyConfirmationRules(t *testing.T) {
 	h := newHarness(t).unlocked(t)
 	srv := startServer(t)

@@ -86,6 +86,20 @@ export function TerminalPane(p: Props) {
   onExit.current = p.onExit
 
   const setSt = (s: State) => { stateRef.current = s; setState(s) }
+  // how far the connection got (events from the backend) and where the line stood when it failed
+  const [stage, setStage] = useState<'connecting' | 'authenticated'>('connecting')
+  const retry = useRef<() => void>(() => {})
+  const frozen = useRef(0)
+  const everReady = useRef(false)
+  useEffect(() => { if (state === 'ready') everReady.current = true }, [state])
+  /** the line's fill right now as a fraction (read from the screen: it is mid-animation) */
+  const measureLine = () => {
+    const line = document.querySelector<HTMLElement>('[data-pane="' + (p.paneId ?? '') + '"] .connect-track .line')
+    const fill = line?.querySelector<HTMLElement>('i')
+    return line && fill && line.offsetWidth ? Math.min(1, fill.offsetWidth / line.offsetWidth) : 0
+  }
+  // slow while it waits, quicker once the login is done, quickest at the end
+  const lineFor = state === 'ready' ? {progress: 1, duration: FINISH_MS} : stage === 'authenticated' ? {progress: 0.92, duration: 3000} : {progress: 0.3, duration: 6000}
   // the connecting screen's line runs to its end when the session is ready, and only then makes room for the terminal
   const [finishing, setFinishing] = useState(false)
   const wasConnecting = useRef(false)
@@ -163,6 +177,16 @@ export function TerminalPane(p: Props) {
       flush()
     }
 
+    // Never reconnect automatically: replaying commands unexpectedly is dangerous. Enter or the Retry button asks for it.
+    retry.current = () => {
+      setClosed(null)
+      setStage('connecting')
+      setSt('connecting')
+      void be.session.reconnect(sid.current, t.cols, t.rows).catch(e => {
+        setClosed({reason: errMsg(e), clean: false})
+        setSt('closed')
+      })
+    }
     const track = createLineTracker()
     t.onData(d => {
       if (stateRef.current === 'ready') {
@@ -181,13 +205,7 @@ export function TerminalPane(p: Props) {
           }, 250)
         }
       } else if (stateRef.current === 'closed' && (d === '\r' || d === '\n')) {
-        // Never reconnect automatically: replaying commands unexpectedly is dangerous.
-        setClosed(null)
-        setSt('connecting')
-        void be.session.reconnect(sid.current, t.cols, t.rows).catch(e => {
-          setClosed({reason: errMsg(e), clean: false})
-          setSt('closed')
-        })
+        retry.current()
       }
     })
     const unregister = p.paneId ? registerPane(p.paneId, text => {
@@ -238,7 +256,9 @@ export function TerminalPane(p: Props) {
         }))
         offs.push(be.on(`term:ready:${id}`, () => { setPrompt(null); setClosed(null); setSt('ready') }))
         offs.push(be.on(`term:hostkey:${id}`, (hk: HostKeyPrompt) => setPrompt(hk)))
+        offs.push(be.on(`term:progress:${id}`, (e: {stage?: string}) => { if (e?.stage === 'authenticated') setStage('authenticated') }))
         offs.push(be.on(`term:closed:${id}`, (c: ClosedInfo) => {
+          frozen.current = measureLine() // the line stops where it was
           setPrompt(null)
           setSt('closed')
           if (c.clean) onExit.current()
@@ -348,7 +368,7 @@ export function TerminalPane(p: Props) {
       {(state === 'connecting' || finishing) && !prompt && (p.connect
         ? (
           <div className="connect-over" role="status" aria-label="Connecting" style={{background: p.termTheme.background}}>
-            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting" progress={state === 'ready' ? 1 : 0.9}
+            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting" progress={lineFor.progress} duration={lineFor.duration}
               headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
               footer={p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : undefined}>
               <div className="connect-msg">Connecting…</div>
@@ -356,7 +376,19 @@ export function TerminalPane(p: Props) {
           </div>
         )
         : <div className="banner info">Connecting…</div>)}
-      {state === 'closed' && closed && (
+      {state === 'closed' && closed && !everReady.current && p.connect && (
+        <div className="connect-over" aria-label="Connection failed" style={{background: p.termTheme.background}}>
+          <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="failed" progress={frozen.current} duration={0}
+            headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
+            footer={<>
+              {p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : <span />}
+              <button className="primary" onClick={() => retry.current()}>Retry</button>
+            </>}>
+            <div className="connect-error" role="alert">{closed.reason}<small>Press Enter to try again</small></div>
+          </ConnectScreen>
+        </div>
+      )}
+      {state === 'closed' && closed && !(!everReady.current && p.connect) && (
         <div className="banner" role="alert">
           <span>{closed.reason}</span>
           <b>Press Enter to reconnect</b>
