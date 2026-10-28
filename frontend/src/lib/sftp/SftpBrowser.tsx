@@ -38,12 +38,13 @@ export function replaceQuestion(r: TransferResult, where: string): string {
  * buttons. Folders go with everything inside. Nothing is replaced without asking, and the question comes
  * once for the whole batch.
  */
-export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0}: {hostId?: string; hostLabel?: string; nonce?: number}) {
+export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: given}: {hostId?: string; hostLabel?: string; nonce?: number; /** the app's current hosts (kept up to date by the app); without it they are loaded once */ hosts?: Host[]}) {
   const be = useBackend()
   const toast = useToast()
   const confirm = useConfirm()
   const [host, setHost] = useState<RemoteHost | null>(hostId ? {id: hostId, label: hostLabel || hostId} : null)
-  const [hosts, setHosts] = useState<Host[]>([])
+  const [loaded, setLoaded] = useState<Host[]>([])
+  const hosts = given ?? loaded
   const [localHome, setLocalHome] = useState('')
   const [local, setLocal] = useState<PaneState>(NONE)
   const [remote, setRemote] = useState<PaneState>(NONE)
@@ -60,7 +61,8 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0}: {hostId?: 
   }, [hostId, nonce])
   useEffect(() => {
     void be.local.home().then(setLocalHome).catch(e => setError(errMsg(e)))
-    void be.hosts.listHosts({}).then(h => setHosts(h ?? [])).catch(() => {})
+    if (!given) void be.hosts.listHosts({}).then(h => setLoaded(h ?? [])).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [be])
   // a finished transfer shows "done" for a moment and then goes away by itself
   useEffect(() => {

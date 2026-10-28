@@ -440,6 +440,8 @@ try {
   await nav('Hosts').click()
   await page.getByRole('button', {name: 'Terminal', exact: true}).click()
   await page.getByRole('tab', {name: 'Local', selected: true}).waitFor()
+  // wait for the shell's prompt: what is typed before the shell is ready has nowhere to go
+  await page.waitForFunction(() => (Array.from(document.querySelectorAll('.xterm-rows')).at(-1)?.textContent ?? '').trim().length > 0, null, {timeout: 30000})
   await page.locator('.pane').last().click()
   await page.keyboard.type('echo vvterm-local-$((6*7))')
   await page.keyboard.press('Enter')
@@ -663,6 +665,7 @@ try {
   await L('Master password').fill(NEW_MASTER)
   await L('Confirm password').fill(NEW_MASTER)
   await page.getByRole('button', {name: 'Create vault'}).click()
+  await nav('Hosts').click() // the app returns to the page it was on (Logs)
   await page.getByPlaceholder(/Find a host or ssh user@hostname/).waitFor()
   await page.getByRole('button', {name: 'Open group vl24h-prod'}).click()
   await page.locator('.host', {hasText: 'app-server'}).waitFor() // hosts survived the reset

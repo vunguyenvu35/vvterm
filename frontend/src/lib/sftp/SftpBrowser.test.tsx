@@ -445,3 +445,16 @@ describe('sftp format helpers', () => {
     expect(kindOf({name: 'trailing.', is_dir: false})).toBe('file')
   })
 })
+
+describe('SftpBrowser: the host list stays current', () => {
+  it('uses the hosts the app gives it, so a host added later is offered', async () => {
+    const be = makeFake()
+    const a = host({id: 'h1', label: 'first'}), b = host({id: 'h2', label: 'added-later'})
+    const {rerender} = render(<Providers be={be}><SftpBrowser hosts={[a]} /></Providers>)
+    await userEvent.click(within(R()).getByRole('button', {name: 'Select host'}))
+    expect(within(R()).queryByRole('button', {name: 'Connect to added-later'})).toBeNull()
+    rerender(<Providers be={be}><SftpBrowser hosts={[a, b]} /></Providers>)
+    expect(within(R()).getByRole('button', {name: 'Connect to added-later'})).toBeInTheDocument()
+    expect(calls(be, 'hosts.listHosts')).toHaveLength(0) // nothing is loaded twice
+  })
+})

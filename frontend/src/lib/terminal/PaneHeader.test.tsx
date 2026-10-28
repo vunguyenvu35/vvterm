@@ -56,13 +56,11 @@ describe('Workspace: the header of a pane', () => {
   })
 
   it('describes this computer, serial ports and Telnet panes', () => {
-    const split = (hostId: string) => splitPane({...newTab(hostId, 'a'), id: 't'}, newTab(hostId, 'x').activePane, 'row')
     const show = (hostId: string) => {
       let t = {...newTab(hostId, 'a'), id: 't'}
       t = splitPane(t, t.activePane, 'row')
       return render(<Workspace {...base} onFocusPane={vi.fn()} onPaneExit={vi.fn()} onClosePane={vi.fn()} tabs={[t]} hosts={hosts} />)
     }
-    void split
     let view = show('local')
     expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('This computer (1)')
     expect(screen.getAllByRole('toolbar')[0]).toHaveTextContent('local shell')

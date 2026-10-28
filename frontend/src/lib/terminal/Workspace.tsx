@@ -104,7 +104,7 @@ export function Workspace(p: Props) {
     <div className="panes" style={{display: p.activeTab ? 'block' : 'none', background: termTheme.background}}>
       {p.tabs.map(t => (
         <div key={t.id} style={{display: t.id === p.activeTab ? 'block' : 'none', height: '100%'}}>
-          {t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} /> : render(t, t.root, t.id === p.activeTab)}
+          {t.kind === 'sftp' ? <SftpBrowser hostId={leaves(t.root)[0].hostId} hostLabel={t.sftpLabel ?? ''} nonce={t.sftpNonce ?? 0} hosts={p.hosts} /> : render(t, t.root, t.id === p.activeTab)}
         </div>
       ))}
     </div>
