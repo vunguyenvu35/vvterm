@@ -130,3 +130,56 @@ func TestOpenPathRefusesFilesThatRunPrograms(t *testing.T) {
 		t.Fatal("relative path")
 	}
 }
+
+func TestSettingsExecutableUsesTheDocklessHelperWhenBuilt(t *testing.T) {
+	root := t.TempDir()
+	exe := filepath.Join(root, "vvterm.app", "Contents", "MacOS", "vvterm")
+	if got := settingsExecutable(exe); got != exe {
+		t.Fatalf("no helper: got %q, want the app itself", got)
+	}
+	helper := filepath.Join(root, "vvterm.app", "Contents", "Helpers", "VVTerm Settings.app", "Contents", "MacOS", "vvterm-settings")
+	if err := os.MkdirAll(filepath.Dir(helper), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(helper, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := filepath.Abs(settingsExecutable(exe))
+	if got != helper {
+		t.Fatalf("got %q, want the helper %q", got, helper)
+	}
+}
+
+func TestPrepareSettingsHelperLinksThePlistAndRefreshesOnRebuild(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "vvterm")
+	if err := os.WriteFile(exe, []byte("v1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, "cache")
+	bin, err := prepareSettingsHelper(exe, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plist, err := os.ReadFile(filepath.Join(root, "VVTerm Settings.app", "Contents", "Info.plist"))
+	if err != nil || !strings.Contains(string(plist), "<key>LSUIElement</key><true/>") {
+		t.Fatalf("the helper must have no Dock icon: %v %q", err, plist)
+	}
+	if b, _ := os.ReadFile(bin); string(b) != "v1" {
+		t.Fatalf("helper runs %q", b)
+	}
+	// a rebuilt app replaces the file: the helper follows
+	if err := os.Remove(exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, []byte("v22"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin2, err := prepareSettingsHelper(exe, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(bin2); string(b) != "v22" {
+		t.Fatalf("helper not refreshed: %q", b)
+	}
+}

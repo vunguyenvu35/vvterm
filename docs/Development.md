@@ -15,6 +15,8 @@ For people who want to build, test or change VVTerm. End users should read the [
 ```bash
 make dev          # hot-reload development mode (wails dev)
 make build        # build/bin/vvterm.app
+                  # (on macOS this also adds the Dock-less Settings helper, see scripts/macos-settings-helper.sh;
+                  # under make dev the app makes the same helper itself in ~/Library/Caches/vvterm)
 make test         # go vet + go test -race + frontend typecheck + vitest
 ./e2e/run.sh      # the walkthrough: also regenerates docs/screenshots and then runs scripts/check-doc-links.sh
 make e2e          # end-to-end walkthrough on the real backend; refreshes docs/screenshots

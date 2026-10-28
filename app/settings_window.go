@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
 	"sync"
 	"time"
 
@@ -30,7 +33,7 @@ func NewSettingsLauncher(b *Bridge) *SettingsLauncher {
 		if err != nil {
 			return nil, err
 		}
-		cmd := exec.Command(exe, SettingsFlag)
+		cmd := exec.Command(settingsExecutable(exe), SettingsFlag)
 		cmd.Env = os.Environ()
 		return cmd, cmd.Start()
 	}}
@@ -163,4 +166,77 @@ func menuViaMain(c *BridgeClient, ctx func() context.Context) *menu.Menu {
 			}
 		},
 	})
+}
+
+// settingsExecutable is what to start for the Settings window. On macOS it is a helper bundle marked as having
+// no Dock icon, so the window opens without the Dock reacting: the one a build made (Contents/Helpers, see
+// scripts/macos-settings-helper.sh), or else one made on the fly in the cache folder, which is what happens
+// under `make dev`. Anywhere else, and when no helper can be made, it is the app itself.
+func settingsExecutable(exe string) string {
+	helper := filepath.Join(filepath.Dir(exe), "..", "Helpers", "VVTerm Settings.app", "Contents", "MacOS", "vvterm-settings")
+	if st, err := os.Stat(helper); err == nil && st.Mode().IsRegular() {
+		return helper
+	}
+	if goruntime.GOOS == "darwin" {
+		if cache, err := os.UserCacheDir(); err == nil {
+			if h, err := prepareSettingsHelper(exe, filepath.Join(cache, "vvterm")); err == nil {
+				return h
+			}
+		}
+	}
+	return exe
+}
+
+const settingsHelperPlist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleName</key><string>VVTerm Settings</string>
+  <key>CFBundleExecutable</key><string>vvterm-settings</string>
+  <key>CFBundleIdentifier</key><string>com.wails.vvterm.settings</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSUIElement</key><true/>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+`
+
+// prepareSettingsHelper makes (or refreshes) root/VVTerm Settings.app around exe and returns the helper's
+// executable. It is a hard link to exe, so a rebuilt exe gets a new link the next time and nothing is copied;
+// across disks it falls back to a copy.
+func prepareSettingsHelper(exe, root string) (string, error) {
+	bundle := filepath.Join(root, "VVTerm Settings.app")
+	bin := filepath.Join(bundle, "Contents", "MacOS", "vvterm-settings")
+	src, err := os.Stat(exe)
+	if err != nil {
+		return "", err
+	}
+	if dst, err := os.Stat(bin); err == nil && (os.SameFile(src, dst) || (dst.Size() == src.Size() && !dst.ModTime().Before(src.ModTime()))) {
+		return bin, nil // already up to date
+	}
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "Contents", "Info.plist"), []byte(settingsHelperPlist), 0o644); err != nil {
+		return "", err
+	}
+	_ = os.Remove(bin)
+	if err := os.Link(exe, bin); err == nil {
+		return bin, nil
+	}
+	in, err := os.Open(exe)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(bin, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return "", err
+	}
+	return bin, out.Close()
 }
