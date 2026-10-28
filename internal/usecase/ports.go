@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"vvterm/internal/domain"
+	"vvterm/internal/sshx"
 )
 
 // Emitter delivers an event to the frontend. The delivery layer (Wails) supplies it.
@@ -22,6 +23,8 @@ type Repository interface {
 	ListHosts(domain.HostFilter) []domain.Host
 	GetHost(id string) (domain.Host, error)
 	SaveHost(domain.Host) (domain.Host, error)
+	// SetHostOS records the server type learned on a connection (icon) without touching other fields.
+	SetHostOS(id, osName string) error
 	DeleteHost(id string) error
 	JumpChain(hostID string) ([]domain.Host, error)
 
@@ -29,6 +32,10 @@ type Repository interface {
 	GetIdentity(id string) (domain.Identity, error)
 	SaveIdentity(domain.Identity) (domain.Identity, error)
 	DeleteIdentity(id string) error
+
+	ListSnippets() []domain.Snippet
+	SaveSnippet(domain.Snippet) (domain.Snippet, error)
+	DeleteSnippet(id string) error
 
 	ListForwards(hostID string) []domain.PortForward
 	GetForward(id string) (domain.PortForward, error)
@@ -47,6 +54,7 @@ type SecretVault interface {
 	EnableKeychain() error
 	DisableKeychain() error
 	Lock()
+	Destroy() error
 	ChangePassword(oldPW, newPW string) error
 	SetAutoLock(d time.Duration)
 	OnLock(func())
@@ -65,3 +73,39 @@ type SecretVault interface {
 	SealBlob(plain, aad []byte) ([]byte, error)
 	OpenBlob(blob, aad []byte) ([]byte, error)
 }
+
+// RemoteFS is the port for remote file access (SFTP). Implemented by internal/sftpx. All remote
+// paths are absolute; Upload and Download refuse to replace an existing target unless overwrite is set.
+type RemoteFS interface {
+	Home() (string, error)
+	List(dir string) ([]domain.RemoteEntry, error)
+	Mkdir(path string) error
+	Rename(from, to string) error
+	Remove(path string, recursive bool) error
+	Upload(local, remote string, overwrite bool, progress func(done, total int64)) error
+	Download(remote, local string, overwrite bool, progress func(done, total int64)) error
+	Close() error
+}
+
+// RemoteFSOpener starts a RemoteFS on an established SSH connection.
+type RemoteFSOpener func(c *sshx.Client) (RemoteFS, error)
+
+// Shell is a running terminal: an SSH shell, a shell on this computer, or a serial port. Output goes to the
+// callback given when it was opened; keystrokes come in through Write.
+type Shell interface {
+	Write(p []byte) (int, error)
+	Resize(cols, rows int) error
+	// Done is closed when the terminal has ended; Err then says why (nil for a normal end).
+	Done() <-chan struct{}
+	Err() error
+	Close()
+}
+
+// ShellOpener starts a shell on this computer.
+type ShellOpener func(cols, rows int, onData func([]byte)) (Shell, error)
+
+// SerialOpener opens a serial device at a baud rate.
+type SerialOpener func(path string, baud int, onData func([]byte)) (Shell, error)
+
+// SerialLister lists the serial ports this computer has.
+type SerialLister func() ([]string, error)

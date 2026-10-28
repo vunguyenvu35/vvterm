@@ -40,3 +40,6 @@ id_rsa
 *.db
 *.db-wal
 *.db-shm
+
+# Release artifacts
+/dist/

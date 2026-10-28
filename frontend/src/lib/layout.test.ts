@@ -55,3 +55,19 @@ describe('pane layout', () => {
     expect(after.activePane).toBe(b)
   })
 })
+
+describe('sftp tabs', () => {
+  it('are tabs of kind sftp with a single leaf for the host', async () => {
+    const {newSftpTab, isSftp} = await import('./layout')
+    const t = newSftpTab('h1', 'web · SFTP')
+    expect(isSftp(t)).toBe(true)
+    expect(isSftp(newTab('h1', 'web'))).toBe(false)
+    expect(leaves(t.root)).toHaveLength(1)
+  })
+
+  it('cannot be split', async () => {
+    const {newSftpTab} = await import('./layout')
+    const t = newSftpTab('h1', 'x')
+    expect(splitPane(t, t.activePane, 'row')).toBe(t)
+  })
+})

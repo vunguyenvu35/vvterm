@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/logo-mark-256.png" alt="VVTerm" width="88"></p>
+
 # Test plan
 
 The authoritative, always-current list of automated test cases is [TestInventory.md](TestInventory.md) (generated). This plan explains how features map to test levels and what is not covered.
@@ -29,10 +31,21 @@ The authoritative, always-current list of automated test cases is [TestInventory
 | Import/export ssh config (§7) | `importer_test.go`, `exporter_test.go` (round trip, Include/groups, ProxyJump chains, key export opt-in and 0600, injection), `TestImportSSHConfigWithKeysAndConflicts` |
 | Encrypted backup (§7) | `TestBackupRoundTrip`, `TestBackupExportImportIntoFreshInstall` |
 | Git sync and merge (§7) | `syncgit_test.go`: LWW/tombstone rules, two machines converge, push race retried, foreign vault and tampered bundle rejected, no empty commits; `TestSyncTwoMachinesEndToEnd` |
+| Add a host: Test connection, Save, Connect (§6) | `test_connection_test.go` (password, saved identity, jump host, known host skips the prompt, wrong password never leaked, unreachable, rejected key leaves `known_hosts` empty, validation, locked vault, nothing stored), `HostForm.test.tsx` (flow order, docked, password becomes an identity, Connect saves first, inline trust prompt), E2E *Create a group, then a host with Test connection* and *Connect saves and opens the terminal* |
+| Docked panels close on page change | `App › panels belong to the page they were opened on`, E2E *A side panel closes when you move to another screen* |
+| Custom dropdown | `Select.test.tsx` (ARIA, keyboard, type-ahead, outside click, Esc does not close a parent, hidden native select kept in sync), E2E *custom-select* |
+| Settings as a native window (ADR-0006) | `bridge_test.go` (token, 0600 file removed on close, allow-list, argument checks, errors pass through, change notifications, focus request, launcher opens once and raises afterwards, fallback without native windows), `SettingsApp.test.tsx` (native layout, Esc, theme/zoom/motion, re-read on focus), `backend.test.ts` (bridge calls), `App.test.tsx › Settings as a native window`; smoke run of both processes (connection file, window process stays up, exits when the main app quits) |
+| Settings window, themes (§11) | `SettingsWindow.test.tsx` (layout, drag, Esc order, theme dropdown, 26-theme picker, preview, font/cursor/scrollback persistence, security, sync, links), `themes.test.ts` (valid palettes, contrast, ids accepted by the backend), `appearance.test.tsx` (Auto follows the OS), `services_test.go` (settings validation, old `settings.json`), E2E *Settings opens as its own window* |
+| Settings: General, Account, window controls (§11) | `SettingsWindow.test.tsx` (zoom stepper and limits, reduce motion, confirm close, profile save/validation, disabled sign-in, maximise/restore/roll-up, drag disabled while maximised), `TestSettings*` in `services_test.go` (zoom range, account fields, shortcut overrides) |
+| Keyboard shortcuts (§11) | `shortcuts.test.ts` (key mapping, Mod vs Ctrl, matching, validation, conflicts, formatting), `SettingsWindow.test.tsx › Shortcuts` (record, conflict, plain key, Esc, reset), `App.test.tsx › keyboard shortcuts` (custom combo works, old one does not, lock, zoom, tab cycling, close with confirm, quiet while recording), `shortcuts_test.go`, E2E *Shortcuts* |
+| SFTP | `SftpBrowser.test.tsx` (browse, mkdir, rename, delete with confirm, upload/download, replace confirmations, prompt fallback, host key prompt, reconnect, connection lost, helpers), `App.test.tsx › SFTP tabs`, `HostList.test.tsx`, `layout.test.ts`, `sftp_service_test.go`, `sftpx_test.go` (real SFTP protocol against the in-process server), E2E *SFTP* (files verified on disk) |
+| Lost master password | `TestResetVault*` (keeps hosts/snippets/forwards/agent identity, erases the rest, works while locked, no ciphertext left, new vault works, old password rejected), `vault_test` (`Destroy`), `UnlockScreen.test.tsx` (forgot flow), E2E *Forgot the master password* |
 | Clean architecture (ADR-0002) | `internal/archtest` |
 | Regressions found during development | `TestReportsNeverMarshalNullSlices` and the Vitest null-array cases (E2E found a white-screen crash), `TestAttachReplays*` (lost first output), `TestSSHConfigSkipsHostWithInjectedHostname` |
 
 ## Manual checklist before a release
+
+- [ ] Settings opens as its own macOS window (⌘ + ,), the green button gives full screen, a second ⌘ + , raises it, changes (zoom, theme, shortcut) show up in the main window at once, and quitting VVTerm closes it.
 
 Not covered by automation; run on a real Mac build (`make build`, open `build/bin/vvterm.app`):
 

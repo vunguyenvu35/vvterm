@@ -1,6 +1,7 @@
 package sqlitedb
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,6 +36,7 @@ func sample() domain.Data {
 			{Meta: domain.Meta{ID: "h2", UpdatedAt: del, DeletedAt: &del}, Label: "gone", Hostname: "g", Port: 22, KeepaliveSec: 30, CreatedAt: now},
 		},
 		Identities: []domain.Identity{{Meta: domain.Meta{ID: "i1", UpdatedAt: now}, Name: "k", Username: "ops", AuthType: domain.AuthKey, SecretRef: "s1", PublicKey: "ssh-ed25519 AAA"}},
+		Snippets:   []domain.Snippet{{Meta: domain.Meta{ID: "s1", UpdatedAt: now}, Label: "Docker clean", Description: "stop and prune", Script: "docker stop $(docker ps -aq)\ndocker system prune -af\n"}},
 		Forwards: []domain.PortForward{{Meta: domain.Meta{ID: "f1", UpdatedAt: now}, HostID: "h1", Type: domain.ForwardLocal, BindAddr: "127.0.0.1",
 			BindPort: 3306, DestHost: "db", DestPort: 3306, AutoStart: true, AllowPublicBind: true}},
 	}
@@ -60,7 +62,7 @@ func TestStoreDataRoundTripPreservesEverything(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("found=%v err=%v", found, err)
 	}
-	if !reflect.DeepEqual(in.Groups, out.Groups) || !reflect.DeepEqual(in.Identities, out.Identities) || !reflect.DeepEqual(in.Forwards, out.Forwards) {
+	if !reflect.DeepEqual(in.Groups, out.Groups) || !reflect.DeepEqual(in.Snippets, out.Snippets) || !reflect.DeepEqual(in.Identities, out.Identities) || !reflect.DeepEqual(in.Forwards, out.Forwards) {
 		t.Fatalf("mismatch\n in=%+v\nout=%+v", in, out)
 	}
 	if len(out.Hosts) != 2 || out.Hosts[0].Tags[1] != "b" || out.Hosts[1].DeletedAt == nil || !out.Hosts[1].DeletedAt.Equal(*in.Hosts[1].DeletedAt) {
@@ -232,5 +234,87 @@ func TestReopenIsIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 		x.Close()
+	}
+}
+
+// A database created by v1.0 (schema v1, no snippets table) must upgrade in place without losing data.
+func TestUpgradeFromSchemaV1KeepsData(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "old.db")
+	raw, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(migrations[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`INSERT INTO hosts(id,label,hostname,port,created_at,updated_at) VALUES('h1','legacy','10.0.0.1',22,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 1`); err != nil {
+		t.Fatal(err)
+	}
+	raw.Close()
+
+	d, err := Open(p)
+	if err != nil {
+		t.Fatalf("upgrade failed: %v", err)
+	}
+	defer d.Close()
+	var v int
+	_ = d.db.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != schemaVersion {
+		t.Fatalf("user_version=%d want %d", v, schemaVersion)
+	}
+	data, found, err := d.StorePersister().Load()
+	if err != nil || !found || len(data.Hosts) != 1 || data.Hosts[0].Label != "legacy" {
+		t.Fatalf("data lost in upgrade: %v %v %+v", err, found, data.Hosts)
+	}
+	data.Snippets = []domain.Snippet{{Meta: domain.Meta{ID: "s", UpdatedAt: time.Now()}, Label: "x", Script: "ls"}}
+	if err := d.StorePersister().Save(data); err != nil {
+		t.Fatalf("snippets table unusable after upgrade: %v", err)
+	}
+}
+
+// A v2 database (hosts without a server type, forwards without a label) upgrades in place, and the new
+// columns round-trip.
+func TestUpgradeFromSchemaV2AddsServerTypeAndForwardLabel(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v2.db")
+	raw, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migrations[:2] {
+		if _, err := raw.Exec(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := raw.Exec(`INSERT INTO hosts(id,label,hostname,port,created_at,updated_at) VALUES('h1','legacy','10.0.0.1',22,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`INSERT INTO port_forwards(id,host_id,type,bind_addr,bind_port,updated_at) VALUES('f1','h1','dynamic','127.0.0.1',1080,'2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 2`); err != nil {
+		t.Fatal(err)
+	}
+	raw.Close()
+
+	d, err := Open(p)
+	if err != nil {
+		t.Fatalf("upgrade failed: %v", err)
+	}
+	defer d.Close()
+	data, _, err := d.StorePersister().Load()
+	if err != nil || len(data.Hosts) != 1 || data.Hosts[0].OS != "" || len(data.Forwards) != 1 || data.Forwards[0].Label != "" {
+		t.Fatalf("%v %+v %+v", err, data.Hosts, data.Forwards)
+	}
+	data.Hosts[0].OS = "debian"
+	data.Forwards[0].Label = "SOCKS to prod"
+	if err := d.StorePersister().Save(data); err != nil {
+		t.Fatal(err)
+	}
+	again, _, err := d.StorePersister().Load()
+	if err != nil || again.Hosts[0].OS != "debian" || again.Forwards[0].Label != "SOCKS to prod" {
+		t.Fatalf("not persisted: %v %+v %+v", err, again.Hosts, again.Forwards)
 	}
 }

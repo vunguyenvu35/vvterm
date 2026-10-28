@@ -375,6 +375,22 @@ func (v *Vault) ChangePassword(oldPW, newPW string) error {
 	return nil
 }
 
+// Destroy erases the vault for good: header, every secret and the keychain entry. It works while
+// locked, because it is the way out when the master password is lost. Nothing can be recovered afterwards.
+func (v *Vault) Destroy() error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.lockLocked()
+	if v.kc != nil {
+		_ = v.kc.Delete("vvterm", v.account)
+	}
+	if err := v.p.Delete(); err != nil {
+		return err
+	}
+	v.f = nil
+	return nil
+}
+
 // ---- secrets ----
 
 func (v *Vault) AddSecret(kind domain.SecretKind, plain []byte) (string, error) {

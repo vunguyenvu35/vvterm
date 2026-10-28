@@ -1,0 +1,48 @@
+# Development fixtures and CI runners for VVTerm. The desktop app itself runs on the host.
+#
+#   docker compose --profile dev up -d      demo SSH servers + Git remote for sync
+#   docker compose --profile ci run --rm go-test
+#   docker compose --profile ci run --rm web-test
+#   docker compose --profile dev down       (add -v to forget the demo host keys)
+#
+# Everything is bound to 127.0.0.1: these fixtures have fixed demo credentials / no authentication.
+name: vvterm
+
+services:
+  demo-bastion:
+    profiles: [dev]
+    build: {context: ., target: demoserver}
+    command: ["-addr", "0.0.0.0:2222", "-hostkey", "/data/hostkey", "-name", "bastion"]
+    ports: ["127.0.0.1:2201:2222"]
+    volumes: ["bastion-key:/data"]
+    restart: unless-stopped
+
+  demo-app:
+    profiles: [dev]
+    build: {context: ., target: demoserver}
+    command: ["-addr", "0.0.0.0:2222", "-hostkey", "/data/hostkey", "-name", "app-server", "-sftp"]
+    ports: ["127.0.0.1:2202:2222"]
+    volumes: ["app-key:/data"]
+    restart: unless-stopped
+
+  git-remote:
+    profiles: [dev]
+    build: {context: ., target: git-remote}
+    ports: ["127.0.0.1:9418:9418"]
+    volumes: ["git-data:/srv/git"]
+    restart: unless-stopped
+
+  go-test:
+    profiles: [ci]
+    build: {context: ., target: go-test}
+    command: ["true"]   # tests run while building the image; `run` just reports success
+
+  web-test:
+    profiles: [ci]
+    build: {context: ., target: web-test}
+    command: ["true"]
+
+volumes:
+  bastion-key:
+  app-key:
+  git-data:

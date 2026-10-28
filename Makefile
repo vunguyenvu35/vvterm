@@ -1,6 +1,6 @@
-.PHONY: help dev build test test-go test-web e2e inventory lint release clean-cache
+.PHONY: help dev build test test-go test-web e2e inventory lint release clean-cache deploy-dev deploy-prod
 
-VERSION ?= 1.0.0
+VERSION ?= $(shell cat VERSION)
 WAILS   ?= $(shell go env GOPATH)/bin/wails
 
 help:
@@ -34,3 +34,9 @@ inventory:
 
 release: test build
 	@shasum -a 256 build/bin/vvterm.app/Contents/MacOS/vvterm
+
+deploy-dev:
+	./scripts/deploy.sh dev
+
+deploy-prod:
+	./scripts/deploy.sh prod

@@ -144,3 +144,28 @@ func AgentAuth() (ssh.AuthMethod, error) {
 	}
 	return ssh.PublicKeysCallback(agent.NewClient(conn).Signers), nil
 }
+
+// Exec runs one command and returns its standard output, giving up after timeout. It is used for tiny
+// read-only probes (server type detection), never for user commands.
+func (c *Client) Exec(cmd string, timeout time.Duration) (string, error) {
+	sess, err := c.Client.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer sess.Close()
+	type result struct {
+		out []byte
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, err := sess.Output(cmd)
+		done <- result{out, err}
+	}()
+	select {
+	case r := <-done:
+		return string(r.out), r.err
+	case <-time.After(timeout):
+		return "", errors.New("the command timed out")
+	}
+}

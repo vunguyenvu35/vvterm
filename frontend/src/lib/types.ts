@@ -22,6 +22,8 @@ export interface Host {
   env?: Env
   tags?: string[]
   keepalive_sec: number
+  /** server type learned on the first connection (ubuntu, debian, freebsd…); '' until then */
+  os?: string
 }
 
 export interface Identity {
@@ -34,6 +36,7 @@ export interface Identity {
 
 export interface PortForward {
   id: string
+  label?: string
   host_id: string
   type: ForwardType
   bind_addr: string
@@ -58,12 +61,33 @@ export interface VaultStatus {
   auto_lock_minutes: number
 }
 
+export type ThemeMode = 'auto' | 'light' | 'dark'
+export type CursorStyle = 'block' | 'bar' | 'underline'
+
 export interface Settings {
-  theme: 'dark' | 'light'
+  theme: ThemeMode
+  terminal_theme: string // 'auto' follows the app theme, otherwise a catalogue id
   font_size: number
   font_family: string
+  cursor_style: CursorStyle
+  cursor_blink: boolean
+  scrollback: number
   auto_lock_minutes: number
   sync_url: string
+  zoom: number // interface scale in percent
+  confirm_close: boolean
+  reduce_motion: boolean
+  account_name: string
+  account_email: string
+  shortcuts: Record<string, string> // overrides only: action id -> combo
+}
+
+export interface ConnectionTest {
+  ok: boolean
+  message: string
+  server_version?: string
+  latency_ms: number
+  hops: number
 }
 
 export interface SyncStatus {
@@ -105,4 +129,45 @@ export interface HostKeyPrompt {
 export interface ClosedInfo {
   reason: string
   clean: boolean
+}
+
+export interface Snippet {
+  id: string
+  label: string
+  description?: string
+  script: string
+}
+
+export interface RemoteEntry {
+  name: string
+  path: string
+  size: number
+  mode: string
+  mod_time: string
+  is_dir: boolean
+  is_link: boolean
+}
+
+export interface SftpInfo {
+  sid: string
+  home: string
+  host: string
+}
+
+/** What a multi-file transfer did (see usecase.TransferResult). */
+export interface TransferResult {
+  files: number
+  dirs: number
+  bytes: number
+  /** files that already exist and were not replaced */
+  skipped: string[]
+  /** links and special files, never followed */
+  ignored: string[]
+}
+
+export interface TransferProgress {
+  name: string
+  direction: 'upload' | 'download'
+  done: number
+  total: number
 }

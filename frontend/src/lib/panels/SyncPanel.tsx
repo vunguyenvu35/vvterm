@@ -5,7 +5,8 @@ import {errMsg} from '../util'
 import type {SyncStatus, VaultStatus} from '../types'
 
 /** Git sync. The repo only ever receives bundle.enc and vault-header.json (ciphertext). */
-export function SyncPanel({vault, onClose, onChanged}: {vault: VaultStatus; onClose(): void; onChanged(): void}) {
+export function SyncPanel({vault, onClose, onChanged, page = false}: {vault: VaultStatus; onClose(): void; onChanged(): void; page?: boolean}) {
+  const Wrap = page ? PageWrap : ModalWrap
   const be = useBackend()
   const [st, setSt] = useState<SyncStatus | null>(null)
   const [url, setUrl] = useState('')
@@ -35,7 +36,7 @@ export function SyncPanel({vault, onClose, onChanged}: {vault: VaultStatus; onCl
   }
 
   return (
-    <Modal title="Sync via Git" onClose={onClose}>
+    <Wrap onClose={onClose}>
       <p className="muted">Sync your encrypted hosts and keys through a private Git repository you own. Authentication uses your ssh-agent or git credential helper.</p>
       <Field label="Repository URL"><input aria-label="Repository URL" value={url} onChange={e => setUrl(e.target.value)} placeholder="git@github.com:you/vvterm-sync.git" /></Field>
       <div className="row">
@@ -54,6 +55,14 @@ export function SyncPanel({vault, onClose, onChanged}: {vault: VaultStatus; onCl
       <Field label="Master password of the synced vault"><input aria-label="Synced master password" type="password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
       <button disabled={busy || !st?.configured || vault.exists || !pw} onClick={() => run(() => be.sync.join(pw))}>Restore from repository</button>
       {err && <div className="error" role="alert">{err}</div>}
-    </Modal>
+    </Wrap>
   )
+}
+
+function ModalWrap({onClose, children}: {onClose(): void; children: React.ReactNode}) {
+  return <Modal title="Sync via Git" onClose={onClose}>{children}</Modal>
+}
+
+function PageWrap({children}: {onClose(): void; children: React.ReactNode}) {
+  return <section className="card-section" aria-label="Sync via Git"><h4>Sync via Git</h4>{children}</section>
 }

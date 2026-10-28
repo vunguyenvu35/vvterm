@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,7 +25,7 @@ type session struct {
 	cols   int
 	rows   int
 	client *sshx.Client
-	shell  *sshx.Shell
+	shell  Shell
 	closed bool
 	abort  chan struct{} // closed on Close(sid) to cancel connecting
 	stopKA chan struct{}
@@ -59,8 +60,16 @@ func NewSessionService(c *Core, f *ForwardService) *SessionService {
 // Open starts connecting to a host and returns the session id immediately. Progress is
 // reported through term:hostkey:<sid>, term:ready:<sid>, term:data:<sid>, term:closed:<sid>.
 func (s *SessionService) Open(hostID string, cols, rows int) (string, error) {
-	if _, err := s.c.Store.GetHost(hostID); err != nil {
-		return "", fmt.Errorf("host: %w", err)
+	switch {
+	case hostID == LocalHostID:
+	case strings.HasPrefix(hostID, serialPrefix):
+		if _, _, err := ParseSerialID(hostID); err != nil {
+			return "", err
+		}
+	default:
+		if _, err := s.c.Store.GetHost(hostID); err != nil {
+			return "", fmt.Errorf("host: %w", err)
+		}
 	}
 	if cols < 1 || rows < 1 {
 		cols, rows = 80, 24
@@ -83,6 +92,10 @@ func (s *SessionService) get(sid string) (*session, error) {
 }
 
 func (s *SessionService) run(sess *session) {
+	if isDeviceID(sess.hostID) {
+		s.runDevice(sess)
+		return
+	}
 	sid := sess.sid
 	closed := func(reason string, clean bool) {
 		sess.mu.Lock()
@@ -108,17 +121,7 @@ func (s *SessionService) run(sess *session) {
 	cols, rows := sess.cols, sess.rows
 	sess.mu.Unlock()
 
-	batch := sshx.NewBatcher(outputBatchInterval, outputBatchMax, func(p []byte) {
-		sess.mu.Lock()
-		defer sess.mu.Unlock()
-		if !sess.attached {
-			if len(sess.pend)+len(p) <= maxPending {
-				sess.pend = append(sess.pend, p...)
-			}
-			return
-		}
-		s.c.emit("term:data:"+sid, base64.StdEncoding.EncodeToString(p))
-	})
+	batch := s.batcher(sess)
 	sh, err := cl.OpenShell(cols, rows, batch.Write)
 	if err != nil {
 		cl.Close()
@@ -136,6 +139,7 @@ func (s *SessionService) run(sess *session) {
 	sess.mu.Unlock()
 
 	go sshx.Keepalive(cl, time.Duration(host.KeepaliveSec)*time.Second, 3, stop, nil)
+	s.c.learnOS(host, cl)
 	s.f.autoStart(sid, cl, host.ID)
 	sess.mu.Lock()
 	sess.state, sess.ready = "ready", map[string]any{"host": host.Label}
@@ -305,4 +309,98 @@ func (s *SessionService) CloseAll() {
 	for _, id := range ids {
 		_ = s.Close(id)
 	}
+}
+
+// batcher collects terminal output for a short while and sends it to the frontend in few events; until the
+// frontend attached, it is kept (up to maxPending) and replayed by Attach.
+func (s *SessionService) batcher(sess *session) *sshx.Batcher {
+	return sshx.NewBatcher(outputBatchInterval, outputBatchMax, func(p []byte) {
+		sess.mu.Lock()
+		defer sess.mu.Unlock()
+		if !sess.attached {
+			if len(sess.pend)+len(p) <= maxPending {
+				sess.pend = append(sess.pend, p...)
+			}
+			return
+		}
+		s.c.emit("term:data:"+sess.sid, base64.StdEncoding.EncodeToString(p))
+	})
+}
+
+func (s *SessionService) markClosed(sess *session, reason string, clean bool) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	sess.state = "closed"
+	sess.closedEv = map[string]any{"reason": reason, "clean": clean}
+	s.c.emit("term:closed:"+sess.sid, sess.closedEv)
+}
+
+// runDevice runs a session that has no SSH connection: a shell on this computer or a serial port. There is
+// no host key, no jump chain, no keepalive and no forwards; everything else (events, buffering, resize,
+// reconnect with Enter, close) is shared with SSH sessions.
+func (s *SessionService) runDevice(sess *session) {
+	sess.mu.Lock()
+	sess.state, sess.closedEv, sess.ready = "connecting", nil, nil
+	cols, rows := sess.cols, sess.rows
+	sess.mu.Unlock()
+
+	batch := s.batcher(sess)
+	var (
+		sh    Shell
+		err   error
+		label string
+	)
+	if sess.hostID == LocalHostID {
+		label = "This computer"
+		if s.c.OpenLocalShell == nil {
+			err = errors.New("the local terminal is not available in this build")
+		} else {
+			sh, err = s.c.OpenLocalShell(cols, rows, batch.Write)
+		}
+	} else {
+		var path string
+		var baud int
+		if path, baud, err = ParseSerialID(sess.hostID); err == nil {
+			label = path
+			if s.c.OpenSerial == nil {
+				err = errors.New("serial ports are not available in this build")
+			} else {
+				sh, err = s.c.OpenSerial(path, baud, batch.Write)
+			}
+		}
+	}
+	if err != nil {
+		batch.Close()
+		s.markClosed(sess, err.Error(), false)
+		return
+	}
+	sess.mu.Lock()
+	if sess.closed {
+		sess.mu.Unlock()
+		sh.Close()
+		batch.Close()
+		return
+	}
+	sess.shell = sh
+	sess.state, sess.ready = "ready", map[string]any{"host": label}
+	s.c.emit("term:ready:"+sess.sid, sess.ready)
+	sess.mu.Unlock()
+
+	<-sh.Done()
+	err = sh.Err()
+	batch.Close()
+	sh.Close()
+
+	sess.mu.Lock()
+	wasClosed := sess.closed
+	sess.shell = nil
+	sess.mu.Unlock()
+	if wasClosed {
+		return
+	}
+	if err == nil {
+		s.markClosed(sess, "session ended", true)
+		return
+	}
+	s.markClosed(sess, "connection lost: "+err.Error(), false)
 }

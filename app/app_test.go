@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -37,5 +38,48 @@ func TestBuildWiresRealAdapters(t *testing.T) {
 	}
 	if _, err := a.System.PickFile("x"); err == nil {
 		t.Fatal("dialogs must be unavailable before Startup")
+	}
+}
+
+func TestOpenURLOnlyAllowsProjectLinks(t *testing.T) {
+	for _, ok := range []string{
+		"https://github.com/vunguyenvu35/vvterm",
+		"https://github.com/vunguyenvu35/vvterm/issues/new",
+		"https://ko-fi.com/vunguyenvu",
+	} {
+		if !urlAllowed(ok) {
+			t.Errorf("%s should be allowed", ok)
+		}
+	}
+	for _, bad := range []string{
+		"", "http://github.com/vunguyenvu35/vvterm", "https://github.com/vunguyenvu35/vvterm-evil",
+		"https://github.com/vunguyenvu35/vvtermx/issues", "https://evil.example/https://ko-fi.com/vunguyenvu",
+		"javascript:alert(1)", "file:///etc/passwd", "https://ko-fi.com/vunguyenvu.evil.com",
+	} {
+		if urlAllowed(bad) {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+	a, err := Build(t.TempDir(), vault.NewMemKeychain(), &vault.KDFParams{Memory: 64, Time: 1, Threads: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.System.OpenURL("https://evil.example"); err == nil {
+		t.Fatal("foreign link opened")
+	}
+}
+
+func TestNativeDialogsCanBeDisabledByEnvironment(t *testing.T) {
+	s := NewSystemService()
+	s.SetContext(context.Background())
+	t.Setenv("VVTERM_NO_NATIVE_DIALOGS", "1")
+	if _, err := s.PickFile("x"); err == nil {
+		t.Fatal("PickFile must fail so the UI falls back to a prompt")
+	}
+	if _, err := s.SaveFile("x", "a.txt"); err == nil {
+		t.Fatal("SaveFile must fail so the UI falls back to a prompt")
+	}
+	if _, err := s.PickDirectory("x"); err == nil {
+		t.Fatal("PickDirectory must fail so the UI falls back to a prompt")
 	}
 }

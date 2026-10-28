@@ -80,10 +80,13 @@ type Host struct {
 	Tags         []string  `json:"tags,omitempty"`
 	KeepaliveSec int       `json:"keepalive_sec"`
 	CreatedAt    time.Time `json:"created_at"`
+	// OS is the server type learned on the first connection (see ParseOS); it picks the host's icon.
+	OS string `json:"os,omitempty"`
 }
 
 type PortForward struct {
 	Meta
+	Label     string      `json:"label,omitempty"`
 	HostID    string      `json:"host_id"`
 	Type      ForwardType `json:"type"`
 	BindAddr  string      `json:"bind_addr"`
@@ -128,4 +131,24 @@ type Data struct {
 	Hosts      []Host        `json:"hosts"`
 	Forwards   []PortForward `json:"forwards"`
 	Identities []Identity    `json:"identities"`
+	Snippets   []Snippet     `json:"snippets"`
+}
+
+// Snippet is a reusable shell script. It is plain text (not a secret) and syncs with the other records.
+type Snippet struct {
+	Meta
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Script      string `json:"script"`
+}
+
+// RemoteEntry is one item of a remote directory listing (SFTP).
+type RemoteEntry struct {
+	Name    string    `json:"name"`
+	Path    string    `json:"path"`
+	Size    int64     `json:"size"`
+	Mode    string    `json:"mode"` // e.g. "drwxr-xr-x"
+	ModTime time.Time `json:"mod_time"`
+	IsDir   bool      `json:"is_dir"`
+	IsLink  bool      `json:"is_link"`
 }

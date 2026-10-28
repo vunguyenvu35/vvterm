@@ -17,11 +17,20 @@ export interface Split {
 
 export type Node = Leaf | Split
 
+export type TabKind = 'terminal' | 'sftp'
+
 export interface Tab {
   id: string
   title: string
   root: Node
   activePane: string
+  /** terminal (default) or an SFTP file browser; an SFTP tab has a single leaf that only carries the host id */
+  kind?: TabKind
+  /** a permanent tab (the SFTP tab next to Vaults): no close button, never removed */
+  pinned?: boolean
+  /** SFTP tab: the host a host card asked to browse, and a counter that makes asking again for the same host count */
+  sftpLabel?: string
+  sftpNonce?: number
 }
 
 let counter = 0
@@ -32,12 +41,26 @@ export function newTab(hostId: string, title: string): Tab {
   return {id: uid('tab'), title, root: leaf, activePane: leaf.id}
 }
 
+export function newSftpTab(hostId: string, title: string): Tab {
+  return {...newTab(hostId, title), kind: 'sftp'}
+}
+
+/** Id of the SFTP tab that is always open next to Vaults. */
+export const SFTP_TAB_ID = 'sftp-main'
+
+export function pinnedSftpTab(): Tab {
+  return {...newSftpTab('', 'SFTP'), id: SFTP_TAB_ID, pinned: true}
+}
+
+export const isSftp = (t: Tab) => t.kind === 'sftp'
+
 export function leaves(n: Node): Leaf[] {
   return n.type === 'leaf' ? [n] : [...leaves(n.a), ...leaves(n.b)]
 }
 
 /** Split the pane `paneId` in direction `dir`; the new pane opens a session to the same host. */
 export function splitPane(tab: Tab, paneId: string, dir: Dir): Tab {
+  if (tab.kind === 'sftp') return tab // a file browser cannot be split
   let created = ''
   const walk = (n: Node): Node => {
     if (n.type === 'leaf') {

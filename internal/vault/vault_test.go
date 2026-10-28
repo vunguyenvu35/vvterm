@@ -344,3 +344,36 @@ func TestGenerateAndParseKey(t *testing.T) {
 		t.Fatal("garbage parsed")
 	}
 }
+
+func TestDestroyWorksWhileLockedAndClearsKeychain(t *testing.T) {
+	v, dir, kc := newVault(t)
+	_ = v.Create(pw)
+	_, _ = v.AddSecret(domain.SecretPassword, []byte("x"))
+	_ = v.EnableKeychain()
+	v.Lock()
+	if err := v.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+	if v.Status().Exists || v.Status().KeychainEnabled {
+		t.Fatalf("%+v", v.Status())
+	}
+	if _, err := kc.Get("vvterm", dir); err == nil {
+		t.Fatal("DEK left in the keychain")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "vault.json")); !os.IsNotExist(err) {
+		t.Fatalf("vault.json still exists: %v", err)
+	}
+	v2, _ := New(dir, nil)
+	if v2.Status().Exists {
+		t.Fatal("vault came back after reopen")
+	}
+	if err := v.Create("another long password"); err != nil {
+		t.Fatalf("cannot create after destroy: %v", err)
+	}
+	if err := v.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Destroy(); err != nil {
+		t.Fatalf("destroy must be idempotent: %v", err)
+	}
+}

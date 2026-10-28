@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 )
 
 // Services is the full set of use cases, built around one Core.
@@ -13,6 +15,10 @@ type Services struct {
 	Forward   *ForwardService
 	Sync      *SyncService
 	ImportExp *ImportExportService
+	Snippet   *SnippetService
+	Sftp      *SftpService
+	Local     *LocalService
+	Serial    *SerialService
 	Settings  *SettingsService
 }
 
@@ -28,6 +34,10 @@ func New(core *Core) *Services {
 		Sync:      NewSyncService(core),
 		ImportExp: NewImportExportService(core),
 		Settings:  NewSettingsService(core),
+		Snippet:   NewSnippetService(core),
+		Sftp:      NewSftpService(core),
+		Local:     NewLocalService(),
+		Serial:    NewSerialService(core),
 	}
 }
 
@@ -35,6 +45,7 @@ func New(core *Core) *Services {
 func (s *Services) Shutdown() {
 	s.Forward.StopAll()
 	s.Session.CloseAll()
+	s.Sftp.CloseAll()
 	s.Core.Vault.Lock()
 }
 
@@ -49,20 +60,85 @@ func (s *SettingsService) Get() Settings {
 	return s.c.settings
 }
 
-// Save updates appearance settings. Sync URL and auto-lock have dedicated methods.
+// Save updates appearance and terminal settings. Sync URL and auto-lock have dedicated methods.
 func (s *SettingsService) Save(in Settings) (Settings, error) {
-	if in.FontSize < 8 || in.FontSize > 40 {
-		return Settings{}, errors.New("font size must be between 8 and 40")
-	}
-	if in.Theme != "dark" && in.Theme != "light" {
-		return Settings{}, errors.New("theme must be dark or light")
+	if err := validateSettings(in); err != nil {
+		return Settings{}, err
 	}
 	s.c.setMu.Lock()
 	defer s.c.setMu.Unlock()
 	s.c.settings.Theme = in.Theme
+	s.c.settings.TerminalTheme = in.TerminalTheme
 	s.c.settings.FontSize = in.FontSize
+	s.c.settings.CursorStyle = in.CursorStyle
+	s.c.settings.CursorBlink = in.CursorBlink
+	s.c.settings.Scrollback = in.Scrollback
+	s.c.settings.Zoom = in.Zoom
+	s.c.settings.ConfirmClose = in.ConfirmClose
+	s.c.settings.ReduceMotion = in.ReduceMotion
+	s.c.settings.AccountName = strings.TrimSpace(in.AccountName)
+	s.c.settings.AccountEmail = strings.TrimSpace(in.AccountEmail)
+	s.c.settings.Shortcuts = cloneShortcuts(in.Shortcuts)
 	if in.FontFamily != "" {
 		s.c.settings.FontFamily = in.FontFamily
 	}
 	return s.c.settings, s.c.saveSettings()
+}
+
+var themeID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
+
+func validateSettings(in Settings) error {
+	switch in.Theme {
+	case "auto", "light", "dark":
+	default:
+		return errors.New("theme must be auto, light or dark")
+	}
+	if in.TerminalTheme != "auto" && !themeID.MatchString(in.TerminalTheme) {
+		return errors.New("invalid terminal theme")
+	}
+	if in.FontSize < 8 || in.FontSize > 40 {
+		return errors.New("font size must be between 8 and 40")
+	}
+	switch in.CursorStyle {
+	case "block", "bar", "underline":
+	default:
+		return errors.New("cursor style must be block, bar or underline")
+	}
+	if in.Scrollback < 500 || in.Scrollback > 100000 {
+		return errors.New("scrollback must be between 500 and 100000 lines")
+	}
+	if in.Zoom < 80 || in.Zoom > 160 {
+		return errors.New("zoom must be between 80 and 160 percent")
+	}
+	if err := validateAccount(in.AccountName, in.AccountEmail); err != nil {
+		return err
+	}
+	if err := ValidateShortcuts(in.Shortcuts); err != nil {
+		return err
+	}
+	if len(in.FontFamily) > 200 || strings.ContainsAny(in.FontFamily, "{};<>\n\r") {
+		return errors.New("invalid font family")
+	}
+	return nil
+}
+
+func cloneShortcuts(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+var emailRe = regexp.MustCompile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+
+func validateAccount(name, email string) error {
+	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
+	if len(name) > 80 || strings.ContainsAny(name, "\x00\r\n\t") {
+		return errors.New("account name must be at most 80 characters and a single line")
+	}
+	if email != "" && (len(email) > 120 || !emailRe.MatchString(email)) {
+		return errors.New("enter a valid email address")
+	}
+	return nil
 }

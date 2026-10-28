@@ -259,6 +259,11 @@ func PlainJSON(d domain.Data) ([]byte, error) {
 			out.Identities = append(out.Identities, x)
 		}
 	}
+	for _, x := range d.Snippets {
+		if !x.Deleted() {
+			out.Snippets = append(out.Snippets, x)
+		}
+	}
 	return json.MarshalIndent(out, "", "  ")
 }
 

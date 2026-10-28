@@ -49,12 +49,19 @@ func NormalizeHost(h *Host) error {
 	if h.KeepaliveSec == 0 {
 		h.KeepaliveSec = 30
 	}
+	if h.OS != "" && !KnownOS[h.OS] {
+		return fmt.Errorf("invalid os %q", h.OS)
+	}
 	return nil
 }
 
 // NormalizeForward validates a port forward and applies the safe default bind address.
 // Binding anything but loopback requires AllowPublicBind to be set explicitly.
 func NormalizeForward(f *PortForward) error {
+	f.Label = strings.TrimSpace(f.Label)
+	if len([]rune(f.Label)) > 80 || strings.ContainsAny(f.Label, "\r\n\x00") {
+		return errors.New("label must be a single line of at most 80 characters")
+	}
 	switch f.Type {
 	case ForwardLocal, ForwardRemote:
 		if f.DestHost == "" || f.DestPort < 1 || f.DestPort > 65535 {
@@ -93,6 +100,28 @@ func CheckJumpChain(self, jump string, lookup func(id string) (Host, bool)) erro
 			return fmt.Errorf("jump host: %w", ErrNotFound)
 		}
 		id = h.JumpHostID
+	}
+	return nil
+}
+
+// MaxSnippetBytes bounds a snippet script (it is typed into a terminal).
+const MaxSnippetBytes = 64 * 1024
+
+// NormalizeSnippet validates a snippet and trims its label. Scripts keep their exact text, but NUL
+// bytes are rejected: they cannot be typed into a terminal and often hide garbage.
+func NormalizeSnippet(s *Snippet) error {
+	s.Label = strings.TrimSpace(s.Label)
+	if s.Label == "" {
+		return errors.New("snippet label is required")
+	}
+	if strings.TrimSpace(s.Script) == "" {
+		return errors.New("snippet script is required")
+	}
+	if len(s.Script) > MaxSnippetBytes {
+		return fmt.Errorf("snippet script is larger than %d KiB", MaxSnippetBytes/1024)
+	}
+	if strings.ContainsRune(s.Script, 0) {
+		return errors.New("snippet script must not contain NUL characters")
 	}
 	return nil
 }

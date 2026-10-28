@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"vvterm/internal/domain"
+	"vvterm/internal/testssh"
 	"vvterm/internal/vault"
 )
 
@@ -602,27 +603,68 @@ func TestSyncRequiresUnlockedVaultAndRepoWithBundle(t *testing.T) {
 
 // ---- settings ----
 
+func goodSettings() Settings {
+	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 14, FontFamily: "Menlo, monospace", CursorStyle: "block", CursorBlink: true, Scrollback: 10000, Zoom: 100, ConfirmClose: true, Shortcuts: map[string]string{}}
+}
+
 func TestSettingsValidationAndPersistence(t *testing.T) {
 	h := newHarness(t)
 	s := h.app.Settings
-	if g := s.Get(); g.Theme != "dark" || g.FontSize != 13 {
-		t.Fatalf("defaults: %+v", g)
+	d := s.Get()
+	if d.Theme != "dark" || d.TerminalTheme != "auto" || d.FontSize != 13 || d.CursorStyle != "block" || !d.CursorBlink || d.Scrollback != 10000 {
+		t.Fatalf("defaults: %+v", d)
 	}
-	if _, err := s.Save(Settings{Theme: "neon", FontSize: 13}); err == nil {
-		t.Fatal("bad theme")
+	bad := map[string]func(*Settings){
+		"theme":          func(x *Settings) { x.Theme = "neon" },
+		"terminal theme": func(x *Settings) { x.TerminalTheme = "Not A Theme!" },
+		"empty terminal": func(x *Settings) { x.TerminalTheme = "" },
+		"font small":     func(x *Settings) { x.FontSize = 2 },
+		"font big":       func(x *Settings) { x.FontSize = 99 },
+		"cursor":         func(x *Settings) { x.CursorStyle = "heart" },
+		"scrollback low": func(x *Settings) { x.Scrollback = 10 },
+		"scrollback big": func(x *Settings) { x.Scrollback = 10_000_000 },
+		"font injection": func(x *Settings) { x.FontFamily = "x; } body { display:none" },
 	}
-	if _, err := s.Save(Settings{Theme: "dark", FontSize: 2}); err == nil {
-		t.Fatal("bad font size")
+	for name, mutate := range bad {
+		in := goodSettings()
+		mutate(&in)
+		if _, err := s.Save(in); err == nil {
+			t.Errorf("%s accepted", name)
+		}
 	}
-	if _, err := s.Save(Settings{Theme: "light", FontSize: 16}); err != nil {
-		t.Fatal(err)
+	if s.Get().FontSize != 13 {
+		t.Fatal("a rejected save changed the settings")
+	}
+	for _, mode := range []string{"auto", "light", "dark"} {
+		in := goodSettings()
+		in.Theme, in.TerminalTheme, in.CursorStyle, in.Scrollback = mode, "tokyo-night", "bar", 2500
+		if _, err := s.Save(in); err != nil {
+			t.Fatalf("%s: %v", mode, err)
+		}
 	}
 	c2, err := testCore(t, h.core.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c2.settings.Theme != "light" || c2.settings.FontSize != 16 {
-		t.Fatalf("%+v", c2.settings)
+	if g := c2.settings; g.Theme != "dark" || g.TerminalTheme != "tokyo-night" || g.CursorStyle != "bar" || g.Scrollback != 2500 {
+		t.Fatalf("not persisted: %+v", g)
+	}
+}
+
+func TestOldSettingsFileGetsDefaultsForNewFields(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "data"), 0o700)
+	os.WriteFile(filepath.Join(dir, "data", "settings.json"), []byte(`{"theme":"light","font_size":15,"font_family":"Menlo","auto_lock_minutes":5,"sync_url":""}`), 0o600)
+	c, err := testCore(t, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c.settings
+	if g.Theme != "light" || g.FontSize != 15 || g.AutoLockMinutes != 5 {
+		t.Fatalf("existing values lost: %+v", g)
+	}
+	if g.TerminalTheme != "auto" || g.CursorStyle != "block" || g.Scrollback != 10000 || !g.CursorBlink {
+		t.Fatalf("new fields missing defaults: %+v", g)
 	}
 }
 
@@ -654,5 +696,358 @@ func TestReportsNeverMarshalNullSlices(t *testing.T) {
 		if string(b) == "null" {
 			t.Errorf("%s marshals to null", name)
 		}
+	}
+}
+
+// ---- snippets ----
+
+func TestSnippetServiceLifecycleAndValidation(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	sn := h.app.Snippet
+	if got := sn.List(); got == nil || len(got) != 0 {
+		t.Fatalf("empty list must be a non-nil slice (JSON []): %#v", got)
+	}
+	if _, err := sn.Save(domain.Snippet{Label: "x"}); err == nil {
+		t.Fatal("snippet without a script accepted")
+	}
+	a, err := sn.Save(domain.Snippet{Label: "Disk usage", Script: "df -h\n", Description: "free space"})
+	if err != nil || a.ID == "" {
+		t.Fatalf("%v %+v", err, a)
+	}
+	a.Script = "df -h /\n"
+	b, _ := sn.Save(a)
+	if b.ID != a.ID || len(sn.List()) != 1 || sn.List()[0].Script != "df -h /\n" {
+		t.Fatalf("update broke: %+v", sn.List())
+	}
+	raw, _ := json.Marshal(sn.List())
+	if !strings.Contains(string(raw), `"script":"df -h /\n"`) {
+		t.Fatalf("json shape: %s", raw)
+	}
+	if err := sn.Delete(a.ID); err != nil || len(sn.List()) != 0 {
+		t.Fatalf("%v %+v", err, sn.List())
+	}
+	if err := sn.Delete(a.ID); err == nil {
+		t.Fatal("double delete accepted")
+	}
+}
+
+func TestSnippetsSurviveRestartBackupSyncAndPlainExport(t *testing.T) {
+	remote := bareRepo(t)
+	a := newHarness(t).unlocked(t)
+	snip, _ := a.app.Snippet.Save(domain.Snippet{Label: "Docker clean", Script: "docker system prune -af\n"})
+
+	// restart: new Core on the same directory (SQLite)
+	c2, err := testCore(t, a.core.Dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := New(c2).Snippet.List(); len(got) != 1 || got[0].ID != snip.ID {
+		t.Fatalf("lost across restart: %+v", got)
+	}
+
+	// plain JSON export carries snippets (they are not secrets)
+	p := filepath.Join(t.TempDir(), "hosts.json")
+	if err := a.app.ImportExp.ExportPlainJSON(p); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "Docker clean") {
+		t.Fatalf("plain export lacks snippets:\n%s", b)
+	}
+
+	// encrypted backup restore into a fresh install
+	bk := filepath.Join(t.TempDir(), "b.vvbak")
+	if err := a.app.ImportExp.ExportBackup(bk, "backup-password"); err != nil {
+		t.Fatal(err)
+	}
+	b := newHarness(t).unlocked(t)
+	if err := b.app.ImportExp.ImportBackup(bk, "backup-password"); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.app.Snippet.List(); len(got) != 1 || got[0].Label != "Docker clean" {
+		t.Fatalf("backup restore lost snippets: %+v", got)
+	}
+
+	// git sync to a second machine, then a delete propagates back
+	if err := a.app.Sync.Configure(remote); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.app.Sync.SyncNow(); err != nil {
+		t.Fatal(err)
+	}
+	m := newHarness(t)
+	if err := m.app.Sync.Configure(remote); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.app.Sync.JoinExisting(masterPW); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.app.Snippet.List(); len(got) != 1 || got[0].Script != "docker system prune -af\n" {
+		t.Fatalf("sync lost snippets: %+v", got)
+	}
+	if err := m.app.Snippet.Delete(snip.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.app.Sync.SyncNow(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.app.Sync.SyncNow(); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.app.Snippet.List(); len(got) != 0 {
+		t.Fatalf("delete did not propagate: %+v", got)
+	}
+}
+
+// ---- reset vault (lost master password) ----
+
+func TestResetVaultErasesSecretsButKeepsHostsAndSnippets(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	pw, _ := h.app.Vault.AddPassword("db", "dba", "OLD-SECRET")
+	key, _ := h.app.Vault.GenerateKey("deploy", "ed25519")
+	agent, _ := h.app.Vault.AddAgent("agent", "me")
+	g, _ := h.app.Host.SaveGroup(domain.Group{Name: "prod"})
+	host, _ := h.app.Host.SaveHost(domain.Host{Label: "web", Hostname: "w.example", Username: "u", GroupID: g.ID, IdentityID: pw.ID})
+	agentHost, _ := h.app.Host.SaveHost(domain.Host{Label: "ag", Hostname: "a.example", Username: "u", IdentityID: agent.ID})
+	snip, _ := h.app.Snippet.Save(domain.Snippet{Label: "s", Script: "ls"})
+	fwd, _ := h.app.Forward.SaveForward(domain.PortForward{HostID: host.ID, Type: domain.ForwardDynamic})
+	if err := h.app.Vault.EnableBiometric(); err != nil {
+		t.Fatal(err)
+	}
+	h.app.Vault.Lock() // the point: it must work while locked
+
+	if err := h.app.Vault.ResetVault("nope"); err == nil {
+		t.Fatal("reset without the confirmation text")
+	}
+	if !h.app.Vault.Status().Exists {
+		t.Fatal("a refused reset must not touch the vault")
+	}
+	if err := h.app.Vault.ResetVault(" RESET "); err != nil {
+		t.Fatal(err)
+	}
+
+	if st := h.app.Vault.Status(); st.Exists || st.Unlocked || st.KeychainEnabled {
+		t.Fatalf("vault still present: %+v", st)
+	}
+	ids := h.app.Vault.ListIdentities()
+	if len(ids) != 1 || ids[0].ID != agent.ID {
+		t.Fatalf("only the ssh-agent identity (no secret) should remain: %+v", ids)
+	}
+	got, err := h.app.Host.GetHost(host.ID)
+	if err != nil || got.IdentityID != "" || got.GroupID != g.ID {
+		t.Fatalf("host must stay, without the erased identity: %v %+v", err, got)
+	}
+	if ah, _ := h.app.Host.GetHost(agentHost.ID); ah.IdentityID != agent.ID {
+		t.Fatal("host using the agent identity must keep it")
+	}
+	if len(h.app.Snippet.List()) != 1 || h.app.Snippet.List()[0].ID != snip.ID {
+		t.Fatal("snippets lost")
+	}
+	if len(h.app.Forward.List()) != 1 || h.app.Forward.List()[0].Forward.ID != fwd.ID {
+		t.Fatal("forwards lost")
+	}
+	_ = key
+
+	// a brand-new vault works and cannot read the old secrets
+	if err := h.app.Vault.Create("a different master password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.core.Vault.GetSecret(pw.SecretRef); err == nil {
+		t.Fatal("old secret is still readable")
+	}
+	if _, err := h.app.Vault.AddPassword("new", "u", "NEW-SECRET"); err != nil {
+		t.Fatal(err)
+	}
+	// the old password no longer opens anything
+	h.app.Vault.Lock()
+	if err := h.app.Vault.Unlock(masterPW); err == nil {
+		t.Fatal("the old master password still unlocks")
+	}
+}
+
+func TestResetVaultLeavesNoOldCiphertextOnDisk(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	if _, err := h.app.Vault.AddPassword("db", "dba", "OLD-SECRET"); err != nil {
+		t.Fatal(err)
+	}
+	before := h.core.Vault.Secrets()
+	if len(before) != 1 {
+		t.Fatalf("setup: %d secrets", len(before))
+	}
+	if err := h.app.Vault.ResetVault("RESET"); err != nil {
+		t.Fatal(err)
+	}
+	// reopen from disk: nothing of the vault may be left
+	c2, err := testCore(t, h.core.Dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Vault.Status().Exists || len(c2.Vault.Secrets()) != 0 {
+		t.Fatal("vault data survived a reset")
+	}
+}
+
+func TestResetOnFreshInstallIsHarmless(t *testing.T) {
+	h := newHarness(t)
+	if err := h.app.Vault.ResetVault("RESET"); err != nil {
+		t.Fatalf("reset with no vault: %v", err)
+	}
+	if err := h.app.Vault.Create(masterPW); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
+	h := newHarness(t)
+	s := h.app.Settings
+	d := s.Get()
+	if d.Zoom != 100 || !d.ConfirmClose || d.ReduceMotion || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
+		t.Fatalf("defaults: %+v", d)
+	}
+	bad := map[string]func(*Settings){
+		"zoom low":      func(x *Settings) { x.Zoom = 50 },
+		"zoom high":     func(x *Settings) { x.Zoom = 300 },
+		"name long":     func(x *Settings) { x.AccountName = strings.Repeat("n", 81) },
+		"name newline":  func(x *Settings) { x.AccountName = "a\nb" },
+		"email":         func(x *Settings) { x.AccountEmail = "not-an-email" },
+		"email long":    func(x *Settings) { x.AccountEmail = strings.Repeat("a", 120) + "@x.io" },
+		"shortcut":      func(x *Settings) { x.Shortcuts = map[string]string{"a": "K"} },
+		"shortcut dupe": func(x *Settings) { x.Shortcuts = map[string]string{"a": "Mod+K", "b": "Mod+K"} },
+	}
+	for name, mutate := range bad {
+		in := goodSettings()
+		mutate(&in)
+		if _, err := s.Save(in); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	in := goodSettings()
+	in.Zoom, in.ConfirmClose, in.ReduceMotion = 120, false, true
+	in.AccountName, in.AccountEmail = "  Vu Nguyen  ", " me@example.com "
+	in.Shortcuts = map[string]string{"open_settings": "Mod+Shift+,", "new_connection": "Mod+T"}
+	got, err := s.Save(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AccountName != "Vu Nguyen" || got.AccountEmail != "me@example.com" {
+		t.Fatalf("not trimmed: %+v", got)
+	}
+	in.Shortcuts["injected_later"] = "Mod+J" // the saved copy must not alias the caller's map
+	if _, ok := s.Get().Shortcuts["injected_later"]; ok {
+		t.Fatal("settings alias the caller's shortcut map")
+	}
+	c2, err := testCore(t, h.core.Dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c2.settings
+	if g.Zoom != 120 || g.ConfirmClose || !g.ReduceMotion || g.AccountEmail != "me@example.com" || g.Shortcuts["open_settings"] != "Mod+Shift+," {
+		t.Fatalf("not persisted: %+v", g)
+	}
+}
+
+func TestOldSettingsWithoutShortcutsGetsNonNilMap(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "data"), 0o700)
+	os.WriteFile(filepath.Join(dir, "data", "settings.json"), []byte(`{"theme":"dark","font_size":14}`), 0o600)
+	c, err := testCore(t, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.settings.Shortcuts == nil || c.settings.Zoom != 100 || !c.settings.ConfirmClose {
+		t.Fatalf("%+v", c.settings)
+	}
+	b, _ := json.Marshal(New(c).Settings.Get())
+	if strings.Contains(string(b), `"shortcuts":null`) {
+		t.Fatalf("shortcuts marshals to null: %s", b)
+	}
+}
+
+// The first connection reveals the server type: it is stored on the host (icon), announced to the UI,
+// and not asked again.
+func TestFirstConnectionLearnsTheServerType(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv, err := testssh.Start(testssh.Config{User: "root", Password: "pw", ExecReply: "Linux\n---VVTERM---\nPRETTY_NAME=\"Ubuntu 24.04\"\nID=ubuntu\nID_LIKE=debian\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	host := h.sshHost(t, "web", srv, "")
+	if host.OS != "" {
+		t.Fatalf("a new host has no type yet: %q", host.OS)
+	}
+	sid, err := h.open(host.ID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.trust(t, sid)
+	h.rec.wait(t, "term:ready:"+sid)
+	h.rec.wait(t, "hosts:changed")
+	got, _ := h.app.Core.Store.GetHost(host.ID)
+	if got.OS != "ubuntu" {
+		t.Fatalf("the server type should be ubuntu, got %q", got.OS)
+	}
+	// editing the host in the form (which does not know the type) keeps it
+	edit := got
+	edit.OS, edit.Label = "", "web-renamed"
+	saved, err := h.app.Host.SaveHost(edit)
+	if err != nil || saved.OS != "ubuntu" {
+		t.Fatalf("%+v %v", saved, err)
+	}
+}
+
+// A server that refuses commands can still be told apart by its SSH version string.
+func TestServerTypeFallsBackToTheSSHVersionString(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv, err := testssh.Start(testssh.Config{User: "root", Password: "pw", Version: "OpenSSH_9.2p1 Debian-2+deb12u3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	host := h.sshHost(t, "old", srv, "")
+	sid, err := h.open(host.ID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.trust(t, sid)
+	h.rec.wait(t, "hosts:changed")
+	if got, _ := h.app.Core.Store.GetHost(host.ID); got.OS != "debian" {
+		t.Fatalf("got %q", got.OS)
+	}
+}
+
+// A server that tells us nothing leaves the type empty and does not announce a change.
+func TestUnknownServerTypeStaysEmpty(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv := startServer(t)
+	host := h.sshHost(t, "mystery", srv, "")
+	sid, err := h.open(host.ID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.trust(t, sid)
+	h.rec.wait(t, "term:ready:"+sid)
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.app.Core.Store.GetHost(host.ID); got.OS != "" || h.rec.count("hosts:changed") != 0 {
+		t.Fatalf("os=%q changes=%d", got.OS, h.rec.count("hosts:changed"))
+	}
+}
+
+func TestSFTPConnectionAlsoLearnsTheServerType(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv, err := testssh.Start(testssh.Config{User: "root", Password: "pw", SFTP: true, ExecReply: "FreeBSD\n---VVTERM---\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	host := h.sshHost(t, "bsd", srv, "")
+	done := make(chan error, 1)
+	go func() { _, err := h.app.Sftp.Open(host.ID, "sftp-1"); done <- err }()
+	h.trust(t, "sftp-1")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	h.rec.wait(t, "hosts:changed")
+	if got, _ := h.app.Core.Store.GetHost(host.ID); got.OS != "freebsd" {
+		t.Fatalf("got %q", got.OS)
 	}
 }

@@ -258,12 +258,36 @@ func (s *Store) SaveHost(h domain.Host) (domain.Host, error) {
 	s.touch(&h.Meta)
 	if existing >= 0 {
 		h.CreatedAt = s.data.Hosts[existing].CreatedAt
+		if h.OS == "" {
+			h.OS = s.data.Hosts[existing].OS // the edit form does not know it
+		}
 		s.data.Hosts[existing] = h
 	} else {
 		h.CreatedAt = h.UpdatedAt
 		s.data.Hosts = append(s.data.Hosts, h)
 	}
 	return h, s.flush()
+}
+
+// SetHostOS records the server type learned on a connection, without touching anything else.
+func (s *Store) SetHostOS(id, osName string) error {
+	if osName != "" && !domain.KnownOS[osName] {
+		return fmt.Errorf("invalid os %q", osName)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.hostIdx(id)
+	if i < 0 || s.data.Hosts[i].DeletedAt != nil {
+		return ErrNotFound
+	}
+	if s.data.Hosts[i].OS == osName {
+		return nil
+	}
+	h := s.data.Hosts[i]
+	h.OS = osName
+	s.touch(&h.Meta)
+	s.data.Hosts[i] = h
+	return s.flush()
 }
 
 func (s *Store) checkJump(self, jump string) error {
@@ -450,5 +474,57 @@ func (s *Store) DeleteForward(id string) error {
 	now := s.now()
 	s.data.Forwards[i].DeletedAt = &now
 	s.data.Forwards[i].UpdatedAt = now
+	return s.flush()
+}
+
+// ---- Snippets ----
+
+func (s *Store) snippetIdx(id string) int {
+	for i, x := range s.data.Snippets {
+		if x.ID == id && !x.Deleted() {
+			return i
+		}
+	}
+	return -1
+}
+
+func (s *Store) ListSnippets() []domain.Snippet {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []domain.Snippet{}
+	for _, x := range s.data.Snippets {
+		if !x.Deleted() {
+			out = append(out, x)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return strings.ToLower(out[i].Label) < strings.ToLower(out[j].Label) })
+	return out
+}
+
+func (s *Store) SaveSnippet(x domain.Snippet) (domain.Snippet, error) {
+	if err := domain.NormalizeSnippet(&x); err != nil {
+		return x, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.touch(&x.Meta)
+	if i := s.snippetIdx(x.ID); i >= 0 {
+		s.data.Snippets[i] = x
+	} else {
+		s.data.Snippets = append(s.data.Snippets, x)
+	}
+	return x, s.flush()
+}
+
+func (s *Store) DeleteSnippet(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.snippetIdx(id)
+	if i < 0 {
+		return ErrNotFound
+	}
+	now := s.now()
+	s.data.Snippets[i].DeletedAt = &now
+	s.data.Snippets[i].UpdatedAt = now
 	return s.flush()
 }

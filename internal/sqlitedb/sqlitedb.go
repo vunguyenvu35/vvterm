@@ -21,7 +21,7 @@ import (
 // DB wraps the connection and exposes the persisters.
 type DB struct{ db *sql.DB }
 
-const schemaVersion = 1
+const schemaVersion = 3
 
 var migrations = []string{
 	// v1
@@ -45,6 +45,13 @@ var migrations = []string{
 	CREATE TABLE secrets (
 		id TEXT PRIMARY KEY, kind TEXT NOT NULL, nonce BLOB, ciphertext BLOB, updated_at TEXT NOT NULL, deleted_at TEXT);
 	CREATE TABLE vault_header (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL);`,
+	// v2: snippets
+	`CREATE TABLE snippets (
+		id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', script TEXT NOT NULL,
+		updated_at TEXT NOT NULL, deleted_at TEXT);`,
+	// v3: the server type of a host (icon) and a name for a port forward
+	`ALTER TABLE hosts ADD COLUMN os TEXT NOT NULL DEFAULT '';
+	ALTER TABLE port_forwards ADD COLUMN label TEXT NOT NULL DEFAULT '';`,
 }
 
 // Open opens (creating and migrating if needed) the database at path with mode 0600.
@@ -153,7 +160,7 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 	}
 	rows.Close()
 
-	rows, err = p.db.Query(`SELECT id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at FROM hosts ORDER BY rowid`)
+	rows, err = p.db.Query(`SELECT id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os FROM hosts ORDER BY rowid`)
 	if err != nil {
 		return data, false, err
 	}
@@ -161,7 +168,7 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 		var h domain.Host
 		var env, tags, cr, upd string
 		var del sql.NullString
-		if err := rows.Scan(&h.ID, &h.Label, &h.GroupID, &h.Hostname, &h.Port, &h.Username, &h.IdentityID, &h.JumpHostID, &env, &tags, &h.KeepaliveSec, &cr, &upd, &del); err != nil {
+		if err := rows.Scan(&h.ID, &h.Label, &h.GroupID, &h.Hostname, &h.Port, &h.Username, &h.IdentityID, &h.JumpHostID, &env, &tags, &h.KeepaliveSec, &cr, &upd, &del, &h.OS); err != nil {
 			rows.Close()
 			return data, false, err
 		}
@@ -190,7 +197,7 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 	}
 	rows.Close()
 
-	rows, err = p.db.Query(`SELECT id,host_id,type,bind_addr,bind_port,dest_host,dest_port,auto_start,allow_public_bind,updated_at,deleted_at FROM port_forwards ORDER BY rowid`)
+	rows, err = p.db.Query(`SELECT id,host_id,type,bind_addr,bind_port,dest_host,dest_port,auto_start,allow_public_bind,updated_at,deleted_at,label FROM port_forwards ORDER BY rowid`)
 	if err != nil {
 		return data, false, err
 	}
@@ -199,7 +206,7 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 		var typ, upd string
 		var auto, pub int
 		var del sql.NullString
-		if err := rows.Scan(&f.ID, &f.HostID, &typ, &f.BindAddr, &f.BindPort, &f.DestHost, &f.DestPort, &auto, &pub, &upd, &del); err != nil {
+		if err := rows.Scan(&f.ID, &f.HostID, &typ, &f.BindAddr, &f.BindPort, &f.DestHost, &f.DestPort, &auto, &pub, &upd, &del, &f.Label); err != nil {
 			rows.Close()
 			return data, false, err
 		}
@@ -209,7 +216,24 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 	}
 	rows.Close()
 
-	found := len(data.Groups)+len(data.Hosts)+len(data.Identities)+len(data.Forwards) > 0
+	rows, err = p.db.Query(`SELECT id,label,description,script,updated_at,deleted_at FROM snippets ORDER BY rowid`)
+	if err != nil {
+		return data, false, err
+	}
+	for rows.Next() {
+		var x domain.Snippet
+		var upd string
+		var del sql.NullString
+		if err := rows.Scan(&x.ID, &x.Label, &x.Description, &x.Script, &upd, &del); err != nil {
+			rows.Close()
+			return data, false, err
+		}
+		x.UpdatedAt, x.DeletedAt = parseTS(upd), parseTSNull(del)
+		data.Snippets = append(data.Snippets, x)
+	}
+	rows.Close()
+
+	found := len(data.Groups)+len(data.Hosts)+len(data.Identities)+len(data.Forwards)+len(data.Snippets) > 0
 	return data, found, nil
 }
 
@@ -220,7 +244,7 @@ func (p StorePersister) Save(d domain.Data) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"groups", "hosts", "identities", "port_forwards"} {
+	for _, t := range []string{"groups", "hosts", "identities", "port_forwards", "snippets"} {
 		if _, err := tx.Exec("DELETE FROM " + t); err != nil {
 			return err
 		}
@@ -236,9 +260,9 @@ func (p StorePersister) Save(d domain.Data) error {
 		if h.Tags == nil {
 			tags = []byte("[]")
 		}
-		if _, err := tx.Exec(`INSERT INTO hosts(id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		if _, err := tx.Exec(`INSERT INTO hosts(id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			h.ID, h.Label, h.GroupID, h.Hostname, h.Port, h.Username, h.IdentityID, h.JumpHostID, string(h.Env), string(tags),
-			h.KeepaliveSec, ts(h.CreatedAt), ts(h.UpdatedAt), tsNull(h.DeletedAt)); err != nil {
+			h.KeepaliveSec, ts(h.CreatedAt), ts(h.UpdatedAt), tsNull(h.DeletedAt), h.OS); err != nil {
 			return err
 		}
 	}
@@ -249,8 +273,14 @@ func (p StorePersister) Save(d domain.Data) error {
 		}
 	}
 	for _, f := range d.Forwards {
-		if _, err := tx.Exec(`INSERT INTO port_forwards(id,host_id,type,bind_addr,bind_port,dest_host,dest_port,auto_start,allow_public_bind,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-			f.ID, f.HostID, string(f.Type), f.BindAddr, f.BindPort, f.DestHost, f.DestPort, b2i(f.AutoStart), b2i(f.AllowPublicBind), ts(f.UpdatedAt), tsNull(f.DeletedAt)); err != nil {
+		if _, err := tx.Exec(`INSERT INTO port_forwards(id,host_id,type,bind_addr,bind_port,dest_host,dest_port,auto_start,allow_public_bind,updated_at,deleted_at,label) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			f.ID, f.HostID, string(f.Type), f.BindAddr, f.BindPort, f.DestHost, f.DestPort, b2i(f.AutoStart), b2i(f.AllowPublicBind), ts(f.UpdatedAt), tsNull(f.DeletedAt), f.Label); err != nil {
+			return err
+		}
+	}
+	for _, x := range d.Snippets {
+		if _, err := tx.Exec(`INSERT INTO snippets(id,label,description,script,updated_at,deleted_at) VALUES(?,?,?,?,?,?)`,
+			x.ID, x.Label, x.Description, x.Script, ts(x.UpdatedAt), tsNull(x.DeletedAt)); err != nil {
 			return err
 		}
 	}
@@ -303,6 +333,22 @@ func (p VaultPersister) Load() (*vault.Snapshot, error) {
 		snap.Secrets = append(snap.Secrets, s)
 	}
 	return snap, rows.Err()
+}
+
+// Delete removes the header and every secret in one transaction.
+func (p VaultPersister) Delete() error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM secrets`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM vault_header`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (p VaultPersister) Save(s *vault.Snapshot) error {

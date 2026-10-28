@@ -1,28 +1,33 @@
 import {useEffect, useRef, useState} from 'react'
-import {Terminal} from '@xterm/xterm'
+import {ITheme, Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import {SearchAddon} from '@xterm/addon-search'
 import {WebLinksAddon} from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import {useBackend} from '../backend'
 import {b64ToBytes, errMsg} from '../util'
+import {registerPane} from './panes'
+import {matches} from '../shortcuts/shortcuts'
+import {IconArrowDown, IconArrowUp} from '../ui/Icons'
 import type {ClosedInfo, HostKeyPrompt} from '../types'
 
 interface Props {
   hostId: string
+  /** identifies the pane so other parts of the UI (snippets) can type into it */
+  paneId?: string
   visible: boolean
   focused: boolean
   fontSize: number
   fontFamily: string
-  theme: 'dark' | 'light'
+  termTheme: ITheme
+  /** key combination that toggles the scrollback search (default Mod+F) */
+  searchCombo?: string
+  cursorStyle: 'block' | 'bar' | 'underline'
+  cursorBlink: boolean
+  scrollback: number
   onFocus(): void
   /** The remote shell ended cleanly (user typed exit): the pane can go away. */
   onExit(): void
-}
-
-const THEMES = {
-  dark: {background: '#0c0e12', foreground: '#e6e8ee', cursor: '#5b8cff', selectionBackground: '#33415c'},
-  light: {background: '#ffffff', foreground: '#1b1f2a', cursor: '#2f62e0', selectionBackground: '#cfdcff'},
 }
 
 type State = 'connecting' | 'ready' | 'closed'
@@ -42,14 +47,16 @@ export function TerminalPane(p: Props) {
   const [showSearch, setShowSearch] = useState(false)
   const [needle, setNeedle] = useState('')
   const onExit = useRef(p.onExit)
+  const searchCombo = useRef(p.searchCombo ?? 'Mod+F')
+  searchCombo.current = p.searchCombo ?? 'Mod+F'
   onExit.current = p.onExit
 
   const setSt = (s: State) => { stateRef.current = s; setState(s) }
 
   useEffect(() => {
     const t = new Terminal({
-      fontSize: p.fontSize, fontFamily: p.fontFamily, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
-      theme: THEMES[p.theme],
+      fontSize: p.fontSize, fontFamily: p.fontFamily, cursorBlink: p.cursorBlink, cursorStyle: p.cursorStyle,
+      scrollback: p.scrollback, allowProposedApi: true, theme: p.termTheme,
     })
     const f = new FitAddon()
     const s = new SearchAddon()
@@ -78,11 +85,16 @@ export function TerminalPane(p: Props) {
         })
       }
     })
+    const unregister = p.paneId ? registerPane(p.paneId, text => {
+      if (stateRef.current !== 'ready') return false
+      void be.session.write(sid.current, text).catch(() => {})
+      return true
+    }) : () => {}
     t.onResize(({cols, rows}) => {
       if (sid.current && cols > 0 && rows > 0) void be.session.resize(sid.current, cols, rows).catch(() => {})
     })
     t.attachCustomKeyEventHandler(e => {
-      if (e.type === 'keydown' && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+      if (e.type === 'keydown' && matches(e, searchCombo.current)) {
         setShowSearch(v => !v)
         return false
       }
@@ -115,6 +127,7 @@ export function TerminalPane(p: Props) {
 
     return () => {
       disposed = true
+      unregister()
       ro.disconnect()
       offs.forEach(o => o())
       if (sid.current) void be.session.close(sid.current).catch(() => {})
@@ -129,9 +142,12 @@ export function TerminalPane(p: Props) {
     if (!t) return
     t.options.fontSize = p.fontSize
     t.options.fontFamily = p.fontFamily
-    t.options.theme = THEMES[p.theme]
+    t.options.theme = p.termTheme
+    t.options.cursorStyle = p.cursorStyle
+    t.options.cursorBlink = p.cursorBlink
+    t.options.scrollback = p.scrollback
     try { fit.current?.fit() } catch { /* hidden */ }
-  }, [p.fontSize, p.fontFamily, p.theme])
+  }, [p.fontSize, p.fontFamily, p.termTheme, p.cursorStyle, p.cursorBlink, p.scrollback])
 
   useEffect(() => {
     if (p.visible) {
@@ -147,8 +163,8 @@ export function TerminalPane(p: Props) {
   }
 
   return (
-    <div className={'pane' + (p.focused ? ' focused' : '')} onMouseDown={p.onFocus} data-testid="pane">
-      <div ref={host} style={{height: '100%'}} />
+    <div className={'pane' + (p.focused ? ' focused' : '')} onMouseDown={p.onFocus} data-testid="pane" style={{background: p.termTheme.background}}>
+      <div ref={host} style={{height: '100%', background: p.termTheme.background}} />
       {showSearch && (
         <div className="searchbar">
           <input autoFocus aria-label="Search terminal" value={needle} placeholder="Find…"
@@ -157,8 +173,8 @@ export function TerminalPane(p: Props) {
               if (e.key === 'Enter') e.shiftKey ? search.current?.findPrevious(needle) : search.current?.findNext(needle)
               if (e.key === 'Escape') { setShowSearch(false); term.current?.focus() }
             }} />
-          <button className="icon" onClick={() => search.current?.findPrevious(needle)}>↑</button>
-          <button className="icon" onClick={() => search.current?.findNext(needle)}>↓</button>
+          <button className="icon" aria-label="Previous match" onClick={() => search.current?.findPrevious(needle)}><IconArrowUp size={15} /></button>
+          <button className="icon" aria-label="Next match" onClick={() => search.current?.findNext(needle)}><IconArrowDown size={15} /></button>
         </div>
       )}
       {state === 'connecting' && !prompt && <div className="banner info">Connecting…</div>}

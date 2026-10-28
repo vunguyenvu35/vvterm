@@ -1,0 +1,12 @@
+.git
+.github
+**/node_modules
+frontend/dist
+build/bin
+e2e
+docs/screenshots
+docs/brand/*.png
+*.db
+*.db-wal
+*.db-shm
+.DS_Store

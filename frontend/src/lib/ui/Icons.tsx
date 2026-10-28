@@ -1,0 +1,53 @@
+import type {ReactNode, SVGProps} from 'react'
+
+/** Small stroke icon set (24x24 grid). Decorative: always aria-hidden. */
+function Icon({children, size = 18, ...p}: {children: ReactNode; size?: number} & SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...p}>
+      {children}
+    </svg>
+  )
+}
+
+type P = {size?: number}
+export const IconServer = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" /><path d="M7 7h.01M7 17h.01" /></Icon>
+export const IconKey = (p: P) => <Icon {...p}><circle cx="8" cy="15" r="4" /><path d="M10.8 12.2 20 3m-3 3 3 3m-6-0 2 2" /></Icon>
+export const IconForward = (p: P) => <Icon {...p}><path d="M4 12h13m-5-5 5 5-5 5" /><path d="M20 5v14" /></Icon>
+export const IconData = (p: P) => <Icon {...p}><path d="M7 4v14m0 0-3-3m3 3 3-3M17 20V6m0 0-3 3m3-3 3 3" /></Icon>
+export const IconCloud = (p: P) => <Icon {...p}><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z" /></Icon>
+export const IconGear = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></Icon>
+export const IconLock = (p: P) => <Icon {...p}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Icon>
+export const IconPlus = (p: P) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>
+export const IconSearch = (p: P) => <Icon {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>
+export const IconFolder = (p: P) => <Icon {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></Icon>
+export const IconTerminal = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3M13 15h4" /></Icon>
+export const IconClose = (p: P) => <Icon {...p}><path d="M6 6l12 12M18 6 6 18" /></Icon>
+export const IconEdit = (p: P) => <Icon {...p}><path d="M4 20h4L19 9l-4-4L4 16z" /></Icon>
+export const IconTrash = (p: P) => <Icon {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></Icon>
+export const IconPlay = (p: P) => <Icon {...p}><path d="M7 5v14l12-7z" /></Icon>
+export const IconSplitH = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></Icon>
+export const IconSplitV = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 12h18" /></Icon>
+export const IconChevron = (p: P) => <Icon {...p}><path d="m9 6 6 6-6 6" /></Icon>
+export const IconShield = (p: P) => <Icon {...p}><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z" /></Icon>
+export const IconBraces = (p: P) => <Icon {...p}><path d="M8 4c-2 0-3 1-3 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-1 3-3 3" /></Icon>
+export const IconCopy = (p: P) => <Icon {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></Icon>
+export const IconEye = (p: P) => <Icon {...p}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Icon>
+export const IconEyeOff = (p: P) => <Icon {...p}><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a10 10 0 0 0 4.4-1M9.9 9.9a3 3 0 0 0 4.2 4.2" /></Icon>
+export const IconArrowUpRight = (p: P) => <Icon {...p}><path d="M7 17 17 7M8 7h9v9" /></Icon>
+export const IconArrowUp = (p: P) => <Icon {...p}><path d="M12 19V5m-6 6 6-6 6 6" /></Icon>
+export const IconArrowDown = (p: P) => <Icon {...p}><path d="M12 5v14m-6-6 6 6 6-6" /></Icon>
+export const IconEnterKey = (p: P) => <Icon {...p}><path d="M20 5v7a3 3 0 0 1-3 3H5m0 0 4-4m-4 4 4 4" /></Icon>
+export const IconWarn = (p: P) => <Icon {...p}><path d="M12 3 2 20h20zM12 10v5M12 17.5v.01" /></Icon>
+export const IconCheckCircle = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="m8 12.5 3 3 5-6" /></Icon>
+export const IconXCircle = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="m9 9 6 6M15 9l-6 6" /></Icon>
+export const IconFile = (p: P) => <Icon {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></Icon>
+export const IconUpload = (p: P) => <Icon {...p}><path d="M12 16V4m-5 5 5-5 5 5M5 20h14" /></Icon>
+export const IconDownload = (p: P) => <Icon {...p}><path d="M12 4v12m-5-5 5 5 5-5M5 20h14" /></Icon>
+export const IconRefresh = (p: P) => <Icon {...p}><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" /></Icon>
+export const IconHome = (p: P) => <Icon {...p}><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></Icon>
+export const IconFolderPlus = (p: P) => <Icon {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M12 11v5M9.5 13.5h5" /></Icon>
+export const IconMinus = (p: P) => <Icon {...p}><path d="M5 12h14" /></Icon>
+export const IconUser = (p: P) => <Icon {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></Icon>
+
+export const IconSerial = (p: P) => <Icon {...p}><path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5" /></Icon>

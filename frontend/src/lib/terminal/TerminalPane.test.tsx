@@ -28,7 +28,7 @@ vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
 
 import {TerminalPane} from './TerminalPane'
 
-const props = {hostId: 'h1', visible: true, focused: true, fontSize: 13, fontFamily: 'monospace', theme: 'dark' as const}
+const props = {hostId: 'h1', visible: true, focused: true, fontSize: 13, fontFamily: 'monospace', termTheme: {background: '#000000'}, cursorStyle: 'block' as const, cursorBlink: true, scrollback: 10000}
 
 async function mount() {
   const be = makeFake()
@@ -112,5 +112,23 @@ describe('TerminalPane', () => {
     const {term} = await mount()
     act(() => { term.keyHandler({type: 'keydown', ctrlKey: true, metaKey: false, key: 'f'}) })
     expect(await screen.findByLabelText('Search terminal')).toBeInTheDocument()
+  })
+})
+
+describe('TerminalPane snippet writer', () => {
+  beforeEach(() => { created.length = 0 })
+
+  it('registers by pane id, types only when ready, and unregisters on unmount', async () => {
+    const {writeToPane} = await import('./panes')
+    const be = makeFake()
+    const view = render(<Providers be={be}><TerminalPane {...props} paneId="pane-x" onFocus={vi.fn()} onExit={vi.fn()} /></Providers>)
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'session.attach')).toBe(true))
+    const sid = be.state.calls.find(c => c[0] === 'session.attach')![1] as string
+    expect(writeToPane('pane-x', 'ls\r')).toBe(false) // still connecting
+    act(() => be.emit(`term:ready:${sid}`, {}))
+    expect(writeToPane('pane-x', 'ls\r')).toBe(true)
+    expect(be.state.calls).toContainEqual(['session.write', sid, 'ls\r'])
+    view.unmount()
+    expect(writeToPane('pane-x', 'x')).toBe(false)
   })
 })

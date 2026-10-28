@@ -36,6 +36,41 @@ func (s *VaultService) DisableBiometric() error { return s.c.Vault.DisableKeycha
 
 func (s *VaultService) Lock() { s.c.Vault.Lock() }
 
+// ResetConfirmation is the text the user must type to reset the vault.
+const ResetConfirmation = "RESET"
+
+// ResetVault is the way out when the master password is lost. The vault is zero-knowledge, so the
+// password cannot be recovered: this erases the vault and every key/password identity, and keeps the
+// rest (hosts, groups, snippets, forwards, ssh-agent identities). Hosts that used an erased identity
+// lose that reference and need new credentials. It works while the vault is locked. If an encrypted
+// backup exists it can be restored into the new vault afterwards.
+func (s *VaultService) ResetVault(confirm string) error {
+	if strings.TrimSpace(confirm) != ResetConfirmation {
+		return fmt.Errorf("type %s to confirm", ResetConfirmation)
+	}
+	erased := map[string]bool{}
+	for _, id := range s.c.Store.ListIdentities() {
+		if id.AuthType == domain.AuthAgent {
+			continue // no secret stored: keep
+		}
+		erased[id.ID] = true
+	}
+	for _, h := range s.c.Store.ListHosts(domain.HostFilter{}) {
+		if erased[h.IdentityID] {
+			h.IdentityID = ""
+			if _, err := s.c.Store.SaveHost(h); err != nil {
+				return err
+			}
+		}
+	}
+	for id := range erased {
+		if err := s.c.Store.DeleteIdentity(id); err != nil {
+			return err
+		}
+	}
+	return s.c.Vault.Destroy()
+}
+
 func (s *VaultService) ChangePassword(oldPW, newPW string) error {
 	return s.c.Vault.ChangePassword(oldPW, newPW)
 }

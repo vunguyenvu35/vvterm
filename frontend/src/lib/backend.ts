@@ -1,7 +1,7 @@
 import {createContext, useContext} from 'react'
 import type {
-  ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
-  SyncStatus, VaultStatus,
+  ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
+  RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
 } from './types'
 
 /**
@@ -15,6 +15,7 @@ export interface Backend {
     unlock(pw: string): Promise<void>
     unlockBiometric(): Promise<void>
     lock(): Promise<void>
+    resetVault(confirm: string): Promise<void>
     changePassword(oldPW: string, newPW: string): Promise<void>
     setAutoLock(minutes: number): Promise<void>
     enableBiometric(): Promise<void>
@@ -43,6 +44,7 @@ export interface Backend {
     reconnect(sid: string, cols: number, rows: number): Promise<void>
     close(sid: string): Promise<void>
     trustHostKey(sid: string, fingerprint: string): Promise<void>
+    testConnection(host: Partial<Host>, password: string, promptKey: string): Promise<ConnectionTest>
   }
   forwards: {
     list(): Promise<ForwardStatus[]>
@@ -68,10 +70,46 @@ export interface Backend {
     get(): Promise<Settings>
     save(s: Settings): Promise<Settings>
   }
+  sftp: {
+    open(hostId: string, promptKey: string): Promise<SftpInfo>
+    list(sid: string, dir: string): Promise<RemoteEntry[]>
+    mkdir(sid: string, path: string): Promise<void>
+    rename(sid: string, from: string, to: string): Promise<void>
+    remove(sid: string, path: string, recursive: boolean): Promise<void>
+    upload(sid: string, local: string, remoteDir: string, overwrite: boolean): Promise<string>
+    download(sid: string, remote: string, local: string, overwrite: boolean): Promise<void>
+    close(sid: string): Promise<void>
+    /** Files and folders (everything inside) into a remote folder. Existing files are skipped unless overwrite. */
+    uploadAll(sid: string, locals: string[], remoteDir: string, overwrite: boolean): Promise<TransferResult>
+    /** Remote files and folders into a local folder. Existing files are skipped unless overwrite. */
+    downloadAll(sid: string, remotes: string[], localDir: string, overwrite: boolean): Promise<TransferResult>
+  }
+  serial: {
+    ports(): Promise<string[]>
+  }
+  /** This computer's files (the Local pane of the SFTP screen). */
+  local: {
+    home(): Promise<string>
+    list(dir: string): Promise<RemoteEntry[]>
+    mkdir(path: string): Promise<void>
+    rename(from: string, to: string): Promise<void>
+    remove(path: string, recursive: boolean): Promise<void>
+  }
+  snippets: {
+    list(): Promise<Snippet[]>
+    save(s: Partial<Snippet>): Promise<Snippet>
+    remove(id: string): Promise<void>
+  }
   system: {
     pickFile(title: string): Promise<string>
     pickDirectory(title: string): Promise<string>
     saveFile(title: string, name: string): Promise<string>
+    openUrl(url: string): Promise<void>
+    info(): Promise<{version: string}>
+    /** Opens the Settings window (a second native window). Rejects where none exists: the UI then shows its in-app window. */
+    openSettings(): Promise<void>
+    /** Zoom the native window (the green button / a double click on the title bar). A no-op in a browser. */
+    toggleMaximise(): Promise<void>
   }
   /** Subscribe to a backend event; returns an unsubscribe function. */
   on(event: string, cb: (data: any) => void): () => void
@@ -82,7 +120,7 @@ type Bound = Record<string, (...a: any[]) => Promise<any>>
 declare global {
   interface Window {
     go?: Record<string, Record<string, Bound>>
-    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void}
+    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void; WindowToggleMaximise?(): void}
   }
 }
 
@@ -105,6 +143,7 @@ export function wailsBackend(): Backend {
       unlock: pw => u('VaultService', 'Unlock', pw),
       unlockBiometric: () => u('VaultService', 'UnlockBiometric'),
       lock: () => u('VaultService', 'Lock'),
+      resetVault: c => u('VaultService', 'ResetVault', c),
       changePassword: (o, n) => u('VaultService', 'ChangePassword', o, n),
       setAutoLock: m => u('VaultService', 'SetAutoLock', m),
       enableBiometric: () => u('VaultService', 'EnableBiometric'),
@@ -133,6 +172,7 @@ export function wailsBackend(): Backend {
       reconnect: (s, c, r) => u('SessionService', 'Reconnect', s, c, r),
       close: s => u('SessionService', 'Close', s),
       trustHostKey: (s, f) => u('SessionService', 'TrustHostKey', s, f),
+      testConnection: (h, p, k) => u('SessionService', 'TestConnection', h, p, k),
     },
     forwards: {
       list: () => u('ForwardService', 'List'),
@@ -158,16 +198,92 @@ export function wailsBackend(): Backend {
       get: () => u('SettingsService', 'Get'),
       save: s => u('SettingsService', 'Save', s),
     },
+    sftp: {
+      open: (h, k) => u('SftpService', 'Open', h, k),
+      list: async (s, d) => (await u<RemoteEntry[]>('SftpService', 'List', s, d)) ?? [],
+      mkdir: (s, p) => u('SftpService', 'Mkdir', s, p),
+      rename: (s, a, b) => u('SftpService', 'Rename', s, a, b),
+      remove: (s, p, r) => u('SftpService', 'Delete', s, p, r),
+      upload: (s, l, d, o) => u('SftpService', 'Upload', s, l, d, o),
+      download: (s, r, l, o) => u('SftpService', 'Download', s, r, l, o),
+      close: s => u('SftpService', 'Close', s),
+      uploadAll: (s, l, d, o) => u('SftpService', 'UploadAll', s, l, d, o),
+      downloadAll: (s, r, d, o) => u('SftpService', 'DownloadAll', s, r, d, o),
+    },
+    serial: {
+      ports: async () => (await call<string[]>('usecase', 'SerialService', 'Ports')) ?? [],
+    },
+    local: {
+      home: () => call('usecase', 'LocalService', 'Home'),
+      list: async d => (await call<RemoteEntry[]>('usecase', 'LocalService', 'List', d)) ?? [],
+      mkdir: p => call('usecase', 'LocalService', 'Mkdir', p),
+      rename: (a, b) => call('usecase', 'LocalService', 'Rename', a, b),
+      remove: (p, r) => call('usecase', 'LocalService', 'Delete', p, r),
+    },
+    snippets: {
+      list: async () => (await u<Snippet[]>('SnippetService', 'List')) ?? [],
+      save: s => u('SnippetService', 'Save', s),
+      remove: id => u('SnippetService', 'Delete', id),
+    },
     system: {
       pickFile: t => call('app', 'SystemService', 'PickFile', t),
       pickDirectory: t => call('app', 'SystemService', 'PickDirectory', t),
       saveFile: (t, n) => call('app', 'SystemService', 'SaveFile', t, n),
+      openUrl: async url => {
+        try {
+          await call('app', 'SystemService', 'OpenURL', url)
+        } catch {
+          window.open(url, '_blank', 'noopener') // browser mode (e2e)
+        }
+      },
+      info: () => call('app', 'SystemService', 'Info'),
+      openSettings: () => call('app', 'SystemService', 'OpenSettings'),
+      toggleMaximise: async () => { window.runtime?.WindowToggleMaximise?.() },
     },
     on: (event, cb) => {
       const rt = window.runtime
       if (!rt) return () => {}
       return rt.EventsOn(event, (...d: any[]) => cb(d[0]))
     },
+  }
+}
+
+/** True in the Settings window process, which has no use cases of its own (only the bridge). */
+export const inSettingsWindow = () => !!window.go?.app?.SettingsBridge
+
+/**
+ * Backend of the Settings window: settings, vault security options and sync are forwarded to the main
+ * window's process through the Go bridge; help links and the version are local.
+ */
+export function bridgeBackend(): Backend {
+  const base = wailsBackend()
+  const rpc = async <T,>(service: string, method: string, ...args: unknown[]): Promise<T> => {
+    const text: string = await window.go!.app.SettingsBridge.Call(service, method, JSON.stringify(args))
+    return (text ? JSON.parse(text) : undefined) as T
+  }
+  const unavailable = () => Promise.reject(new Error('not available in the settings window'))
+  return {
+    ...base,
+    vault: {
+      ...base.vault,
+      status: () => rpc('VaultService', 'Status'),
+      changePassword: (o, n) => rpc('VaultService', 'ChangePassword', o, n),
+      setAutoLock: m => rpc('VaultService', 'SetAutoLock', m),
+      enableBiometric: () => rpc('VaultService', 'EnableBiometric'),
+      disableBiometric: () => rpc('VaultService', 'DisableBiometric'),
+      resetVault: c => rpc('VaultService', 'ResetVault', c),
+    },
+    settings: {
+      get: () => rpc('SettingsService', 'Get'),
+      save: s => rpc('SettingsService', 'Save', s),
+    },
+    sync: {
+      configure: url => rpc('SyncService', 'Configure', url),
+      syncNow: () => rpc('SyncService', 'SyncNow'),
+      join: pw => rpc('SyncService', 'JoinExisting', pw),
+      status: () => rpc('SyncService', 'Status'),
+    },
+    system: {...base.system, openSettings: unavailable},
   }
 }
 

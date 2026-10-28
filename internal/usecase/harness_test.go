@@ -13,7 +13,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"vvterm/internal/sftpx"
 	"vvterm/internal/sqlitedb"
+	"vvterm/internal/sshx"
 	"vvterm/internal/store"
 
 	"vvterm/internal/domain"
@@ -142,7 +144,8 @@ func testCore(t *testing.T, dir string, emit Emitter) (*Core, error) {
 		return nil, err
 	}
 	v.SetKDF(vault.KDFParams{Memory: 64, Time: 1, Threads: 1})
-	return NewCore(dir, Options{Store: st, Vault: v, Emit: emit})
+	return NewCore(dir, Options{Store: st, Vault: v, Emit: emit,
+		OpenRemoteFS: func(c *sshx.Client) (RemoteFS, error) { return sftpx.Open(c.Client) }})
 }
 
 func newHarness(t *testing.T) *harness {
@@ -245,4 +248,44 @@ func (h *harness) open(hostID string, cols, rows int) (string, error) {
 		err = h.app.Session.Attach(sid)
 	}
 	return sid, err
+}
+
+// trust2 answers the n-th host key prompt recorded for key (jump chains prompt once per machine).
+func (h *harness) trust2(t *testing.T, key string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		h.rec.mu.Lock()
+		seen := 0
+		var fp string
+		for _, e := range h.rec.events {
+			if e.name == "term:hostkey:"+key {
+				seen++
+				if seen == n {
+					fp = e.data.(map[string]any)["fingerprint"].(string)
+				}
+			}
+		}
+		h.rec.mu.Unlock()
+		if seen >= n {
+			if err := h.app.Session.TrustHostKey(key, fp); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("prompt #%d for %s never appeared", n, key)
+}
+
+// lastEvent returns the most recent event with the given name.
+func (r *recorder) lastEvent(name string) event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := len(r.events) - 1; i >= 0; i-- {
+		if r.events[i].name == name {
+			return r.events[i]
+		}
+	}
+	return event{}
 }

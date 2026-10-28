@@ -106,7 +106,7 @@ func TestUseCaseDependsOnlyInward(t *testing.T) {
 }
 
 func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
-	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "fsutil", "testssh", "sqlitedb"} {
+	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "fsutil", "testssh", "sqlitedb", "sftpx"} {
 		for _, d := range internalDeps(imports(t, "internal/"+pkg)) {
 			if d == "app" || d == "internal/usecase" {
 				t.Errorf("infrastructure package %s imports %s (dependency points outward)", pkg, d)
@@ -117,7 +117,7 @@ func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
 
 func TestOnlyDeliveryLayerTouchesWails(t *testing.T) {
 	for _, pkg := range []string{"internal/usecase", "internal/domain", "internal/store", "internal/vault", "internal/sshx",
-		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/sqlitedb"} {
+		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/sqlitedb", "internal/sftpx"} {
 		for p := range imports(t, pkg) {
 			if strings.Contains(p, "wailsapp") {
 				t.Errorf("%s imports Wails (%s)", pkg, p)

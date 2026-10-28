@@ -8,8 +8,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+	"vvterm/internal/domain"
 	"vvterm/internal/fsutil"
 
 	"vvterm/internal/sshx"
@@ -17,28 +19,53 @@ import (
 
 // Settings is persisted in settings.json and never synced.
 type Settings struct {
-	Theme           string `json:"theme"`
+	Theme           string `json:"theme"`          // app appearance: auto | light | dark
+	TerminalTheme   string `json:"terminal_theme"` // "auto" (follow the app) or a theme id from the UI catalogue
 	FontSize        int    `json:"font_size"`
 	FontFamily      string `json:"font_family"`
+	CursorStyle     string `json:"cursor_style"` // block | bar | underline
+	CursorBlink     bool   `json:"cursor_blink"`
+	Scrollback      int    `json:"scrollback"`
 	AutoLockMinutes int    `json:"auto_lock_minutes"`
 	SyncURL         string `json:"sync_url"`
+
+	// General
+	Zoom         int  `json:"zoom"`          // interface scale in percent (80..160)
+	ConfirmClose bool `json:"confirm_close"` // ask before closing a terminal or SFTP tab
+	ReduceMotion bool `json:"reduce_motion"` // turn animations off
+
+	// Account: a local profile today, the hook for sign-in and team features later
+	AccountName  string `json:"account_name"`
+	AccountEmail string `json:"account_email"`
+
+	// Shortcuts holds only the user's overrides (action id -> combo such as "Mod+Shift+K"); an action
+	// without an entry uses its default, which lives with the UI that implements it.
+	Shortcuts map[string]string `json:"shortcuts"`
 }
 
 func defaultSettings() Settings {
-	return Settings{Theme: "dark", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace", AutoLockMinutes: 15}
+	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace",
+		CursorStyle: "block", CursorBlink: true, Scrollback: 10000, AutoLockMinutes: 15,
+		Zoom: 100, ConfirmClose: true, Shortcuts: map[string]string{}}
 }
 
 // Core wires the packages together; the services below share one instance.
 type Core struct {
-	Dir      string // root of user data (contains data/ and sync/)
-	DataDir  string
-	SyncDir  string
-	Store    Repository
-	Vault    SecretVault
-	Dialer   *sshx.Dialer
-	emit     Emitter
-	setMu    sync.Mutex
-	settings Settings
+	Dir     string // root of user data (contains data/ and sync/)
+	DataDir string
+	SyncDir string
+	Store   Repository
+	Vault   SecretVault
+	Dialer  *sshx.Dialer
+	// OpenRemoteFS starts SFTP on an SSH connection; nil disables the SFTP feature.
+	OpenRemoteFS RemoteFSOpener
+	// OpenLocalShell, OpenSerial and ListSerial back the Terminal and Serial features; nil disables them.
+	OpenLocalShell ShellOpener
+	OpenSerial     SerialOpener
+	ListSerial     SerialLister
+	emit           Emitter
+	setMu          sync.Mutex
+	settings       Settings
 
 	prompts *prompter
 }
@@ -49,6 +76,12 @@ type Options struct {
 	Store Repository
 	Vault SecretVault
 	Emit  Emitter
+	// OpenRemoteFS is the SFTP adapter (optional).
+	OpenRemoteFS RemoteFSOpener
+	// Local terminal and serial adapters (optional).
+	OpenLocalShell ShellOpener
+	OpenSerial     SerialOpener
+	ListSerial     SerialLister
 }
 
 // NewCore wires the use cases around the given ports. dir is the root of user data.
@@ -57,7 +90,8 @@ func NewCore(dir string, opt Options) (*Core, error) {
 		return nil, errors.New("store and vault ports are required")
 	}
 	c := &Core{Dir: dir, DataDir: filepath.Join(dir, "data"), SyncDir: filepath.Join(dir, "sync"), emit: opt.Emit,
-		Store: opt.Store, Vault: opt.Vault, prompts: newPrompter()}
+		Store: opt.Store, Vault: opt.Vault, prompts: newPrompter(), OpenRemoteFS: opt.OpenRemoteFS,
+		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, ListSerial: opt.ListSerial}
 	if c.emit == nil {
 		c.emit = func(string, ...any) {}
 	}
@@ -147,4 +181,26 @@ func (p *prompter) answer(key, fingerprint string, trust bool) error {
 	default:
 	}
 	return nil
+}
+
+// learnOS works out the server type on the first connection to a host and stores it, so the UI can show
+// the right icon. It runs in the background, asks for nothing the user typed, and gives up quietly when
+// the server refuses commands (the SSH version string alone may still tell). It never runs again once
+// the type is known.
+func (c *Core) learnOS(host domain.Host, cl *sshx.Client) {
+	if host.OS != "" {
+		return
+	}
+	go func() {
+		version := string(cl.Client.ServerVersion())
+		out, _ := cl.Exec("uname -s; echo ---VVTERM---; cat /etc/os-release 2>/dev/null", 5*time.Second) // a non-zero exit still carries the output
+		uname, release, _ := strings.Cut(out, "---VVTERM---")
+		name := domain.ParseOS(version, uname, release)
+		if name == "" {
+			return
+		}
+		if err := c.Store.SetHostOS(host.ID, name); err == nil {
+			c.emit("hosts:changed", host.ID)
+		}
+	}()
 }

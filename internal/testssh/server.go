@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -24,6 +25,16 @@ type Config struct {
 	HostKey  ssh.Signer      // generated when nil
 	Banner   string          // optional text printed after READY (demos)
 	Prompt   string          // optional prompt printed after READY and each echoed line (demos)
+
+	// Version is the SSH software version announced after "SSH-2.0-" (default: the library's).
+	Version string
+	// ExecReply is written for any `exec` request (the command itself is not run); empty refuses exec.
+	ExecReply string
+
+	// SFTP enables the sftp subsystem on an in-memory filesystem (no real files are exposed).
+	// SFTPSeed pre-creates entries: a path ending in "/" is a directory, otherwise a file with that content.
+	SFTP     bool
+	SFTPSeed map[string]string
 }
 
 type Server struct {
@@ -31,6 +42,7 @@ type Server struct {
 	HostKey ssh.Signer
 
 	ln       net.Listener
+	handlers sftp.Handlers
 	cfg      Config
 	sshCfg   *ssh.ServerConfig
 	mu       sync.Mutex
@@ -58,6 +70,13 @@ func Start(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{ln: ln, cfg: cfg, Addr: ln.Addr().String(), HostKey: cfg.HostKey}
+	if cfg.SFTP {
+		s.handlers = sftp.InMemHandler()
+		if err := seedSFTP(s.handlers, cfg.SFTPSeed); err != nil {
+			ln.Close()
+			return nil, err
+		}
+	}
 	sc := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pw []byte) (*ssh.Permissions, error) {
 			if cfg.Password != "" && c.User() == cfg.User && string(pw) == cfg.Password {
@@ -73,6 +92,9 @@ func Start(cfg Config) (*Server, error) {
 			}
 			return nil, fmt.Errorf("key rejected")
 		},
+	}
+	if cfg.Version != "" {
+		sc.ServerVersion = "SSH-2.0-" + cfg.Version
 	}
 	sc.AddHostKey(cfg.HostKey)
 	s.sshCfg = sc
@@ -261,10 +283,25 @@ func pipe(ch ssh.Channel, c net.Conn) {
 func (s *Server) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 	defer ch.Close()
 	started := make(chan struct{})
+	done := make(chan struct{})
 	var once sync.Once
 	go func() {
+		defer close(done)
 		for r := range reqs {
 			switch r.Type {
+			case "subsystem":
+				var p struct{ Name string }
+				ssh.Unmarshal(r.Payload, &p)
+				if p.Name != "sftp" || !s.cfg.SFTP {
+					r.Reply(false, nil)
+					continue
+				}
+				r.Reply(true, nil)
+				go func() {
+					srv := sftp.NewRequestServer(ch, s.handlers)
+					srv.Serve()
+					ch.Close()
+				}()
 			case "pty-req":
 				var p struct {
 					Term       string
@@ -284,6 +321,16 @@ func (s *Server) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 				s.window = [2]uint32{p.Cols, p.Rows}
 				s.mu.Unlock()
 				r.Reply(true, nil)
+			case "exec":
+				if s.cfg.ExecReply == "" {
+					r.Reply(false, nil)
+					continue
+				}
+				r.Reply(true, nil)
+				io.WriteString(ch, s.cfg.ExecReply)
+				ch.SendRequest("exit-status", false, ssh.Marshal(struct{ C uint32 }{0}))
+				ch.CloseWrite()
+				ch.Close()
 			case "shell":
 				r.Reply(true, nil)
 				once.Do(func() { close(started) })
@@ -292,7 +339,11 @@ func (s *Server) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 			}
 		}
 	}()
-	<-started
+	select {
+	case <-started:
+	case <-done:
+		return
+	}
 	io.WriteString(ch, "READY\r\n")
 	if s.cfg.Banner != "" {
 		io.WriteString(ch, s.cfg.Banner+"\r\n")

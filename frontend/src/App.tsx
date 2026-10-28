@@ -1,62 +1,131 @@
-import {useCallback, useEffect, useState} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 import {useBackend} from './lib/backend'
 import {UnlockScreen} from './lib/vault/UnlockScreen'
-import {IdentitiesPanel} from './lib/vault/IdentitiesPanel'
-import {HostList} from './lib/hosts/HostList'
+import {KeychainPage, KeyMode} from './lib/vault/KeychainPage'
+import {KeyPanel} from './lib/vault/KeyPanel'
+import {SerialPanel, portName} from './lib/hosts/SerialPanel'
+import {HostList, QuickConnect} from './lib/hosts/HostList'
 import {GroupForm, HostForm} from './lib/hosts/HostForm'
 import {Workspace} from './lib/terminal/Workspace'
-import {ForwardsPanel} from './lib/panels/ForwardsPanel'
+import {ForwardPanel} from './lib/panels/ForwardPanel'
+import {SnippetsPage} from './lib/snippets/SnippetsPage'
+import {SnippetForm} from './lib/snippets/SnippetForm'
+import {toTerminalInput, writeToPane} from './lib/terminal/panes'
+import {PortForwardsPage} from './lib/panels/PortForwardsPage'
 import {DataPanel} from './lib/panels/DataPanel'
-import {SyncPanel} from './lib/panels/SyncPanel'
-import {SettingsPanel} from './lib/panels/SettingsPanel'
-import {closePane, hasPane, newTab, splitPane, Tab} from './lib/layout'
+import {SettingsWindow} from './lib/settings/SettingsWindow'
+import {useAppearance} from './lib/settings/appearance'
+import {DEFAULT_SETTINGS} from './lib/settings/defaults'
+import {Nav, Page} from './lib/shell/Nav'
+import {TopBar} from './lib/shell/TopBar'
+import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
+import {closePane, hasPane, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab} from './lib/layout'
+import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
-import type {Group, Host, Identity, Settings, VaultStatus} from './lib/types'
+import {useConfirm} from './lib/ui/Confirm'
+import {DragBar} from './lib/ui/DragBar'
+import type {Leaf} from './lib/layout'
+import type {ForwardType, Group, PortForward, Host, Identity, Settings, Snippet, VaultStatus} from './lib/types'
 
 type Dialog =
-  | {k: 'host'; host?: Host}
+  | {k: 'host'; host?: Host; prefill?: QuickConnect}
   | {k: 'group'; group?: Group}
-  | {k: 'identities'}
-  | {k: 'forwards'; host: Host}
+  | {k: 'forward'; forward?: PortForward; hostId?: string}
+  | {k: 'snippet'; snippet?: Snippet}
+  | {k: 'key'; mode: KeyMode}
+  | {k: 'serial'}
   | {k: 'data'}
-  | {k: 'sync'}
-  | {k: 'settings'}
   | null
 
-const DEFAULT_SETTINGS: Settings = {theme: 'dark', font_size: 13, font_family: 'Menlo, monospace', auto_lock_minutes: 15, sync_url: ''}
+
+/** The tab to show when the active one closes: the last terminal that is left (the pinned SFTP tab does not count), else Vaults. */
+const fallbackTab = (rest: Tab[]) => rest.filter(t => !t.pinned).at(-1)?.id ?? 'home'
 
 export default function App() {
   const be = useBackend()
   const toast = useToast()
+  const confirm = useConfirm()
   const [vault, setVault] = useState<VaultStatus | null>(null)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const saving = useRef<Promise<unknown>>(Promise.resolve())
   const [groups, setGroups] = useState<Group[]>([])
   const [hosts, setHosts] = useState<Host[]>([])
   const [identities, setIdentities] = useState<Identity[]>([])
-  const [tabs, setTabs] = useState<Tab[]>([])
-  const [active, setActive] = useState('')
+  const [snippets, setSnippets] = useState<Snippet[]>([])
+  const [lastTerm, setLastTerm] = useState('') // most recently focused terminal tab
+  // the SFTP tab is always there, right after Vaults
+  const [tabs, setTabs] = useState<Tab[]>(() => [pinnedSftpTab()])
+  const [active, setActive] = useState('home') // 'home' or a tab id
+  const [page, setPage] = useState<Page>('hosts')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [draft, setDraft] = useState('')
+  const [fwDraft, setFwDraft] = useState<{label: string; type: ForwardType}>({label: '', type: 'local'})
+  const [fwTick, setFwTick] = useState(0) // bumped when the forwarding panel saved something
+  const appearance = useAppearance(settings.theme)
 
   const refreshVault = useCallback(async () => setVault(await be.vault.status()), [be])
   const refreshData = useCallback(async () => {
-    const [g, h, i] = await Promise.all([be.hosts.listGroups(), be.hosts.listHosts({}), be.vault.listIdentities()])
+    const [g, h, i, sn] = await Promise.all([be.hosts.listGroups(), be.hosts.listHosts({}), be.vault.listIdentities(), be.snippets.list()])
     setGroups(g ?? [])
     setHosts(h ?? [])
     setIdentities(i ?? [])
+    setSnippets(sn ?? [])
   }, [be])
 
+  const refreshDataRef = useRef<() => Promise<void> | void>(() => {})
+  refreshDataRef.current = () => { if (vault?.unlocked) return refreshData() }
   useEffect(() => {
     void refreshVault()
     void be.settings.get().then(setSettings).catch(() => {})
-    // the vault auto-locked (idle or sleep): drop back to the unlock screen and close terminals
-    return be.on('vault:locked', () => { void refreshVault() })
+    // the vault auto-locked (idle): drop back to the unlock screen
+    const offLocked = be.on('vault:locked', () => { void refreshVault() })
+    // the Settings window (its own process) changed something here: pick it up
+    const offBridge = be.on('bridge:changed', (service: string) => {
+      if (service === 'SettingsService') void be.settings.get().then(setSettings).catch(() => {})
+      else void refreshVault().then(() => refreshDataRef.current())
+    })
+    // the first connection to a host revealed its server type (ubuntu, debian…): the icon changes
+    const offHosts = be.on('hosts:changed', () => { void refreshDataRef.current() })
+    return () => { offLocked(); offBridge(); offHosts() }
   }, [be, refreshVault])
 
-  useEffect(() => { document.documentElement.dataset.theme = settings.theme }, [settings.theme])
+  useEffect(() => { document.documentElement.dataset.theme = appearance }, [appearance])
+
+  // Configurable shortcuts (Settings → Shortcuts). The handlers are re-assigned on every render once the
+  // vault is unlocked, so the listener below never sees stale state.
+  const act = useRef<Record<string, () => void>>({})
+  const bindings = effective(settings.shortcuts)
+  const bindingsRef = useRef(bindings)
+  bindingsRef.current = bindings
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (capture.active) return // the editor is recording a new shortcut
+      for (const [id, combo] of Object.entries(bindingsRef.current)) {
+        if (id === 'terminal_search') continue // handled by the focused terminal
+        if (matches(e, combo)) {
+          const fn = act.current[id]
+          if (fn) { e.preventDefault(); fn() }
+          return
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // interface zoom and reduced motion
+  useEffect(() => { document.documentElement.style.setProperty('zoom', String((settings.zoom || 100) / 100)) }, [settings.zoom])
+  useEffect(() => { document.documentElement.dataset.motion = settings.reduce_motion ? 'reduced' : 'full' }, [settings.reduce_motion])
+
+  // a side panel belongs to the page it was opened on: leaving the home view closes it
+  const leftHome = active !== 'home' && tabs.some(t => t.id === active)
+  useEffect(() => { if (leftHome) setDialog(null) }, [leftHome])
   useEffect(() => { if (vault?.unlocked) void refreshData() }, [vault?.unlocked, refreshData])
 
-  if (!vault) return <div className="gate"><div className="muted">Loading…</div></div>
+  act.current = {}
+  if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div></div>
   if (!vault.unlocked) {
     return <UnlockScreen status={vault} onDone={() => { void refreshVault() }} />
   }
@@ -66,74 +135,169 @@ export default function App() {
     setTabs(ts => [...ts, t])
     setActive(t.id)
   }
-  const closeTab = (id: string) => {
-    setTabs(ts => {
-      const next = ts.filter(t => t.id !== id)
-      if (id === active) setActive(next.length ? next[next.length - 1].id : '')
-      return next
-    })
+  // the SFTP button of a host card: switch to the SFTP tab and connect it to that host
+  const openSftp = (h: Host) => {
+    setTabs(ts => ts.map(t => (t.id === SFTP_TAB_ID ? {...t, root: {...(t.root as Leaf), hostId: h.id}, sftpLabel: h.label, sftpNonce: (t.sftpNonce ?? 0) + 1} : t)))
+    setActive(SFTP_TAB_ID)
+  }
+  // a terminal that is not an SSH host: this computer ("local") or a serial port ("serial:<device>@<baud>")
+  const openDevice = (hostId: string, title: string) => {
+    const t = newTab(hostId, title)
+    setTabs(ts => [...ts, t])
+    setActive(t.id)
+  }
+  const closeTab = async (id: string) => {
+    const closing = tabs.find(t => t.id === id)
+    if (closing?.pinned) return // the SFTP tab stays
+    if (settings.confirm_close && closing && !(await confirm(`Close "${closing.title}"? Its connection will end.`, {confirmLabel: 'Close tab', danger: true}))) return
+    setTabs(ts => ts.filter(t => t.id !== id))
+    if (id === active) {
+      const rest = tabs.filter(t => t.id !== id)
+      setActive(fallbackTab(rest))
+    }
   }
   const split = (dir: 'row' | 'col') => setTabs(ts => ts.map(t => (t.id === active ? splitPane(t, t.activePane, dir) : t)))
   const focusPane = (tabId: string, paneId: string) => setTabs(ts => ts.map(t => (t.id === tabId && hasPane(t, paneId) ? {...t, activePane: paneId} : t)))
+  // the × on a pane of a split tab: ask first like closing a tab, then end just that pane's session
+  const closePaneAsk = async (tabId: string, paneId: string) => {
+    if (settings.confirm_close && !(await confirm('Close this pane? Its connection will end.', {confirmLabel: 'Close pane', danger: true}))) return
+    paneExit(tabId, paneId)
+  }
   const paneExit = (tabId: string, paneId: string) => {
-    setTabs(ts => ts.flatMap(t => {
+    const remaining = tabs.flatMap(t => {
       if (t.id !== tabId) return [t]
       const n = closePane(t, paneId)
       return n ? [n] : []
-    }))
-    setActive(a => (a === tabId && !tabs.some(t => t.id !== tabId) ? '' : a))
+    })
+    setTabs(remaining)
+    if (!remaining.some(t => t.id === tabId) && active === tabId) setActive(fallbackTab(remaining))
   }
+  const runSnippet = (s: Snippet, execute: boolean) => {
+    const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
+    if (!tab) return toast.error('Open a terminal first: the snippet is typed into the focused pane.')
+    if (!writeToPane(tab.activePane, toTerminalInput(s.script, execute))) {
+      return toast.error('The focused terminal is not connected yet.')
+    }
+    setActive(tab.id)
+    toast.info(execute ? `Ran “${s.label}”` : `Pasted “${s.label}”`)
+  }
+  const delSnippet = async (s: Snippet) => {
+    if (!(await confirm(`Delete snippet "${s.label}"?`, {confirmLabel: 'Delete', danger: true}))) return
+    try { await be.snippets.remove(s.id); await refreshData() } catch (e) { toast.error(errMsg(e)) }
+  }
+  /** Changing page discards an open panel (New host, New group, New snippet, forwards…). */
+  const changePage = (p: Page) => {
+    if (p !== page) { setPage(p); setDialog(null) }
+  }
+  const goHome = (p?: Page) => { setActive('home'); if (p) changePage(p) }
 
   const delHost = async (h: Host) => {
-    if (!window.confirm(`Delete host "${h.label}"?`)) return
+    if (!(await confirm(`Delete host "${h.label}"?`, {confirmLabel: 'Delete', danger: true}))) return
     try { await be.hosts.deleteHost(h.id); await refreshData() } catch (e) { toast.error(errMsg(e)) }
   }
   const delGroup = async (g: Group) => {
-    if (!window.confirm(`Delete group "${g.name}"? Its hosts move to the parent group.`)) return
+    if (!(await confirm(`Delete group "${g.name}"? Its hosts move to the parent group.`, {confirmLabel: 'Delete', danger: true}))) return
     try { await be.hosts.deleteGroup(g.id); await refreshData() } catch (e) { toast.error(errMsg(e)) }
   }
 
   const close = () => setDialog(null)
-  const activeTab = tabs.find(t => t.id === active) ? active : tabs[0]?.id ?? ''
+  const termActive = tabs.some(t => t.id === active) ? active : ''
+  const onHome = active === 'home' || !termActive
+  const activeTabObj = tabs.find(t => t.id === termActive)
+  if (termActive && activeTabObj?.kind !== 'sftp' && lastTerm !== termActive) setLastTerm(termActive)
+
+  const saveSettings = (patch: Partial<Settings>) => {
+    // optimistic and serialised, so quick repeats (holding a zoom shortcut) build on each other
+    const next = {...settings, ...patch}
+    setSettings(next)
+    saving.current = saving.current
+      .then(() => be.settings.save(next))
+      .then(setSettings)
+      .catch(e => { toast.error(errMsg(e)); setSettings(settings) })
+  }
+  // Settings opens as its own native window; where there is none (browser mode) the in-app window is used
+  const openSettings = (toggle = false) => { void be.system.openSettings().catch(() => setSettingsOpen(o => (toggle ? !o : true))) }
+  const zoomBy = (delta: number) => saveSettings({zoom: Math.max(80, Math.min(160, settings.zoom + delta))})
+  const cycle = (dir: 1 | -1) => {
+    const ids = ['home', ...tabs.map(t => t.id)]
+    const at = onHome ? 0 : Math.max(0, ids.indexOf(termActive))
+    setActive(ids[(at + dir + ids.length) % ids.length])
+  }
+  const inTerminalTab = !!activeTabObj && activeTabObj.kind !== 'sftp'
+  act.current = {
+    open_settings: () => openSettings(true),
+    new_connection: () => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) },
+    lock_vault: () => { void be.vault.lock().then(refreshVault) },
+    close_tab: () => { if (termActive) closeTab(termActive) },
+    next_tab: () => cycle(1),
+    prev_tab: () => cycle(-1),
+    close_pane: () => { if (activeTabObj && inTerminalTab && !onHome) void closePaneAsk(activeTabObj.id, activeTabObj.activePane) },
+    split_right: () => { if (inTerminalTab) split('row') },
+    split_down: () => { if (inTerminalTab) split('col') },
+    zoom_in: () => zoomBy(10),
+    zoom_out: () => zoomBy(-10),
+    zoom_reset: () => saveSettings({zoom: 100}),
+  }
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="sidebar-head">
-          <div className="brand">
-            <span>⌘ VVTerm</span>
-            <span>
-              <button className="icon" title="New host" aria-label="New host" onClick={() => setDialog({k: 'host'})}>＋ Host</button>{' '}
-              <button className="icon" title="New group" aria-label="New group" onClick={() => setDialog({k: 'group'})}>＋ Group</button>
-            </span>
-          </div>
+    <div className="shell">
+      <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
+        onNew={() => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) }}
+        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} snippets={snippets} onRunSnippet={runSnippet} />
+      <div className="body">
+        <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
+          <Nav page={page} onPage={changePage} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
+          <main className="main">
+            {page === 'hosts' && (
+              <HostList groups={groups} hosts={hosts} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
+                toolbar={<>
+                  <button className="split-btn" aria-label="New host" onClick={() => setDialog({k: 'host'})}><IconPlus size={14} /> New host</button>
+                  <button className="ghost-btn" aria-label="New group" onClick={() => setDialog({k: 'group'})}><IconPlus size={14} /> New group</button>
+                  <button className="ghost-btn" aria-label="Terminal" title="A terminal on this computer" onClick={() => openDevice('local', 'Local')}><IconTerminal size={14} /> Terminal</button>
+                  <button className="ghost-btn" aria-label="Serial" title="Connect to a serial port" onClick={() => setDialog({k: 'serial'})}><IconSerial size={14} /> Serial</button>
+                </>}
+                onConnect={connect} onEdit={h => setDialog({k: 'host', host: h})} onDelete={delHost}
+                onForwards={h => { goHome('forwards'); setFwDraft({label: '', type: 'local'}); setDialog({k: 'forward', hostId: h.id}) }} onSftp={openSftp} onEditGroup={g => setDialog({k: 'group', group: g})}
+                onDeleteGroup={delGroup} onQuickConnect={q => setDialog({k: 'host', prefill: q})} />
+            )}
+            {page === 'keychain' && (
+              <KeychainPage identities={identities} draft={dialog?.k === 'key' ? draft : undefined}
+                onNew={mode => { setDraft(''); setDialog({k: 'key', mode}) }} onChanged={() => void refreshData()} />
+            )}
+            {page === 'snippets' && (
+              <SnippetsPage snippets={snippets} canRun={tabs.some(t => t.kind !== 'sftp')} onNew={() => setDialog({k: 'snippet'})}
+                onRun={runSnippet} onEdit={s => setDialog({k: 'snippet', snippet: s})} onDelete={delSnippet} />
+            )}
+            {page === 'forwards' && (
+              <PortForwardsPage hosts={hosts} draft={dialog?.k === 'forward' && !dialog.forward ? fwDraft : undefined} reloadKey={fwTick}
+                onNew={() => { setFwDraft({label: '', type: 'local'}); setDialog({k: 'forward'}) }} onEdit={f => setDialog({k: 'forward', forward: f})} />
+            )}
+          </main>
+          {dialog?.k === 'host' && (
+            <HostForm key={dialog.host?.id ?? dialog.prefill?.hostname ?? 'new'}
+              host={dialog.host ?? (dialog.prefill ? ({id: '', label: '', hostname: dialog.prefill.hostname, port: dialog.prefill.port, username: dialog.prefill.username, keepalive_sec: 30} as Host) : undefined)}
+              isNew={!dialog.host}
+              groups={groups} hosts={hosts} identities={identities} onClose={close}
+              onSaved={() => { close(); void refreshData() }}
+              onConnect={h => { connect(h) }} onDraft={setDraft} />
+          )}
+          {dialog?.k === 'group' && <GroupForm group={dialog.group} groups={groups} onClose={close} onSaved={() => { close(); void refreshData() }} />}
+          {dialog?.k === 'forward' && (
+            <ForwardPanel key={dialog.forward?.id ?? 'new-' + (dialog.hostId ?? '')} hosts={hosts} forward={dialog.forward} hostId={dialog.hostId}
+              onClose={close} onChanged={() => setFwTick(n => n + 1)} onDraft={setFwDraft} />
+          )}
+          {dialog?.k === 'serial' && <SerialPanel onClose={close} onConnect={(path, baud) => { close(); openDevice(`serial:${path}@${baud}`, portName(path)) }} />}
+          {dialog?.k === 'key' && <KeyPanel key={dialog.mode} mode={dialog.mode} onClose={close} onChanged={() => void refreshData()} onDraft={setDraft} />}
+          {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
-        <HostList groups={groups} hosts={hosts} onConnect={connect}
-          onEdit={h => setDialog({k: 'host', host: h})} onDelete={delHost} onForwards={h => setDialog({k: 'forwards', host: h})}
-          onEditGroup={g => setDialog({k: 'group', group: g})} onDeleteGroup={delGroup} />
-        <div className="sidebar-foot">
-          <button onClick={() => setDialog({k: 'identities'})}>🔑 Vault</button>
-          <button onClick={() => setDialog({k: 'data'})}>⇅ Data</button>
-          <button onClick={() => setDialog({k: 'sync'})}>☁ Sync</button>
-          <button onClick={() => setDialog({k: 'settings'})}>⚙ Settings</button>
-          <button onClick={() => { void be.vault.lock().then(refreshVault) }}>🔒 Lock</button>
-        </div>
-      </aside>
-      <Workspace tabs={tabs} activeTab={activeTab} settings={settings} onSelect={setActive} onClose={closeTab}
-        onSplit={split} onFocusPane={focusPane} onPaneExit={paneExit} />
+        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} />
+      </div>
 
-      {dialog?.k === 'host' && (
-        <HostForm host={dialog.host} groups={groups} hosts={hosts} identities={identities} onClose={close}
-          onSaved={() => { close(); void refreshData() }} />
+      {settingsOpen && (
+        <SettingsWindow settings={settings} appearance={appearance} vault={vault} onSettings={setSettings}
+          onVault={() => void refreshVault()} onChanged={() => void refreshData()} onClose={() => setSettingsOpen(false)} />
       )}
-      {dialog?.k === 'group' && <GroupForm group={dialog.group} groups={groups} onClose={close} onSaved={() => { close(); void refreshData() }} />}
-      {dialog?.k === 'identities' && <IdentitiesPanel onClose={close} onChanged={() => void refreshData()} />}
-      {dialog?.k === 'forwards' && <ForwardsPanel host={dialog.host} onClose={close} />}
       {dialog?.k === 'data' && <DataPanel onClose={close} onChanged={() => void refreshData()} />}
-      {dialog?.k === 'sync' && <SyncPanel vault={vault} onClose={close} onChanged={() => void refreshData()} />}
-      {dialog?.k === 'settings' && (
-        <SettingsPanel vault={vault} onClose={close} onSettings={setSettings} onVault={() => void refreshVault()} />
-      )}
     </div>
   )
 }

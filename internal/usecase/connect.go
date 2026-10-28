@@ -86,6 +86,13 @@ func (c *Core) connect(hostID, promptKey string, abort <-chan struct{}) (*sshx.C
 			return nil, target, err
 		}
 	}
+	cl, err := c.dialHops(hops, promptKey, abort)
+	return cl, target, err
+}
+
+// dialHops dials a prepared chain. Unknown host keys raise term:hostkey:<promptKey> and wait for
+// TrustHostKey; known keys are checked against known_hosts as usual.
+func (c *Core) dialHops(hops []sshx.Hop, promptKey string, abort <-chan struct{}) (*sshx.Client, error) {
 	d := &sshx.Dialer{Timeout: c.Dialer.Timeout, HostKeys: &sshx.HostKeyChecker{
 		Path: c.Dialer.HostKeys.Path,
 		Prompt: func(host string, key ssh.PublicKey) (bool, error) {
@@ -104,6 +111,5 @@ func (c *Core) connect(hostID, promptKey string, abort <-chan struct{}) (*sshx.C
 			}
 		},
 	}}
-	cl, err := d.Dial(hops)
-	return cl, target, err
+	return d.Dial(hops)
 }

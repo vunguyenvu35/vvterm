@@ -1,5 +1,7 @@
 import {useState} from 'react'
 import {Field, Modal} from '../ui/Modal'
+import {Select} from '../ui/Select'
+import {IconWarn} from '../ui/Icons'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {errMsg} from '../util'
@@ -40,9 +42,8 @@ export function DataPanel({onClose, onChanged}: {onClose(): void; onChanged(): v
         <div className="fixed"><button onClick={() => guard(async () => { const p = await choose('Choose ssh config', 'file'); if (p) setCfgPath(p) })}>Browse…</button></div>
       </div>
       <Field label="If a host with the same name exists">
-        <select aria-label="Conflict policy" value={conflict} onChange={e => setConflict(e.target.value)}>
-          <option value="skip">Skip it</option><option value="overwrite">Overwrite it</option><option value="duplicate">Create a copy</option>
-        </select>
+        <Select label="Conflict policy" value={conflict} onChange={setConflict}
+          options={[{value: 'skip', label: 'Skip it'}, {value: 'overwrite', label: 'Overwrite it'}, {value: 'duplicate', label: 'Create a copy'}]} />
       </Field>
       <button className="primary" disabled={!cfgPath} onClick={() => guard(async () => {
         const r = await be.data.importSSHConfig(cfgPath, conflict)
@@ -53,7 +54,7 @@ export function DataPanel({onClose, onChanged}: {onClose(): void; onChanged(): v
         <div className="notice" data-testid="import-report">
           Added {report.hosts_added} hosts, {report.groups_added} groups, {report.forwards_added} forwards; imported {report.keys_imported} keys.
           {(report.skipped?.length ?? 0) > 0 && <div>Skipped: {report.skipped.join(', ')}</div>}
-          {(report.warnings ?? []).map((w, i) => <div key={i} className="muted">⚠ {w}</div>)}
+          {(report.warnings ?? []).map((w, i) => <div key={i} className="muted warn-line"><IconWarn size={14} /> {w}</div>)}
         </div>
       )}
 

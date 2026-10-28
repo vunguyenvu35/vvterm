@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/logo-mark-256.png" alt="VVTerm" width="88"></p>
+
 # Clean architecture
 
 ## Layers and the dependency rule
@@ -104,3 +106,10 @@ Implement `store.Persister` and `vault.Persister`, then pass them to `store.Open
 - **Status**: accepted (from `Architecture.md` §6).
 - **Decision**: a dropped link keeps the terminal content and shows a banner; the user presses Enter to reconnect. Forwards flagged `auto_start` are rebuilt after a successful reconnect.
 - **Rationale**: avoids replaying commands or duplicating side effects without the user noticing.
+
+## ADR-0006: Settings is a second process with its own native window
+
+- **Status**: accepted.
+- **Context**: Wails v2 creates one native window per process. Settings should be a real window (own title bar, macOS full screen, movable outside the main window), not a popup layer.
+- **Decision**: `vvterm --settings` starts a second process of the same binary. It opens no database and no vault. The main process runs a `Bridge` (`app/bridge.go`): HTTP on `127.0.0.1` with a random token in a `0600` file (`settings-ipc.json`), exposing an explicit allow-list of use case methods (`SettingsService`, the security methods of `VaultService`, `SyncService`). After a change it emits `bridge:changed` so the main window reloads. The Settings process quits when the main process quits (the launcher kills it on shutdown; a heartbeat covers a crash). Where there is no native window (browser mode, E2E) the frontend falls back to the in-app Settings window.
+- **Consequences**: use cases stay in one process (no second SQLite or vault writer); the bridge is a new local attack surface, kept small by the token, loopback binding and the allow-list; the Settings process shows a second Dock icon while it is open.

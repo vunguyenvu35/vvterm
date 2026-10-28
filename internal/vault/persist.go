@@ -13,6 +13,8 @@ import (
 type Persister interface {
 	Load() (*Snapshot, error)
 	Save(*Snapshot) error
+	// Delete removes the stored vault entirely (used by Destroy).
+	Delete() error
 }
 
 // JSONFile persists the vault to one JSON file with atomic writes.
@@ -31,6 +33,13 @@ func (j JSONFile) Load() (*Snapshot, error) {
 		return nil, fmt.Errorf("parse vault: %w", err)
 	}
 	return &f, nil
+}
+
+func (j JSONFile) Delete() error {
+	if err := os.Remove(j.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (j JSONFile) Save(f *Snapshot) error {

@@ -52,6 +52,7 @@ func Merge(local, remote Bundle) Bundle {
 	out.Data.Hosts = mergeSlice(local.Data.Hosts, remote.Data.Hosts, func(h Host) Meta { return h.Meta })
 	out.Data.Forwards = mergeSlice(local.Data.Forwards, remote.Data.Forwards, func(f PortForward) Meta { return f.Meta })
 	out.Data.Identities = mergeSlice(local.Data.Identities, remote.Data.Identities, func(x Identity) Meta { return x.Meta })
+	out.Data.Snippets = mergeSlice(local.Data.Snippets, remote.Data.Snippets, func(x Snippet) Meta { return x.Meta })
 	out.Secrets = mergeSlice(local.Secrets, remote.Secrets, func(s Secret) Meta { return s.Meta })
 	return out
 }
@@ -80,6 +81,11 @@ func PurgeTombstones(b Bundle, cutoff time.Time) Bundle {
 	for _, x := range b.Data.Identities {
 		if keep(x.Meta) {
 			o.Data.Identities = append(o.Data.Identities, x)
+		}
+	}
+	for _, x := range b.Data.Snippets {
+		if keep(x.Meta) {
+			o.Data.Snippets = append(o.Data.Snippets, x)
 		}
 	}
 	for _, x := range b.Secrets {

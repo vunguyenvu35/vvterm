@@ -321,3 +321,64 @@ func TestHostnameWithControlCharsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestSnippetsCRUDSortingAndTombstones(t *testing.T) {
+	s, dir := open(t)
+	b, err := s.SaveSnippet(domain.Snippet{Label: "b-second", Script: "echo b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.SaveSnippet(domain.Snippet{Label: "A-first", Script: "echo a", Description: "says a"})
+	if got := s.ListSnippets(); len(got) != 2 || got[0].ID != a.ID || got[1].ID != b.ID {
+		t.Fatalf("not sorted case-insensitively: %+v", got)
+	}
+	a.Script = "echo changed"
+	if _, err := s.SaveSnippet(a); err != nil || len(s.ListSnippets()) != 2 {
+		t.Fatalf("update created a duplicate: %v", err)
+	}
+	if _, err := s.SaveSnippet(domain.Snippet{Label: "", Script: "x"}); err == nil {
+		t.Fatal("invalid snippet saved")
+	}
+	if err := s.DeleteSnippet(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSnippet(b.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("double delete: %v", err)
+	}
+	if snap := s.Snapshot(); len(snap.Snippets) != 2 || snap.Snippets[1].DeletedAt == nil && snap.Snippets[0].DeletedAt == nil {
+		t.Fatalf("tombstone missing: %+v", snap.Snippets)
+	}
+	s2, _ := Open(dir)
+	if got := s2.ListSnippets(); len(got) != 1 || got[0].Script != "echo changed" {
+		t.Fatalf("not persisted: %+v", got)
+	}
+}
+
+func TestSetHostOSKeepsTheRestAndSurvivesAnEditWithoutIt(t *testing.T) {
+	s, _ := open(t)
+	h, err := s.SaveHost(domain.Host{Label: "web", Hostname: "10.0.0.1", Username: "root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHostOS(h.ID, "ubuntu"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetHost(h.ID)
+	if got.OS != "ubuntu" || got.Label != "web" || !got.UpdatedAt.After(h.UpdatedAt) && !got.UpdatedAt.Equal(h.UpdatedAt) {
+		t.Fatalf("%+v", got)
+	}
+	// the edit form does not know the OS: saving without it must not erase it
+	edit := got
+	edit.OS = ""
+	edit.Label = "web-renamed"
+	saved, err := s.SaveHost(edit)
+	if err != nil || saved.OS != "ubuntu" || saved.Label != "web-renamed" {
+		t.Fatalf("%+v %v", saved, err)
+	}
+	if err := s.SetHostOS(h.ID, "plan9"); err == nil {
+		t.Fatal("an unknown os must be refused")
+	}
+	if err := s.SetHostOS("missing", "debian"); err == nil {
+		t.Fatal("an unknown host must be refused")
+	}
+}

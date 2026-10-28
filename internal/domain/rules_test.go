@@ -73,3 +73,26 @@ func TestCheckJumpChain(t *testing.T) {
 		t.Fatal("missing jump host accepted")
 	}
 }
+
+func TestNormalizeSnippet(t *testing.T) {
+	s := Snippet{Label: "  Docker clean  ", Script: "docker system prune -af\n"}
+	if err := NormalizeSnippet(&s); err != nil || s.Label != "Docker clean" || s.Script != "docker system prune -af\n" {
+		t.Fatalf("%v %+v", err, s)
+	}
+	big := make([]byte, MaxSnippetBytes+1)
+	for i := range big {
+		big[i] = 'x'
+	}
+	for name, bad := range map[string]Snippet{
+		"no label":    {Script: "ls"},
+		"blank label": {Label: "   ", Script: "ls"},
+		"no script":   {Label: "x"},
+		"blank body":  {Label: "x", Script: " \n\t"},
+		"NUL byte":    {Label: "x", Script: "ls\x00rm"},
+		"too large":   {Label: "x", Script: string(big)},
+	} {
+		if NormalizeSnippet(&bad) == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}

@@ -368,3 +368,26 @@ func TestUnreachableRemoteReportsError(t *testing.T) {
 		t.Fatal("expected fetch error")
 	}
 }
+
+func TestSnippetsMergeLikeOtherRecords(t *testing.T) {
+	snip := func(id, label string, at time.Duration) domain.Snippet {
+		return domain.Snippet{Meta: domain.Meta{ID: id, UpdatedAt: t0.Add(at)}, Label: label, Script: "echo " + label}
+	}
+	local := Bundle{Data: domain.Data{Snippets: []domain.Snippet{snip("a", "old", 0), snip("only-local", "L", 0)}}}
+	remote := Bundle{Data: domain.Data{Snippets: []domain.Snippet{snip("a", "new", time.Minute), snip("only-remote", "R", 0)}}}
+	m := Merge(local, remote)
+	got := map[string]string{}
+	for _, s := range m.Data.Snippets {
+		got[s.ID] = s.Label
+	}
+	if len(got) != 3 || got["a"] != "new" || got["only-local"] != "L" || got["only-remote"] != "R" {
+		t.Fatalf("%v", got)
+	}
+	dead := snip("a", "x", time.Hour)
+	d := t0.Add(time.Hour)
+	dead.DeletedAt = &d
+	m = Merge(Bundle{Data: domain.Data{Snippets: []domain.Snippet{snip("a", "edit", time.Minute)}}}, Bundle{Data: domain.Data{Snippets: []domain.Snippet{dead}}})
+	if m.Data.Snippets[0].DeletedAt == nil {
+		t.Fatal("newer tombstone must win")
+	}
+}

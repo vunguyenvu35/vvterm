@@ -9,7 +9,11 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"vvterm/internal/localtty"
+	"vvterm/internal/serialx"
+	"vvterm/internal/sftpx"
 	"vvterm/internal/sqlitedb"
+	"vvterm/internal/sshx"
 	"vvterm/internal/store"
 	"vvterm/internal/usecase"
 	"vvterm/internal/vault"
@@ -23,6 +27,10 @@ type App struct {
 	*usecase.Services
 	System *SystemService
 	db     *sqlitedb.DB
+	dir    string
+
+	bridge   *Bridge
+	launcher *SettingsLauncher
 }
 
 // DataDir resolves where user data lives: $VVTERM_DATA_DIR, else the OS config dir
@@ -64,22 +72,43 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 	if kdf != nil {
 		v.SetKDF(*kdf)
 	}
-	core, err := usecase.NewCore(dir, usecase.Options{Store: st, Vault: v})
+	core, err := usecase.NewCore(dir, usecase.Options{Store: st, Vault: v, OpenRemoteFS: func(c *sshx.Client) (usecase.RemoteFS, error) { return sftpx.Open(c.Client) },
+		OpenLocalShell: func(cols, rows int, onData func([]byte)) (usecase.Shell, error) {
+			return localtty.Open(cols, rows, onData)
+		},
+		OpenSerial: func(path string, baud int, onData func([]byte)) (usecase.Shell, error) {
+			return serialx.Open(path, baud, onData)
+		},
+		ListSerial: serialx.Ports})
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	return &App{Services: usecase.New(core), System: NewSystemService(), db: db}, nil
+	return &App{Services: usecase.New(core), System: NewSystemService(), db: db, dir: dir}, nil
 }
 
 // Startup is the Wails OnStartup hook: it routes use case events to the frontend.
 func (a *App) Startup(ctx context.Context) {
 	a.System.SetContext(ctx)
 	a.Core.SetEmitter(func(event string, data ...any) { runtime.EventsEmit(ctx, event, data...) })
+
+	// The Settings window is a second process that talks to this one. Without the bridge the frontend
+	// falls back to its in-app Settings window.
+	a.bridge = NewBridge(a, func(service string) { runtime.EventsEmit(ctx, "bridge:changed", service) })
+	if err := a.bridge.Start(a.dir); err == nil {
+		a.launcher = NewSettingsLauncher(a.bridge)
+		a.System.SetSettingsOpener(a.launcher.Open)
+	}
 }
 
 // Shutdown is the Wails OnShutdown hook.
 func (a *App) Shutdown(ctx context.Context) {
+	if a.launcher != nil {
+		a.launcher.Close()
+	}
+	if a.bridge != nil {
+		a.bridge.Close()
+	}
 	a.Services.Shutdown()
 	_ = a.db.Close()
 }
