@@ -71,3 +71,64 @@ describe('sftp tabs', () => {
     expect(splitPane(t, t.activePane, 'row')).toBe(t)
   })
 })
+
+describe('uniqueTitle', () => {
+  it('keeps a free name, and numbers a taken one with the lowest free number', async () => {
+    const {uniqueTitle} = await import('./layout')
+    expect(uniqueTitle([], 'web')).toBe('web')
+    expect(uniqueTitle([{title: 'db'}], 'web')).toBe('web')
+    expect(uniqueTitle([{title: 'web'}], 'web')).toBe('web (2)')
+    expect(uniqueTitle([{title: 'web'}, {title: 'web (2)'}], 'web')).toBe('web (3)')
+    expect(uniqueTitle([{title: 'web'}, {title: 'web (3)'}], 'web')).toBe('web (2)') // a closed tab frees its number
+    expect(uniqueTitle([{title: 'web (2)'}], 'web')).toBe('web')
+  })
+})
+
+describe('broadcast, zoom and duplicate', () => {
+  const two = async () => {
+    const m = await import('./layout')
+    let t = m.newTab('h1', 'web')
+    t = m.splitPane(t, t.activePane, 'row')
+    return {m, t, ids: m.leaves(t.root).map(l => l.id)}
+  }
+
+  it('broadcast needs two panes, toggles, and goes away when one pane is left', async () => {
+    const {m, t, ids} = await two()
+    expect(m.toggleBroadcast(m.newTab('h', 'x')).broadcast).toBeUndefined()
+    const on = m.toggleBroadcast(t)
+    expect(on.broadcast).toBe(true)
+    expect(m.toggleBroadcast(on).broadcast).toBe(false)
+    const left = m.closePane(on, ids[0])!
+    expect(left.broadcast).toBeUndefined()
+  })
+
+  it('zoom shows one pane, toggles back, ignores a pane that is not there, and a new split leaves the zoom', async () => {
+    const {m, t, ids} = await two()
+    const z = m.toggleZoom(t, ids[0])
+    expect(z.zoomPane).toBe(ids[0])
+    expect(z.activePane).toBe(ids[0])
+    expect(m.toggleZoom(z, ids[0]).zoomPane).toBeUndefined()
+    expect(m.toggleZoom(t, 'nope')).toBe(t)
+    expect(m.toggleZoom(m.newTab('h', 'x'), 'p')).toBeDefined()
+    expect(m.splitPane(z, ids[0], 'col').zoomPane).toBeUndefined()
+  })
+
+  it('closing the zoomed pane leaves the zoom; closing another keeps it', async () => {
+    const {m, t, ids} = await two()
+    let three = m.splitPane(t, ids[1], 'col')
+    const [a, b, c] = m.leaves(three.root).map(l => l.id)
+    three = m.toggleZoom(three, a)
+    expect(m.closePane(three, b)!.zoomPane).toBe(a)
+    expect(m.closePane(three, a)!.zoomPane).toBeUndefined()
+    expect(c).toBeTruthy()
+  })
+
+  it('duplicate makes a new tab on the focused pane\'s host, but not for a file browser', async () => {
+    const {m, t} = await two()
+    const d = m.duplicateOf(t, 'web (2)')!
+    expect(d.title).toBe('web (2)')
+    expect(m.leaves(d.root)[0].hostId).toBe('h1')
+    expect(d.id).not.toBe(t.id)
+    expect(m.duplicateOf(m.pinnedSftpTab(), 'x')).toBeNull()
+  })
+})

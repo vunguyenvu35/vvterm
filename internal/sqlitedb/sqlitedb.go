@@ -21,7 +21,9 @@ import (
 // DB wraps the connection and exposes the persisters.
 type DB struct{ db *sql.DB }
 
-const schemaVersion = 3
+// schemaVersion 3 and 4 are the same idempotent step (see ensureAdditions): a database that stopped at 3 on
+// an intermediate build has only some of the additions, and 4 completes it.
+const schemaVersion = 4
 
 var migrations = []string{
 	// v1
@@ -49,9 +51,6 @@ var migrations = []string{
 	`CREATE TABLE snippets (
 		id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', script TEXT NOT NULL,
 		updated_at TEXT NOT NULL, deleted_at TEXT);`,
-	// v3: the server type of a host (icon) and a name for a port forward
-	`ALTER TABLE hosts ADD COLUMN os TEXT NOT NULL DEFAULT '';
-	ALTER TABLE port_forwards ADD COLUMN label TEXT NOT NULL DEFAULT '';`,
 }
 
 // Open opens (creating and migrating if needed) the database at path with mode 0600.
@@ -93,7 +92,12 @@ func (d *DB) migrate() error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(migrations[v]); err != nil {
+		if v < len(migrations) {
+			_, err = tx.Exec(migrations[v])
+		} else {
+			err = ensureAdditions(tx)
+		}
+		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("migrate to v%d: %w", v+1, err)
 		}
@@ -106,6 +110,54 @@ func (d *DB) migrate() error {
 		}
 	}
 	return nil
+}
+
+// additions are the columns added after the first two schema versions. They are added only when missing, so
+// the step can run on a database that already has some of them, and twice.
+var additions = []struct{ table, column, def string }{
+	{"hosts", "os", "TEXT NOT NULL DEFAULT ''"},               // server type: the icon
+	{"hosts", "telnet_enabled", "INTEGER NOT NULL DEFAULT 0"}, // Telnet as a second way in
+	{"hosts", "telnet_port", "INTEGER NOT NULL DEFAULT 0"},
+	{"hosts", "terminal_theme", "TEXT NOT NULL DEFAULT ''"},   // a theme of its own
+	{"port_forwards", "label", "TEXT NOT NULL DEFAULT ''"},    // a name for a rule
+	{"identities", "certificate", "TEXT NOT NULL DEFAULT ''"}, // OpenSSH user certificate
+}
+
+const activityTable = `CREATE TABLE IF NOT EXISTS activity_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, kind TEXT NOT NULL, host_id TEXT NOT NULL DEFAULT '',
+		host_label TEXT NOT NULL DEFAULT '', message TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 1)`
+
+func ensureAdditions(tx *sql.Tx) error {
+	have := map[string]map[string]bool{}
+	for _, a := range additions {
+		if have[a.table] == nil {
+			cols := map[string]bool{}
+			rows, err := tx.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, a.table))
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var cid, notnull, pk int
+				var name, typ string
+				var dflt sql.NullString
+				if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+					rows.Close()
+					return err
+				}
+				cols[name] = true
+			}
+			rows.Close()
+			have[a.table] = cols
+		}
+		if have[a.table][a.column] {
+			continue
+		}
+		if _, err := tx.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, a.table, a.column, a.def)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", a.table, a.column, err)
+		}
+	}
+	_, err := tx.Exec(activityTable)
+	return err
 }
 
 // ---- time helpers ----
@@ -160,26 +212,28 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 	}
 	rows.Close()
 
-	rows, err = p.db.Query(`SELECT id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os FROM hosts ORDER BY rowid`)
+	rows, err = p.db.Query(`SELECT id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os,telnet_enabled,telnet_port,terminal_theme FROM hosts ORDER BY rowid`)
 	if err != nil {
 		return data, false, err
 	}
 	for rows.Next() {
 		var h domain.Host
 		var env, tags, cr, upd string
+		var telnet int
 		var del sql.NullString
-		if err := rows.Scan(&h.ID, &h.Label, &h.GroupID, &h.Hostname, &h.Port, &h.Username, &h.IdentityID, &h.JumpHostID, &env, &tags, &h.KeepaliveSec, &cr, &upd, &del, &h.OS); err != nil {
+		if err := rows.Scan(&h.ID, &h.Label, &h.GroupID, &h.Hostname, &h.Port, &h.Username, &h.IdentityID, &h.JumpHostID, &env, &tags, &h.KeepaliveSec, &cr, &upd, &del, &h.OS, &telnet, &h.TelnetPort, &h.TerminalTheme); err != nil {
 			rows.Close()
 			return data, false, err
 		}
 		h.Env = domain.Env(env)
+		h.TelnetEnabled = telnet != 0
 		_ = json.Unmarshal([]byte(tags), &h.Tags)
 		h.CreatedAt, h.UpdatedAt, h.DeletedAt = parseTS(cr), parseTS(upd), parseTSNull(del)
 		data.Hosts = append(data.Hosts, h)
 	}
 	rows.Close()
 
-	rows, err = p.db.Query(`SELECT id,name,username,auth_type,secret_ref,public_key,updated_at,deleted_at FROM identities ORDER BY rowid`)
+	rows, err = p.db.Query(`SELECT id,name,username,auth_type,secret_ref,public_key,updated_at,deleted_at,certificate FROM identities ORDER BY rowid`)
 	if err != nil {
 		return data, false, err
 	}
@@ -187,7 +241,7 @@ func (p StorePersister) Load() (domain.Data, bool, error) {
 		var x domain.Identity
 		var at, upd string
 		var del sql.NullString
-		if err := rows.Scan(&x.ID, &x.Name, &x.Username, &at, &x.SecretRef, &x.PublicKey, &upd, &del); err != nil {
+		if err := rows.Scan(&x.ID, &x.Name, &x.Username, &at, &x.SecretRef, &x.PublicKey, &upd, &del, &x.Certificate); err != nil {
 			rows.Close()
 			return data, false, err
 		}
@@ -260,15 +314,15 @@ func (p StorePersister) Save(d domain.Data) error {
 		if h.Tags == nil {
 			tags = []byte("[]")
 		}
-		if _, err := tx.Exec(`INSERT INTO hosts(id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		if _, err := tx.Exec(`INSERT INTO hosts(id,label,group_id,hostname,port,username,identity_id,jump_host_id,env,tags,keepalive_sec,created_at,updated_at,deleted_at,os,telnet_enabled,telnet_port,terminal_theme) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			h.ID, h.Label, h.GroupID, h.Hostname, h.Port, h.Username, h.IdentityID, h.JumpHostID, string(h.Env), string(tags),
-			h.KeepaliveSec, ts(h.CreatedAt), ts(h.UpdatedAt), tsNull(h.DeletedAt), h.OS); err != nil {
+			h.KeepaliveSec, ts(h.CreatedAt), ts(h.UpdatedAt), tsNull(h.DeletedAt), h.OS, b2i(h.TelnetEnabled), h.TelnetPort, h.TerminalTheme); err != nil {
 			return err
 		}
 	}
 	for _, x := range d.Identities {
-		if _, err := tx.Exec(`INSERT INTO identities(id,name,username,auth_type,secret_ref,public_key,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?)`,
-			x.ID, x.Name, x.Username, string(x.AuthType), x.SecretRef, x.PublicKey, ts(x.UpdatedAt), tsNull(x.DeletedAt)); err != nil {
+		if _, err := tx.Exec(`INSERT INTO identities(id,name,username,auth_type,secret_ref,public_key,updated_at,deleted_at,certificate) VALUES(?,?,?,?,?,?,?,?,?)`,
+			x.ID, x.Name, x.Username, string(x.AuthType), x.SecretRef, x.PublicKey, ts(x.UpdatedAt), tsNull(x.DeletedAt), x.Certificate); err != nil {
 			return err
 		}
 	}

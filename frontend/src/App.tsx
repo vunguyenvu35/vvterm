@@ -8,6 +8,9 @@ import {HostList, QuickConnect} from './lib/hosts/HostList'
 import {GroupForm, HostForm} from './lib/hosts/HostForm'
 import {Workspace} from './lib/terminal/Workspace'
 import {ForwardPanel} from './lib/panels/ForwardPanel'
+import {AddMenu} from './lib/hosts/AddMenu'
+import {KnownHostsPage} from './lib/panels/KnownHostsPage'
+import {LogsPage} from './lib/panels/LogsPage'
 import {SnippetsPage} from './lib/snippets/SnippetsPage'
 import {SnippetForm} from './lib/snippets/SnippetForm'
 import {toTerminalInput, writeToPane} from './lib/terminal/panes'
@@ -19,7 +22,7 @@ import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
-import {closePane, hasPane, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab} from './lib/layout'
+import {closePane, duplicateOf, hasPane, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
@@ -88,7 +91,8 @@ export default function App() {
     })
     // the first connection to a host revealed its server type (ubuntu, debian…): the icon changes
     const offHosts = be.on('hosts:changed', () => { void refreshDataRef.current() })
-    return () => { offLocked(); offBridge(); offHosts() }
+    const offMenu = be.on('menu:action', (action: string) => menuHandler.current(action))
+    return () => { offLocked(); offBridge(); offHosts(); offMenu() }
   }, [be, refreshVault])
 
   useEffect(() => { document.documentElement.dataset.theme = appearance }, [appearance])
@@ -96,6 +100,8 @@ export default function App() {
   // Configurable shortcuts (Settings → Shortcuts). The handlers are re-assigned on every render once the
   // vault is unlocked, so the listener below never sees stale state.
   const act = useRef<Record<string, () => void>>({})
+  // what the application menu bar asks for (see app/menu.go); replaced on every render so it never sees stale state
+  const menuHandler = useRef<(action: string) => void>(() => {})
   const bindings = effective(settings.shortcuts)
   const bindingsRef = useRef(bindings)
   bindingsRef.current = bindings
@@ -103,7 +109,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (capture.active) return // the editor is recording a new shortcut
       for (const [id, combo] of Object.entries(bindingsRef.current)) {
-        if (id === 'terminal_search') continue // handled by the focused terminal
+        if (id === 'terminal_search' || id === 'terminal_copy' || id === 'terminal_paste') continue // handled by the focused terminal
         if (matches(e, combo)) {
           const fn = act.current[id]
           if (fn) { e.preventDefault(); fn() }
@@ -125,31 +131,32 @@ export default function App() {
   useEffect(() => { if (vault?.unlocked) void refreshData() }, [vault?.unlocked, refreshData])
 
   act.current = {}
+  menuHandler.current = () => {} // locked or loading: the menu does nothing
   if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div></div>
   if (!vault.unlocked) {
     return <UnlockScreen status={vault} onDone={() => { void refreshVault() }} />
   }
 
+  // a second tab on the same host is numbered ("web", "web (2)"…); double-click a tab to give it any name
   const connect = (h: Host) => {
-    const t = newTab(h.id, h.label)
-    setTabs(ts => [...ts, t])
+    const t = newTab(h.id, '')
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, h.label)}])
     setActive(t.id)
   }
-  // the SFTP button of a host card: switch to the SFTP tab and connect it to that host
-  const openSftp = (h: Host) => {
-    setTabs(ts => ts.map(t => (t.id === SFTP_TAB_ID ? {...t, root: {...(t.root as Leaf), hostId: h.id}, sftpLabel: h.label, sftpNonce: (t.sftpNonce ?? 0) + 1} : t)))
-    setActive(SFTP_TAB_ID)
+  const renameTab = (id: string, name: string) => {
+    const title = name.trim().slice(0, MAX_TAB_TITLE)
+    if (title) setTabs(ts => ts.map(t => (t.id === id && !t.pinned ? {...t, title} : t)))
   }
   // a terminal that is not an SSH host: this computer ("local") or a serial port ("serial:<device>@<baud>")
   const openDevice = (hostId: string, title: string) => {
-    const t = newTab(hostId, title)
-    setTabs(ts => [...ts, t])
+    const t = newTab(hostId, '')
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, title)}])
     setActive(t.id)
   }
   const closeTab = async (id: string) => {
     const closing = tabs.find(t => t.id === id)
     if (closing?.pinned) return // the SFTP tab stays
-    if (settings.confirm_close && closing && !(await confirm(`Close "${closing.title}"? Its connection will end.`, {confirmLabel: 'Close tab', danger: true}))) return
+    if (settings.confirm_tab_close && closing && !(await confirm(`Close "${closing.title}"? Its connection will end.`, {confirmLabel: 'Close tab', danger: true}))) return
     setTabs(ts => ts.filter(t => t.id !== id))
     if (id === active) {
       const rest = tabs.filter(t => t.id !== id)
@@ -157,10 +164,21 @@ export default function App() {
     }
   }
   const split = (dir: 'row' | 'col') => setTabs(ts => ts.map(t => (t.id === active ? splitPane(t, t.activePane, dir) : t)))
+  // the right-click menu of a tab acts on that tab, whichever one is showing
+  const splitTab = (id: string, dir: 'row' | 'col') => { setTabs(ts => ts.map(t => (t.id === id ? splitPane(t, t.activePane, dir) : t))); setActive(id) }
+  const duplicateTab = (id: string) => {
+    const src = tabs.find(t => t.id === id)
+    const copy = src && duplicateOf(src, uniqueTitle(tabs, src.title))
+    if (!src || !copy) return
+    setTabs(ts => { const i = ts.findIndex(t => t.id === id); return [...ts.slice(0, i + 1), copy, ...ts.slice(i + 1)] })
+    setActive(copy.id)
+  }
+  const broadcastTab = (id: string) => setTabs(ts => ts.map(t => (t.id === id ? toggleBroadcast(t) : t)))
+  const zoomPane = (id: string, pane: string) => setTabs(ts => ts.map(t => (t.id === id ? toggleZoom(t, pane) : t)))
   const focusPane = (tabId: string, paneId: string) => setTabs(ts => ts.map(t => (t.id === tabId && hasPane(t, paneId) ? {...t, activePane: paneId} : t)))
   // the × on a pane of a split tab: ask first like closing a tab, then end just that pane's session
   const closePaneAsk = async (tabId: string, paneId: string) => {
-    if (settings.confirm_close && !(await confirm('Close this pane? Its connection will end.', {confirmLabel: 'Close pane', danger: true}))) return
+    if (settings.confirm_tab_close && !(await confirm('Close this pane? Its connection will end.', {confirmLabel: 'Close pane', danger: true}))) return
     paneExit(tabId, paneId)
   }
   const paneExit = (tabId: string, paneId: string) => {
@@ -232,6 +250,7 @@ export default function App() {
     next_tab: () => cycle(1),
     prev_tab: () => cycle(-1),
     close_pane: () => { if (activeTabObj && inTerminalTab && !onHome) void closePaneAsk(activeTabObj.id, activeTabObj.activePane) },
+    broadcast_input: () => { if (activeTabObj && inTerminalTab && !onHome) broadcastTab(activeTabObj.id) },
     split_right: () => { if (inTerminalTab) split('row') },
     split_down: () => { if (inTerminalTab) split('col') },
     zoom_in: () => zoomBy(10),
@@ -239,11 +258,24 @@ export default function App() {
     zoom_reset: () => saveSettings({zoom: 100}),
   }
 
+  menuHandler.current = (action: string) => {
+    if (action === 'new_host') { goHome('hosts'); setDialog({k: 'host'}) }
+    else if (action === 'new_group') { goHome('hosts'); setDialog({k: 'group'}) }
+    else if (action === 'new_terminal') openDevice('local', 'Local')
+    else if (action === 'serial') { goHome('hosts'); setDialog({k: 'serial'}) }
+    else if (action === 'import') setDialog({k: 'data'})
+    else if (action === 'open_settings') openSettings()
+    else if (action === 'duplicate_tab') { if (activeTabObj && !onHome) duplicateTab(activeTabObj.id) }
+    else if (action === 'page:sftp') setActive(SFTP_TAB_ID)
+    else if (action.startsWith('page:')) goHome(action.slice('page:'.length) as Page)
+    else act.current[action]?.()
+  }
+
   return (
     <div className="shell">
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
         onNew={() => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) }}
-        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} snippets={snippets} onRunSnippet={runSnippet} />
+        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onDuplicate={duplicateTab} onSplitTab={splitTab} snippets={snippets} onRunSnippet={runSnippet} />
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
           <Nav page={page} onPage={changePage} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
@@ -251,13 +283,15 @@ export default function App() {
             {page === 'hosts' && (
               <HostList groups={groups} hosts={hosts} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
                 toolbar={<>
-                  <button className="split-btn" aria-label="New host" onClick={() => setDialog({k: 'host'})}><IconPlus size={14} /> New host</button>
-                  <button className="ghost-btn" aria-label="New group" onClick={() => setDialog({k: 'group'})}><IconPlus size={14} /> New group</button>
+                  <span className="split-wrap">
+                    <button className="split-btn" aria-label="New host" onClick={() => setDialog({k: 'host'})}><IconPlus size={14} /> New host</button>
+                    <AddMenu onGroup={() => setDialog({k: 'group'})} onImport={() => setDialog({k: 'data'})} />
+                  </span>
                   <button className="ghost-btn" aria-label="Terminal" title="A terminal on this computer" onClick={() => openDevice('local', 'Local')}><IconTerminal size={14} /> Terminal</button>
                   <button className="ghost-btn" aria-label="Serial" title="Connect to a serial port" onClick={() => setDialog({k: 'serial'})}><IconSerial size={14} /> Serial</button>
                 </>}
                 onConnect={connect} onEdit={h => setDialog({k: 'host', host: h})} onDelete={delHost}
-                onForwards={h => { goHome('forwards'); setFwDraft({label: '', type: 'local'}); setDialog({k: 'forward', hostId: h.id}) }} onSftp={openSftp} onEditGroup={g => setDialog({k: 'group', group: g})}
+                onForwards={h => { goHome('forwards'); setFwDraft({label: '', type: 'local'}); setDialog({k: 'forward', hostId: h.id}) }} onTelnet={h => openDevice(`telnet:${h.id}`, `${h.label} (Telnet)`)} onEditGroup={g => setDialog({k: 'group', group: g})}
                 onDeleteGroup={delGroup} onQuickConnect={q => setDialog({k: 'host', prefill: q})} />
             )}
             {page === 'keychain' && (
@@ -268,6 +302,8 @@ export default function App() {
               <SnippetsPage snippets={snippets} canRun={tabs.some(t => t.kind !== 'sftp')} onNew={() => setDialog({k: 'snippet'})}
                 onRun={runSnippet} onEdit={s => setDialog({k: 'snippet', snippet: s})} onDelete={delSnippet} />
             )}
+            {page === 'knownhosts' && <KnownHostsPage />}
+            {page === 'logs' && <LogsPage />}
             {page === 'forwards' && (
               <PortForwardsPage hosts={hosts} draft={dialog?.k === 'forward' && !dialog.forward ? fwDraft : undefined} reloadKey={fwTick}
                 onNew={() => { setFwDraft({label: '', type: 'local'}); setDialog({k: 'forward'}) }} onEdit={f => setDialog({k: 'forward', forward: f})} />
@@ -283,14 +319,14 @@ export default function App() {
           )}
           {dialog?.k === 'group' && <GroupForm group={dialog.group} groups={groups} onClose={close} onSaved={() => { close(); void refreshData() }} />}
           {dialog?.k === 'forward' && (
-            <ForwardPanel key={dialog.forward?.id ?? 'new-' + (dialog.hostId ?? '')} hosts={hosts} forward={dialog.forward} hostId={dialog.hostId}
+            <ForwardPanel key={dialog.forward?.id ?? 'new-' + (dialog.hostId ?? '')} hosts={hosts} groups={groups} forward={dialog.forward} hostId={dialog.hostId}
               onClose={close} onChanged={() => setFwTick(n => n + 1)} onDraft={setFwDraft} />
           )}
           {dialog?.k === 'serial' && <SerialPanel onClose={close} onConnect={(path, baud) => { close(); openDevice(`serial:${path}@${baud}`, portName(path)) }} />}
           {dialog?.k === 'key' && <KeyPanel key={dialog.mode} mode={dialog.mode} onClose={close} onChanged={() => void refreshData()} onDraft={setDraft} />}
           {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
-        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} />
+        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} />
       </div>
 
       {settingsOpen && (

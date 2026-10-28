@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor, within} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {host, makeFake, Providers} from './test/fakeBackend'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
@@ -380,7 +380,8 @@ describe('App: panels belong to the page they were opened on', () => {
   it('New group and New snippet close on page change too', async () => {
     const be = setup()
     await unlock(be)
-    await userEvent.click(screen.getByLabelText('New group'))
+    await userEvent.click(screen.getByRole('button', {name: 'More ways to add hosts'}))
+    await userEvent.click(screen.getByRole('menuitem', {name: 'New group'}))
     expect(await screen.findByRole('dialog', {name: 'New group'})).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', {name: 'Snippets'}))
     expect(panelOpen('New group')).toBeNull()
@@ -427,29 +428,23 @@ describe('App: the SFTP tab next to Vaults', () => {
     expect(screen.getAllByTestId('sftp')).toHaveLength(1) // the same tab, not another one
   })
 
-  it('the SFTP button of a host card switches to that tab and connects it to the host', async () => {
+  it('connects to a host chosen inside the tab: Select host, then the host (a card has no SFTP button)', async () => {
     const be = setup()
     await unlock(be)
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP web-1'}))
-    expect(await screen.findByTestId('sftp')).toHaveAttribute('aria-label', 'SFTP web-1')
-    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('SFTP')
+    expect(screen.queryByRole('button', {name: /^SFTP /})).toBeNull()
+    await userEvent.click(screen.getByRole('tab', {name: 'SFTP'}))
+    const pane = await screen.findByRole('region', {name: 'Remote'})
+    await userEvent.click(within(pane).getByRole('button', {name: 'Select host'}))
+    await userEvent.click(within(pane).getByRole('button', {name: 'Connect to web-1'}))
     await waitFor(() => expect(be.state.calls.some(c => c[0] === 'sftp.open' && c[1] === 'h1')).toBe(true))
-    // asking again for another host reconnects the same tab
-    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP db-1'}))
+    expect(screen.getByTestId('sftp')).toHaveAttribute('aria-label', 'SFTP web-1')
+    // change host and pick another one in the same tab
+    const remote = () => screen.getByRole('region', {name: 'Remote'}) // a new element once connected
+    await userEvent.click(await within(remote()).findByRole('button', {name: 'Change host'}))
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Select host'}))
+    await userEvent.click(within(remote()).getByRole('button', {name: 'Connect to db-1'}))
     await waitFor(() => expect(be.state.calls.some(c => c[0] === 'sftp.open' && c[1] === 'h2')).toBe(true))
     expect(screen.getAllByTestId('sftp')).toHaveLength(1)
-  })
-
-  it('asking for the same host again after "Change host" connects again', async () => {
-    const be = setup()
-    await unlock(be)
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP web-1'}))
-    const pane = await screen.findByRole('region', {name: 'Remote'})
-    await userEvent.click(await within(pane).findByRole('button', {name: 'Change host'}))
-    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP web-1'}))
-    await waitFor(() => expect(be.state.calls.filter(c => c[0] === 'sftp.open')).toHaveLength(2))
   })
 
   it('closing the last terminal goes back to Vaults, not to the SFTP tab; Ctrl+W on the SFTP tab does nothing', async () => {
@@ -471,7 +466,7 @@ describe('App: the SFTP tab next to Vaults', () => {
     await unlock(be)
     await userEvent.dblClick(hostCard('db-1'))
     await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP web-1'}))
+    await userEvent.click(screen.getByRole('tab', {name: 'SFTP'}))
     await screen.findByTestId('sftp')
     await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
     await userEvent.click(screen.getByRole('button', {name: 'Snippets'}))
@@ -521,7 +516,7 @@ describe('App: keyboard shortcuts', () => {
     await waitFor(() => expect(be.state.settings.zoom).toBe(100))
   })
 
-  it('next/previous tab cycle through Vaults and the open tabs; close tab asks first', async () => {
+  it('next/previous tab cycle through Vaults and the open tabs; close tab does not ask', async () => {
     const be = setup()
     await unlock(be)
     await userEvent.dblClick(hostCard('web-1'))
@@ -531,10 +526,10 @@ describe('App: keyboard shortcuts', () => {
     expect(screen.getByRole('tab', {name: 'Vaults', selected: true})).toBeInTheDocument()
     press({key: 'Tab', code: 'Tab', ctrlKey: true, shiftKey: true})
     expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('db-1')
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const confirm = vi.spyOn(window, 'confirm')
     press({key: 'w', code: 'KeyW', ctrlKey: true})
     await waitFor(() => expect(screen.getAllByTestId('terminal')).toHaveLength(1))
-    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
   })
 
@@ -598,9 +593,9 @@ describe('App: confirmations are in-app dialogs (a desktop webview has no confir
     return be
   }
 
-  it('closing a terminal tab asks in the app, and Cancel keeps it', async () => {
+  it('with "Confirm before closing a tab" on, closing a tab asks in the app, and Cancel keeps it', async () => {
     const native = vi.spyOn(window, 'confirm')
-    const be = await setupWithDialogs()
+    const be = await setupWithDialogs({settings: {...DEFAULT_SETTINGS, font_family: 'monospace', confirm_tab_close: true}})
     await unlock(be)
     await userEvent.dblClick(hostCard('web-1'))
     await userEvent.click(screen.getByRole('button', {name: /^Close web-1/}))
@@ -611,9 +606,9 @@ describe('App: confirmations are in-app dialogs (a desktop webview has no confir
     expect(native).not.toHaveBeenCalled()
   })
 
-  it('closing a terminal tab and deleting a host use the same dialog', async () => {
+  it('closing a tab (when asked for) and deleting a host use the same in-app dialog', async () => {
     const native = vi.spyOn(window, 'confirm')
-    const be = await setupWithDialogs()
+    const be = await setupWithDialogs({settings: {...DEFAULT_SETTINGS, font_family: 'monospace', confirm_tab_close: true}})
     await unlock(be)
     await userEvent.dblClick(hostCard('web-1'))
     await userEvent.click(screen.getByRole('button', {name: /^Close web-1/}))
@@ -666,10 +661,288 @@ describe('App: Terminal and Serial on the Hosts page', () => {
 })
 
 describe('App: Hosts toolbar order', () => {
-  it('New host, New group, then Terminal and Serial', async () => {
+  it('New host with its caret, then Terminal and Serial', async () => {
     const be = setup()
     await unlock(be)
     const bar = document.querySelector('.toolbar') as HTMLElement
-    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'New group', 'Terminal', 'Serial'])
+    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'More ways to add hosts', 'Terminal', 'Serial', 'View'])
+  })
+})
+
+describe('App: tab names', () => {
+  const tabTitles = () => screen.getAllByRole('tab').map(t => t.textContent?.trim()).filter(x => x && x !== 'Vaults' && x !== 'SFTP')
+
+  it('a second tab on the same host is numbered, and a closed tab frees its number', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.dblClick(hostCard('web-1'))
+    expect(tabTitles()).toEqual(['web-1', 'web-1 (2)', 'web-1 (3)'])
+    await userEvent.click(screen.getByRole('button', {name: 'Close web-1 (2)'}))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.dblClick(hostCard('web-1'))
+    expect(tabTitles()).toEqual(['web-1', 'web-1 (3)', 'web-1 (2)'])
+  })
+
+  it('a double click renames a tab, and the new name is used when closing it', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.dblClick(screen.getByText('web-1', {selector: '.tab-title'}))
+    const input = screen.getByLabelText('Tab name')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'prod web{Enter}')
+    expect(tabTitles()).toEqual(['prod web'])
+    expect(screen.getByRole('button', {name: 'Close prod web'})).toBeInTheDocument()
+  })
+
+  it('an empty name is ignored, and a long one is cut to 60 characters', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.dblClick(screen.getByText('web-1', {selector: '.tab-title'}))
+    await userEvent.clear(screen.getByLabelText('Tab name'))
+    await userEvent.keyboard('{Enter}')
+    expect(tabTitles()).toEqual(['web-1'])
+    await userEvent.dblClick(screen.getByText('web-1', {selector: '.tab-title'}))
+    await userEvent.clear(screen.getByLabelText('Tab name'))
+    await userEvent.type(screen.getByLabelText('Tab name'), 'x'.repeat(80))
+    await userEvent.keyboard('{Enter}')
+    expect(tabTitles()[0]).toHaveLength(60)
+  })
+
+  it('local terminals and serial ports are numbered too', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.click(screen.getByRole('button', {name: 'Terminal'}))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.click(screen.getByRole('button', {name: 'Terminal'}))
+    expect(tabTitles()).toEqual(['Local', 'Local (2)'])
+  })
+})
+
+describe('App: Known Hosts and Logs pages', () => {
+  it('the navigation opens them', async () => {
+    const be = setup({knownHosts: [{host: 'web.example.com', key_type: 'ssh-ed25519', fingerprint: 'SHA256:abc'}], logs: [{id: 1, at: '2026-10-28T14:32:10Z', kind: 'connect', message: 'Connected to web', ok: true}]})
+    await unlock(be)
+    await userEvent.click(screen.getByRole('button', {name: 'Known Hosts'}))
+    expect(await screen.findByText('web.example.com')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: 'Known Hosts'})).toHaveAttribute('aria-current', 'page')
+    await userEvent.click(screen.getByRole('button', {name: 'Logs'}))
+    expect(await screen.findByText('Connected to web')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: 'Logs'})).toHaveAttribute('aria-current', 'page')
+  })
+})
+
+describe('App: Telnet', () => {
+  it('the Telnet button of a host opens a tab on telnet:<host>, numbered like any other', async () => {
+    const be = setup({hosts: [host({id: 'h1', label: 'switch', telnet_enabled: true, telnet_port: 23} as never)]})
+    await unlock(be)
+    await userEvent.click(screen.getByRole('button', {name: 'Telnet switch'}))
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'telnet:h1')
+    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('switch (Telnet)')
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.click(screen.getByRole('button', {name: 'Telnet switch'}))
+    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('switch (Telnet) (2)')
+  })
+})
+
+describe('App: closing a tab does not ask by default', () => {
+  it('the × and the shortcut close at once, with no dialog of any kind', async () => {
+    const native = vi.spyOn(window, 'confirm')
+    const be = await (async () => {
+      const {ConfirmProvider} = await import('./lib/ui/Confirm')
+      const be = makeFake({hosts: [host({id: 'h1', label: 'web-1'})]})
+      render(<Providers be={be}><ConfirmProvider><App /></ConfirmProvider></Providers>)
+      return be
+    })()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByRole('button', {name: /^Close web-1/}))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(screen.queryAllByTestId('terminal')).toHaveLength(0))
+    expect(native).not.toHaveBeenCalled()
+  })
+})
+
+describe('App: the New host caret menu', () => {
+  const caret = () => screen.getByRole('button', {name: 'More ways to add hosts'})
+
+  it('offers New group and Import; Import opens the Import / Export panel', async () => {
+    const be = setup()
+    await unlock(be)
+    expect(screen.queryByRole('menu')).toBeNull()
+    await userEvent.click(caret())
+    expect(caret()).toHaveAttribute('aria-expanded', 'true')
+    const menu = screen.getByRole('menu', {name: 'Add'})
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.trim())).toEqual(['New group', 'Import'])
+    await userEvent.click(within(menu).getByRole('menuitem', {name: 'Import'}))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(await screen.findByRole('dialog', {name: /Import/})).toBeInTheDocument()
+  })
+
+  it('closes on Escape and on a click elsewhere, and moves with the arrow keys', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.click(caret())
+    expect(screen.getByRole('menuitem', {name: 'New group'})).toHaveFocus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(screen.getByRole('menuitem', {name: 'Import'})).toHaveFocus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(screen.getByRole('menuitem', {name: 'New group'})).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+    await userEvent.click(caret())
+    await userEvent.click(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('the host card subtitle mentions telnet when the host has it', async () => {
+    const be = setup({hosts: [host({id: 'h1', label: 'switch', username: 'admin', telnet_enabled: true} as never), host({id: 'h2', label: 'plain', username: 'root'})]})
+    await unlock(be)
+    const addr = (label: string) => hostCard(label).closest('.host')!.querySelector('.addr')!.textContent
+    expect(addr('switch')).toMatch(/^ssh, telnet, admin/)
+    expect(addr('plain')).toMatch(/^ssh, root/)
+  })
+})
+
+describe('App: tab menu, broadcast and maximise', () => {
+  const titles = () => screen.getAllByRole('tab').map(t => t.textContent?.trim()).filter(x => x && x !== 'Vaults' && x !== 'SFTP')
+
+  it('Duplicate opens another tab on the same host right next to it, numbered, and selects it', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    await userEvent.dblClick(hostCard('db-1'))
+    fireEvent.contextMenu(screen.getByRole('tab', {name: /web-1/}))
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Duplicate'}))
+    expect(titles()).toEqual(['web-1', 'web-1 (2)', 'db-1'])
+    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('web-1 (2)')
+    expect(screen.getAllByTestId('terminal').map(t => t.getAttribute('data-host'))).toEqual(['h1', 'h1', 'h2'])
+  })
+
+  it('Split right from the menu splits that tab and shows it', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByRole('tab', {name: 'Vaults'}))
+    fireEvent.contextMenu(screen.getByRole('tab', {name: /web-1/}))
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Split right'}))
+    expect(screen.getAllByTestId('terminal')).toHaveLength(2)
+    expect(screen.getAllByRole('tab', {selected: true})[0]).toHaveTextContent('web-1')
+  })
+
+  it('Rename from the menu, then the shortcut turns Broadcast on and off', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    fireEvent.contextMenu(screen.getByRole('tab', {name: /web-1/}))
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Rename'}))
+    await userEvent.clear(screen.getByLabelText('Tab name'))
+    await userEvent.type(screen.getByLabelText('Tab name'), 'cluster{Enter}')
+    expect(titles()).toEqual(['cluster'])
+    await userEvent.click(screen.getByLabelText('Split right'))
+    expect(document.querySelectorAll('.pane-wrap.broadcasting')).toHaveLength(0)
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {key: 'b', code: 'KeyB', ctrlKey: true, altKey: true, bubbles: true, cancelable: true})) })
+    await waitFor(() => expect(document.querySelectorAll('.pane-wrap.broadcasting')).toHaveLength(2))
+    await userEvent.click(screen.getAllByRole('button', {name: 'Broadcast input'})[0])
+    await waitFor(() => expect(document.querySelectorAll('.pane-wrap.broadcasting')).toHaveLength(0))
+  })
+
+  it('Maximize pane shows one pane, and closing the split pane afterwards leaves no stale zoom', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(screen.getByLabelText('Split right'))
+    await userEvent.click(screen.getAllByRole('button', {name: 'Maximize pane'})[0])
+    expect(Array.from(document.querySelectorAll('.pane-wrap')).filter(p => (p as HTMLElement).style.display === 'none')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', {name: 'Show all panes'}))
+    expect(Array.from(document.querySelectorAll('.pane-wrap')).filter(p => (p as HTMLElement).style.display === 'none')).toHaveLength(0)
+    await userEvent.click(screen.getAllByRole('button', {name: 'Maximize pane'})[1])
+    // only the zoomed pane's header can be reached now: closing it ends that pane and the zoom with it
+    await userEvent.click(screen.getByRole('button', {name: 'Close pane'}))
+    expect(screen.getAllByTestId('terminal')).toHaveLength(1)
+    expect(screen.queryByRole('button', {name: 'Show all panes'})).toBeNull()
+  })
+})
+
+describe('App: the application menu bar', () => {
+  // the actions of app/menu.go (MenuActions): the Go test keeps that list in step with the menu itself
+  const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
+    'broadcast_input', 'split_right', 'split_down', 'duplicate_tab', 'page:hosts', 'page:keychain', 'page:forwards', 'page:snippets', 'page:sftp', 'page:knownhosts', 'page:logs']
+  const menu = (be: ReturnType<typeof makeFake>, action: string) => act(() => be.emit('menu:action', action))
+
+  it('opens the panels the File menu names', async () => {
+    const be = setup()
+    await unlock(be)
+    menu(be, 'new_host')
+    expect(await screen.findByRole('dialog', {name: 'New host'})).toBeInTheDocument()
+    menu(be, 'new_group')
+    expect(await screen.findByRole('dialog', {name: 'New group'})).toBeInTheDocument()
+    menu(be, 'serial')
+    expect(await screen.findByRole('dialog', {name: 'Serial'})).toBeInTheDocument()
+    menu(be, 'import')
+    expect(await screen.findByRole('dialog', {name: /Import/})).toBeInTheDocument()
+  })
+
+  it('New Terminal opens a local terminal; Duplicate, Close Tab and Close Pane act on the open tab', async () => {
+    const be = setup()
+    await unlock(be)
+    menu(be, 'new_terminal')
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'local')
+    menu(be, 'duplicate_tab')
+    expect(screen.getAllByTestId('terminal')).toHaveLength(2)
+    menu(be, 'split_right')
+    await waitFor(() => expect(screen.getAllByTestId('terminal')).toHaveLength(3))
+    menu(be, 'close_pane')
+    await waitFor(() => expect(screen.getAllByTestId('terminal')).toHaveLength(2))
+    menu(be, 'close_tab')
+    await waitFor(() => expect(screen.getAllByTestId('terminal')).toHaveLength(1))
+  })
+
+  it('View shows the pages and the SFTP tab, and zooms', async () => {
+    const be = setup()
+    await unlock(be)
+    menu(be, 'page:logs')
+    expect(await screen.findByRole('table', {name: 'Activity'})).toBeInTheDocument()
+    menu(be, 'page:knownhosts')
+    expect(await screen.findByRole('list', {name: 'Known hosts'})).toBeInTheDocument()
+    menu(be, 'page:sftp')
+    expect(await screen.findByTestId('sftp')).toBeInTheDocument()
+    menu(be, 'page:hosts')
+    expect(await screen.findByRole('list', {name: 'Hosts'})).toBeInTheDocument()
+    menu(be, 'zoom_in')
+    await waitFor(() => expect(be.state.settings.zoom).toBe(110))
+  })
+
+  it('Settings… opens (never toggles shut) and Lock Vault locks', async () => {
+    const be = setup()
+    await unlock(be)
+    menu(be, 'open_settings')
+    expect(await screen.findByRole('dialog', {name: 'Settings'})).toBeInTheDocument()
+    menu(be, 'open_settings')
+    expect(screen.getByRole('dialog', {name: 'Settings'})).toBeInTheDocument()
+    menu(be, 'lock_vault')
+    expect(await screen.findByRole('form', {name: 'Unlock vault'})).toBeInTheDocument()
+  })
+
+  it('does nothing while the vault is locked, and ignores an unknown action', async () => {
+    const be = setup()
+    menu(be, 'new_host') // still on the unlock screen
+    expect(screen.queryByRole('dialog', {name: 'New host'})).toBeNull()
+    await unlock(be)
+    menu(be, 'definitely_not_an_action')
+    expect(screen.getByRole('list', {name: 'Hosts'})).toBeInTheDocument()
+  })
+
+  it('knows every action the Go menu can send', async () => {
+    const be = setup()
+    await unlock(be)
+    for (const a of GO_ACTIONS) menu(be, a) // none of them may throw
+    expect(GO_ACTIONS).toHaveLength(23)
   })
 })

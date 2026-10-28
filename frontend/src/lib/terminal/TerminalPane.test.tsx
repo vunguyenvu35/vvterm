@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {makeFake, Providers} from '../../test/fakeBackend'
 
@@ -19,6 +19,17 @@ vi.mock('@xterm/xterm', () => ({
     onData(cb: any) { this.dataCb = cb }
     onResize() {}
     attachCustomKeyEventHandler(h: any) { this.keyHandler = h }
+    selection = ''
+    selectionCb: () => void = () => {}
+    pasted: string[] = []
+    selectedAll = false
+    cleared = false
+    getSelection() { return this.selection }
+    hasSelection() { return this.selection !== '' }
+    onSelectionChange(cb: () => void) { this.selectionCb = cb; return {dispose() {}} }
+    paste(t: string) { this.pasted.push(t) }
+    selectAll() { this.selectedAll = true }
+    clear() { this.cleared = true }
   },
 }))
 vi.mock('@xterm/addon-fit', () => ({FitAddon: class { fit() {} }}))
@@ -130,5 +141,183 @@ describe('TerminalPane snippet writer', () => {
     expect(be.state.calls).toContainEqual(['session.write', sid, 'ls\r'])
     view.unmount()
     expect(writeToPane('pane-x', 'x')).toBe(false)
+  })
+})
+
+describe('TerminalPane: keystroke order', () => {
+  beforeEach(() => { created.length = 0 })
+
+  // Regression: typing "echo" reached the shell as "ceho" because every key was its own call, and calls
+  // that are in flight together may be run in any order.
+  it('sends one call at a time, in order, and what was typed meanwhile goes out together', async () => {
+    const {be, sid, term} = await mount()
+    act(() => be.emit(`term:ready:${sid}`, {}))
+    const sent: string[] = []
+    const releases: Array<() => void> = []
+    be.session.write = (_s, d) => { sent.push(d); return new Promise<void>(r => releases.push(r)) }
+    term.dataCb('e'); term.dataCb('c'); term.dataCb('h'); term.dataCb('o')
+    expect(sent).toEqual(['e']) // the others wait for the first call to finish
+    releases[0]()
+    await waitFor(() => expect(sent).toEqual(['e', 'cho']))
+    term.dataCb('\r')
+    releases[1]()
+    await waitFor(() => expect(sent).toEqual(['e', 'cho', '\r']))
+    releases[2]()
+    term.dataCb('x')
+    await waitFor(() => expect(sent.at(-1)).toBe('x')) // and it goes back to sending at once when idle
+  })
+
+  it('a failed call does not block the ones after it', async () => {
+    const {be, sid, term} = await mount()
+    act(() => be.emit(`term:ready:${sid}`, {}))
+    const sent: string[] = []
+    be.session.write = (_s, d) => { sent.push(d); return sent.length === 1 ? Promise.reject(new Error('boom')) : Promise.resolve() }
+    term.dataCb('a')
+    term.dataCb('b')
+    await waitFor(() => expect(sent).toEqual(['a', 'b']))
+  })
+
+  it('snippets are typed through the same ordered queue, after what is already on its way', async () => {
+    const be = makeFake()
+    render(<Providers be={be}><TerminalPane {...props} paneId="pane-q" onFocus={vi.fn()} onExit={vi.fn()} /></Providers>)
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'session.attach')).toBe(true))
+    const sid = be.state.calls.find(c => c[0] === 'session.attach')![1] as string
+    act(() => be.emit('term:ready:' + sid, {}))
+    const {writeToPane} = await import('./panes')
+    const sent: string[] = []
+    const releases: Array<() => void> = []
+    be.session.write = (_s, d) => { sent.push(d); return new Promise<void>(r => releases.push(r)) }
+    const term = created[created.length - 1]
+    term.dataCb('c')
+    expect(writeToPane('pane-q', 'df -h\r')).toBe(true)
+    expect(sent).toEqual(['c']) // the snippet waits its turn
+    releases[0]()
+    await waitFor(() => expect(sent).toEqual(['c', 'df -h\r']))
+  })
+})
+
+describe('TerminalPane: copy on select, right click, copy and paste keys', () => {
+  beforeEach(() => { created.length = 0 })
+  const keydown = (init: KeyboardEventInit) => new KeyboardEvent('keydown', {cancelable: true, ...init})
+  const ctrlShift = (key: string) => keydown({key, code: 'Key' + key.toUpperCase(), ctrlKey: true, shiftKey: true})
+
+  async function mountWith(extra: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
+    const be = makeFake()
+    render(<Providers be={be}><TerminalPane {...props} {...extra} onFocus={vi.fn()} onExit={vi.fn()} /></Providers>)
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'session.attach')).toBe(true))
+    const sid = be.state.calls.find(c => c[0] === 'session.attach')![1] as string
+    act(() => be.emit('term:ready:' + sid, {}))
+    return {be, sid, term: created[created.length - 1]}
+  }
+  const wrote = (be: ReturnType<typeof makeFake>) => be.state.calls.filter(c => c[0] === 'system.writeClipboard').map(c => c[1])
+
+  it('copies the selection once it stops changing (copy on select)', async () => {
+    const {be, term} = await mountWith()
+    term.selection = 'he'; term.selectionCb()
+    term.selection = 'hello'; term.selectionCb() // dragging: only the last one counts
+    await waitFor(() => expect(wrote(be)).toEqual(['hello']))
+    expect(be.state.clipboard).toBe('hello')
+  })
+
+  it('does nothing when copy on select is off, or the selection was cleared', async () => {
+    const off = await mountWith({copyOnSelect: false})
+    off.term.selection = 'x'; off.term.selectionCb()
+    await new Promise(r => setTimeout(r, 300))
+    expect(wrote(off.be)).toEqual([])
+    const cleared = await mountWith()
+    cleared.term.selection = ''; cleared.term.selectionCb()
+    await new Promise(r => setTimeout(r, 300))
+    expect(wrote(cleared.be)).toEqual([])
+  })
+
+  it('the copy key copies the selection and is not sent to the shell; with nothing selected it passes through', async () => {
+    const {be, term} = await mountWith()
+    term.selection = 'abc'
+    const e = ctrlShift('c')
+    expect(term.keyHandler(e)).toBe(false)
+    expect(e.defaultPrevented).toBe(true)
+    expect(wrote(be)).toEqual(['abc'])
+    term.selection = ''
+    expect(term.keyHandler(ctrlShift('c'))).toBe(true) // the shell gets it (Ctrl+C stays the interrupt)
+    expect(wrote(be)).toEqual(['abc'])
+  })
+
+  it('the copy and paste combinations can be changed', async () => {
+    const {be, term} = await mountWith({copyCombo: 'Alt+Y', pasteCombo: 'Alt+P'})
+    term.selection = 'sel'
+    expect(term.keyHandler(ctrlShift('c'))).toBe(true) // the old default no longer does anything
+    expect(term.keyHandler(keydown({key: 'y', code: 'KeyY', altKey: true}))).toBe(false)
+    expect(wrote(be)).toEqual(['sel'])
+    be.state.clipboard = 'from clipboard'
+    expect(term.keyHandler(keydown({key: 'p', code: 'KeyP', altKey: true}))).toBe(false)
+    await waitFor(() => expect(term.pasted).toEqual(['from clipboard']))
+  })
+
+  it('the paste key pastes the clipboard into the terminal, only when connected', async () => {
+    const {be, term, sid} = await mountWith()
+    be.state.clipboard = 'echo pasted\\nls'
+    const e = ctrlShift('v')
+    expect(term.keyHandler(e)).toBe(false)
+    expect(e.defaultPrevented).toBe(true)
+    await waitFor(() => expect(term.pasted).toEqual(['echo pasted\\nls']))
+    act(() => be.emit('term:closed:' + sid, {reason: 'x', clean: false}))
+    term.keyHandler(ctrlShift('v'))
+    await new Promise(r => setTimeout(r, 50))
+    expect(term.pasted).toHaveLength(1) // not connected: nothing is typed anywhere
+  })
+
+  it('a right click pastes by default, and never shows the browser menu', async () => {
+    const {be, term} = await mountWith()
+    be.state.clipboard = 'right-click paste'
+    const ev = new MouseEvent('contextmenu', {bubbles: true, cancelable: true})
+    screen.getByTestId('pane').dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    await waitFor(() => expect(term.pasted).toEqual(['right-click paste']))
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('right click = none does nothing at all', async () => {
+    const {be, term} = await mountWith({rightClick: 'none'})
+    be.state.clipboard = 'x'
+    const ev = new MouseEvent('contextmenu', {bubbles: true, cancelable: true})
+    screen.getByTestId('pane').dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    await new Promise(r => setTimeout(r, 50))
+    expect(term.pasted).toEqual([])
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('right click = menu shows Copy, Paste, Select all and Clear where you clicked', async () => {
+    const {be, term} = await mountWith({rightClick: 'menu'})
+    be.state.clipboard = 'menu paste'
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 40, clientY: 60})
+    const menu = screen.getByRole('menu', {name: 'Terminal'})
+    expect(menu).toHaveStyle({left: '40px', top: '60px'})
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Copy', 'Paste', 'Select all', 'Clear'])
+    expect(within(menu).getByRole('menuitem', {name: 'Copy'})).toBeDisabled() // nothing selected
+    await userEvent.click(within(menu).getByRole('menuitem', {name: 'Paste'}))
+    await waitFor(() => expect(term.pasted).toEqual(['menu paste']))
+    expect(screen.queryByRole('menu')).toBeNull()
+    term.selection = 'picked'
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 1, clientY: 2})
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Copy'}))
+    expect(wrote(be)).toContain('picked')
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 1, clientY: 2})
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Select all'}))
+    expect(term.selectedAll).toBe(true)
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 1, clientY: 2})
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Clear'}))
+    expect(term.cleared).toBe(true)
+  })
+
+  it('the menu closes on Escape and on a click elsewhere', async () => {
+    await mountWith({rightClick: 'menu'})
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 5, clientY: 5})
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.keyDown(window, {key: 'Escape'})
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.contextMenu(screen.getByTestId('pane'), {clientX: 5, clientY: 5})
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 })

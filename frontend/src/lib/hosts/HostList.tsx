@@ -1,8 +1,9 @@
 import {OS_INFO, OsIcon, osName} from '../ui/OsIcon'
+import {loadView, saveView, ViewMenu, ViewMode} from './ViewMenu'
 import {ReactNode, useMemo, useState} from 'react'
 import type {Env, Group, Host} from '../types'
 import {formatAddr} from '../util'
-import {IconChevron, IconEdit, IconFolder, IconForward, IconPlay, IconSearch, IconServer, IconTrash} from '../ui/Icons'
+import {IconChevron, IconEdit, IconFolder, IconForward, IconPlay, IconSearch, IconServer, IconTerminal, IconTrash} from '../ui/Icons'
 
 export interface QuickConnect {
   username: string
@@ -19,8 +20,8 @@ interface Props {
   onEdit(h: Host): void
   onDelete(h: Host): void
   onForwards(h: Host): void
-  /** open the SFTP file browser for a host */
-  onSftp?(h: Host): void
+  /** open the host with Telnet (only offered for hosts that have it enabled) */
+  onTelnet?(h: Host): void
   onEditGroup(g: Group): void
   onDeleteGroup(g: Group): void
   /** Text being typed in the New host panel: shown as a highlighted draft card. `undefined` = no draft. */
@@ -54,6 +55,8 @@ function descendants(groups: Group[], id: string): Set<string> {
 export function HostList(p: Props) {
   const [q, setQ] = useState('')
   const [env, setEnv] = useState<Env>('')
+  const [view, setView] = useState<ViewMode>(loadView)
+  const changeView = (v: ViewMode) => { setView(v); saveView(v) }
   const [groupId, setGroupId] = useState('')
 
   const groupIds = useMemo(() => new Set(p.groups.map(g => g.id)), [p.groups])
@@ -110,11 +113,11 @@ export function HostList(p: Props) {
         : <span className={'tile env-' + (h.env || 'none')} title={h.env || 'no environment'}><IconServer size={20} /></span>}
       <div className="meta">
         <div className="label">{h.label}</div>
-        <div className="addr">{h.username ? `ssh, ${h.username}` : 'ssh'} · {formatAddr({hostname: h.hostname, port: h.port})}</div>
+        <div className="addr">{['ssh', h.telnet_enabled ? 'telnet' : '', h.username].filter(Boolean).join(', ')} · {formatAddr({hostname: h.hostname, port: h.port})}</div>
       </div>
-      {p.onSftp && <button className="sftp-chip" aria-label={`SFTP ${h.label}`} title="Browse files (SFTP)" onClick={() => p.onSftp!(h)}><IconFolder size={14} /> SFTP</button>}
       <div className="actions">
         <button className="icon ghost" aria-label={`Connect ${h.label}`} onClick={() => p.onConnect(h)}><IconPlay size={14} /></button>
+        {p.onTelnet && h.telnet_enabled && <button className="icon ghost" aria-label={`Telnet ${h.label}`} title={`Connect with Telnet on port ${h.telnet_port || 23} (unencrypted)`} onClick={() => p.onTelnet!(h)}><IconTerminal size={14} /></button>}
         <button className="icon ghost" aria-label={`Forwards ${h.label}`} onClick={() => p.onForwards(h)}><IconForward size={14} /></button>
         <button className="icon ghost" aria-label={`Edit ${h.label}`} onClick={() => p.onEdit(h)}><IconEdit size={14} /></button>
         <button className="icon ghost danger" aria-label={`Delete ${h.label}`} onClick={() => p.onDelete(h)}><IconTrash size={14} /></button>
@@ -134,6 +137,7 @@ export function HostList(p: Props) {
       <div className="toolbar">
         {p.toolbar}
         <div className="spacer" />
+        <ViewMenu value={view} onChange={changeView} />
         <div className="chips">
           {ENVS.map(e => (
             <span key={e} role="button" aria-pressed={env === e} tabIndex={0} className={'chip' + (env === e ? ' on' : '')}
@@ -156,7 +160,7 @@ export function HostList(p: Props) {
       {!filtering && subgroups.length > 0 && (
         <>
           <h3 className="sec-title">Groups</h3>
-          <div className="cards">
+          <div className={'cards' + (view === 'list' ? ' as-list' : '')}>
             {subgroups.map(g => (
               <div key={g.id} className="group card" role="button" tabIndex={0} aria-label={`Open group ${g.name}`}
                 onClick={() => setGroupId(g.id)} onKeyDown={e => e.key === 'Enter' && setGroupId(g.id)}>
@@ -176,7 +180,7 @@ export function HostList(p: Props) {
       )}
 
       <h3 className="sec-title">Hosts</h3>
-      <div className="cards" role="list" aria-label="Hosts">
+      <div className={'cards' + (view === 'list' ? ' as-list' : '')} role="list" aria-label="Hosts" data-view={view}>
         {p.draft !== undefined && (
           <div className="card draft" aria-label="New host draft" data-testid="draft-card">
             <span className="tile env-none"><IconServer size={20} /></span>

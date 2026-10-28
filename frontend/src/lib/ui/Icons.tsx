@@ -51,3 +51,11 @@ export const IconMinus = (p: P) => <Icon {...p}><path d="M5 12h14" /></Icon>
 export const IconUser = (p: P) => <Icon {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></Icon>
 
 export const IconSerial = (p: P) => <Icon {...p}><path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5" /></Icon>
+export const IconFingerprint = (p: P) => <Icon {...p}><path d="M12 11v3.500c0 2 .8 3.900 2.200 5.300M8.500 13.500c0 3 1 5.200 2.500 6.800M5 12a7 7 0 0 1 14 0v1.500M8 8.500A5 5 0 0 1 17 12v2M12 7.500" /></Icon>
+export const IconClock = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>
+export const IconGrid = (p: P) => <Icon {...p}><rect x="4" y="4" width="7" height="7" rx="1.500" /><rect x="13" y="4" width="7" height="7" rx="1.500" /><rect x="4" y="13" width="7" height="7" rx="1.500" /><rect x="13" y="13" width="7" height="7" rx="1.500" /></Icon>
+export const IconList = (p: P) => <Icon {...p}><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.500" cy="6" r="1" /><circle cx="4.500" cy="12" r="1" /><circle cx="4.500" cy="18" r="1" /></Icon>
+export const IconBroadcast = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="2" /><path d="M7.500 7.500a6.400 6.400 0 0 0 0 9M16.500 7.500a6.400 6.400 0 0 1 0 9M4.800 4.800a10.200 10.200 0 0 0 0 14.400M19.200 4.800a10.200 10.200 0 0 1 0 14.400" /></Icon>
+export const IconMaximizePane = (p: P) => <Icon {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Icon>
+export const IconMinimizePane = (p: P) => <Icon {...p}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Icon>
+export const IconCapsLock = (p: P) => <Icon {...p}><path d="M12 4 4.500 12H9v4h6v-4h4.500z" /><path d="M9 20h6" /></Icon>

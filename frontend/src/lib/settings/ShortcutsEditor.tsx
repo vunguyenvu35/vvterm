@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import {ACTIONS, ActionDef, FIXED_SHORTCUTS, capture, comboFromEvent, conflictFor, effective, formatCombo, validateCombo} from '../shortcuts/shortcuts'
+import {ACTIONS, ActionDef, FIXED_SHORTCUTS, capture, comboFromEvent, conflictFor, defaultOf, effective, formatCombo, validateCombo} from '../shortcuts/shortcuts'
 
 interface Props {
   /** the user's overrides (action id -> combo) */
@@ -20,7 +20,7 @@ export function ShortcutsEditor({overrides, onChange}: Props) {
 
   const set = (a: ActionDef, combo: string) => {
     const next = {...overrides}
-    if (combo === a.default) delete next[a.id]
+    if (combo === defaultOf(a)) delete next[a.id]
     else next[a.id] = combo
     onChange(next)
   }
@@ -48,7 +48,7 @@ export function ShortcutsEditor({overrides, onChange}: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording, overrides])
 
-  const changed = Object.keys(overrides).filter(id => ACTIONS.some(a => a.id === id && overrides[id] !== a.default))
+  const changed = Object.keys(overrides).filter(id => ACTIONS.some(a => a.id === id && overrides[id] !== defaultOf(a)))
 
   return (
     <section className="card-section shortcuts">
@@ -62,7 +62,7 @@ export function ShortcutsEditor({overrides, onChange}: Props) {
           <div className="sc-title">{g}</div>
           {ACTIONS.filter(a => a.group === g).map(a => {
             const isRec = recording === a.id
-            const custom = overrides[a.id] && overrides[a.id] !== a.default
+            const custom = overrides[a.id] && overrides[a.id] !== defaultOf(a)
             return (
               <div key={a.id} className="sc-row">
                 <span>{a.label}</span>
@@ -73,7 +73,7 @@ export function ShortcutsEditor({overrides, onChange}: Props) {
                     <button className={'key-chip' + (custom ? ' custom' : '')} aria-label={`Change shortcut for ${a.label}, now ${formatCombo(eff[a.id])}`}
                       onClick={() => { setError(''); setRecording(a.id) }}>{formatCombo(eff[a.id])}</button>
                   )}
-                  {custom && !isRec && <button className="icon ghost" aria-label={`Reset shortcut for ${a.label}`} title={`Default: ${formatCombo(a.default)}`} onClick={() => { set(a, a.default) }}>Reset</button>}
+                  {custom && !isRec && <button className="icon ghost" aria-label={`Reset shortcut for ${a.label}`} title={`Default: ${formatCombo(defaultOf(a))}`} onClick={() => { set(a, defaultOf(a)) }}>Reset</button>}
                 </span>
               </div>
             )

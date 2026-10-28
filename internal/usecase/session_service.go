@@ -66,6 +66,14 @@ func (s *SessionService) Open(hostID string, cols, rows int) (string, error) {
 		if _, _, err := ParseSerialID(hostID); err != nil {
 			return "", err
 		}
+	case strings.HasPrefix(hostID, telnetPrefix):
+		h, err := s.c.Store.GetHost(strings.TrimPrefix(hostID, telnetPrefix))
+		if err != nil {
+			return "", fmt.Errorf("host: %w", err)
+		}
+		if !h.TelnetEnabled {
+			return "", fmt.Errorf("Telnet is not enabled for %q: edit the host and turn it on", h.Label)
+		}
 	default:
 		if _, err := s.c.Store.GetHost(hostID); err != nil {
 			return "", fmt.Errorf("host: %w", err)
@@ -98,6 +106,7 @@ func (s *SessionService) run(sess *session) {
 	}
 	sid := sess.sid
 	closed := func(reason string, clean bool) {
+		s.logEnd(sess, reason, clean)
 		sess.mu.Lock()
 		defer sess.mu.Unlock()
 		sess.state = "closed"
@@ -143,6 +152,7 @@ func (s *SessionService) run(sess *session) {
 	s.f.autoStart(sid, cl, host.ID)
 	sess.mu.Lock()
 	sess.state, sess.ready = "ready", map[string]any{"host": host.Label}
+	s.c.record(domain.ActConnect, host.ID, host.Label, fmt.Sprintf("Connected to %s:%d", host.Hostname, host.Port), true)
 	s.c.emit("term:ready:"+sid, sess.ready)
 	sess.mu.Unlock()
 
@@ -158,6 +168,7 @@ func (s *SessionService) run(sess *session) {
 	sess.client, sess.shell = nil, nil
 	sess.mu.Unlock()
 	if wasClosed {
+		s.c.record(domain.ActDisconnect, sess.hostID, "", "Closed by you", true)
 		return // user closed the tab: no event needed
 	}
 	if err == nil {
@@ -328,6 +339,7 @@ func (s *SessionService) batcher(sess *session) *sshx.Batcher {
 }
 
 func (s *SessionService) markClosed(sess *session, reason string, clean bool) {
+	s.logEnd(sess, reason, clean)
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
 	sess.state = "closed"
@@ -357,6 +369,8 @@ func (s *SessionService) runDevice(sess *session) {
 		} else {
 			sh, err = s.c.OpenLocalShell(cols, rows, batch.Write)
 		}
+	} else if strings.HasPrefix(sess.hostID, telnetPrefix) {
+		sh, label, err = s.openTelnet(sess, cols, rows, batch.Write)
 	} else {
 		var path string
 		var baud int
@@ -383,6 +397,7 @@ func (s *SessionService) runDevice(sess *session) {
 	}
 	sess.shell = sh
 	sess.state, sess.ready = "ready", map[string]any{"host": label}
+	s.c.record(domain.ActConnect, sess.hostID, label, s.openedMessage(sess, label), true)
 	s.c.emit("term:ready:"+sess.sid, sess.ready)
 	sess.mu.Unlock()
 
@@ -396,6 +411,7 @@ func (s *SessionService) runDevice(sess *session) {
 	sess.shell = nil
 	sess.mu.Unlock()
 	if wasClosed {
+		s.c.record(domain.ActDisconnect, sess.hostID, "", "Closed by you", true)
 		return
 	}
 	if err == nil {
@@ -403,4 +419,32 @@ func (s *SessionService) runDevice(sess *session) {
 		return
 	}
 	s.markClosed(sess, "connection lost: "+err.Error(), false)
+}
+
+// openTelnet connects a Telnet session for a saved host.
+func (s *SessionService) openTelnet(sess *session, cols, rows int, onData func([]byte)) (Shell, string, error) {
+	h, err := s.c.Store.GetHost(strings.TrimPrefix(sess.hostID, telnetPrefix))
+	if err != nil {
+		return nil, "", err
+	}
+	if s.c.OpenTelnet == nil {
+		return nil, h.Label, errors.New("Telnet is not available in this build")
+	}
+	addr, user, pass, err := s.c.telnetCredentials(h)
+	if err != nil {
+		return nil, h.Label, err
+	}
+	sh, err := s.c.OpenTelnet(addr, cols, rows, user, pass, onData)
+	return sh, h.Label, err
+}
+
+// openedMessage is the log line for a session that has no SSH connection.
+func (s *SessionService) openedMessage(sess *session, label string) string {
+	switch {
+	case sess.hostID == LocalHostID:
+		return "Opened a terminal on this computer"
+	case strings.HasPrefix(sess.hostID, telnetPrefix):
+		return "Connected with Telnet (unencrypted) to " + label
+	}
+	return "Opened the serial port " + label
 }

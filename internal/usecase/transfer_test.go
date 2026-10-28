@@ -290,4 +290,3 @@ func TestDownloadIgnoresNamesThatWouldEscapeTheFolder(t *testing.T) {
 		t.Fatal("ordinary names are fine")
 	}
 }
-

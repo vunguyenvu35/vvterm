@@ -145,7 +145,9 @@ export function ForwardPanel({hosts, groups = [], forward, hostId, onClose, onCh
   if (step === 'host') {
     const q = filter.trim().toLowerCase()
     const shown = hosts.filter(h => !q || (h.label + ' ' + h.hostname + ' ' + (h.username ?? '')).toLowerCase().includes(q))
-    const byGroup = (gid: string) => shown.filter(h => (h.group_id ?? '') === gid)
+    const known = new Set(groups.map(g => g.id))
+    // a host whose group is unknown still shows, with the ungrouped ones: no host may go missing from the list
+    const byGroup = (gid: string) => shown.filter(h => (gid ? h.group_id === gid : !h.group_id || !known.has(h.group_id)))
     const sections = [...groups.map(g => ({key: g.id, name: g.name, hosts: byGroup(g.id)})), {key: '', name: groups.length ? 'Hosts' : '', hosts: byGroup('')}].filter(s => s.hosts.length)
     const pick = (h: Host) => { setHost(h.id); setErr(''); setStep(dynamic ? 'label' : 'dest') }
     return (

@@ -6,7 +6,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"vvterm/internal/localtty"
@@ -15,6 +17,7 @@ import (
 	"vvterm/internal/sqlitedb"
 	"vvterm/internal/sshx"
 	"vvterm/internal/store"
+	"vvterm/internal/telnetx"
 	"vvterm/internal/usecase"
 	"vvterm/internal/vault"
 )
@@ -31,6 +34,7 @@ type App struct {
 
 	bridge   *Bridge
 	launcher *SettingsLauncher
+	ctx      context.Context
 }
 
 // DataDir resolves where user data lives: $VVTERM_DATA_DIR, else the OS config dir
@@ -79,7 +83,10 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 		OpenSerial: func(path string, baud int, onData func([]byte)) (usecase.Shell, error) {
 			return serialx.Open(path, baud, onData)
 		},
-		ListSerial: serialx.Ports})
+		OpenTelnet: func(addr string, cols, rows int, user, pass string, onData func([]byte)) (usecase.Shell, error) {
+			return telnetx.Open(addr, 10*time.Second, cols, rows, user, pass, onData)
+		},
+		ListSerial: serialx.Ports, Activity: db.ActivityLog()})
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -89,6 +96,7 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 
 // Startup is the Wails OnStartup hook: it routes use case events to the frontend.
 func (a *App) Startup(ctx context.Context) {
+	a.ctx = ctx
 	a.System.SetContext(ctx)
 	a.Core.SetEmitter(func(event string, data ...any) { runtime.EventsEmit(ctx, event, data...) })
 
@@ -111,4 +119,30 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 	a.Services.Shutdown()
 	_ = a.db.Close()
+}
+
+// Menu is the application menu bar, wired to this window.
+func (a *App) Menu() *menu.Menu {
+	return BuildMenu(MenuHooks{
+		Emit: func(action string) {
+			if a.ctx != nil {
+				runtime.EventsEmit(a.ctx, MenuEvent, action)
+			}
+		},
+		OpenURL: func(url string) {
+			if a.ctx != nil && urlAllowed(url) {
+				runtime.BrowserOpenURL(a.ctx, url)
+			}
+		},
+		ToggleFullScreen: func() {
+			if a.ctx == nil {
+				return
+			}
+			if runtime.WindowIsFullscreen(a.ctx) {
+				runtime.WindowUnfullscreen(a.ctx)
+			} else {
+				runtime.WindowFullscreen(a.ctx)
+			}
+		},
+	})
 }

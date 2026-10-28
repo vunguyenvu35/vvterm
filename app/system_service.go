@@ -68,6 +68,33 @@ func (s *SystemService) SaveFile(title, defaultName string) (string, error) {
 	return runtime.SaveFileDialog(s.ctx, runtime.SaveDialogOptions{Title: title, DefaultFilename: defaultName})
 }
 
+// maxClipboard bounds what is moved through the clipboard in one go.
+const maxClipboard = 10 << 20
+
+// ClipboardText returns the text on the system clipboard (the terminal's paste). It fails where there is no
+// native window; the frontend then asks the browser instead.
+func (s *SystemService) ClipboardText() (string, error) {
+	if s.noDialogs() {
+		return "", errNoDialog
+	}
+	t, err := runtime.ClipboardGetText(s.ctx)
+	if len(t) > maxClipboard {
+		t = t[:maxClipboard]
+	}
+	return t, err
+}
+
+// SetClipboardText puts text on the system clipboard (the terminal's copy).
+func (s *SystemService) SetClipboardText(text string) error {
+	if s.noDialogs() {
+		return errNoDialog
+	}
+	if len(text) > maxClipboard {
+		return errors.New("that is too much text for the clipboard")
+	}
+	return runtime.ClipboardSetText(s.ctx, text)
+}
+
 // allowedURLPrefixes are the only links the app opens in the browser (About page).
 var allowedURLPrefixes = []string{
 	"https://github.com/vunguyenvu35/vvterm",

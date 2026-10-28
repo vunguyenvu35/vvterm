@@ -4,6 +4,7 @@ import SettingsApp from './lib/settings/SettingsApp'
 import {BackendContext, bridgeBackend, inSettingsWindow, wailsBackend} from './lib/backend'
 import {ToastProvider} from './lib/ui/Toast'
 import {ConfirmProvider} from './lib/ui/Confirm'
+import {CapsLockWarning} from './lib/ui/CapsLockWarning'
 import './styles.css'
 
 // The Settings window is a second process of the same binary; it is the only one that has the bridge bound.
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
     <ToastProvider>
       <ConfirmProvider>
         {settingsWindow ? <SettingsApp /> : <App />}
+        <CapsLockWarning />
       </ConfirmProvider>
     </ToastProvider>
   </BackendContext.Provider>,

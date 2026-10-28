@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 // MaxJumpDepth bounds jump host chains to avoid loops.
@@ -51,6 +52,18 @@ func NormalizeHost(h *Host) error {
 	}
 	if h.OS != "" && !KnownOS[h.OS] {
 		return fmt.Errorf("invalid os %q", h.OS)
+	}
+	if h.TelnetEnabled && h.TelnetPort == 0 {
+		h.TelnetPort = 23
+	}
+	if h.TelnetPort < 0 || h.TelnetPort > 65535 {
+		return errors.New("telnet port out of range")
+	}
+	if !h.TelnetEnabled {
+		h.TelnetPort = 0 // a port without Telnet means nothing
+	}
+	if len(h.TerminalTheme) > 40 || strings.ContainsAny(h.TerminalTheme, " \t\r\n\x00/\\") {
+		return errors.New("invalid terminal theme")
 	}
 	return nil
 }
@@ -122,6 +135,29 @@ func NormalizeSnippet(s *Snippet) error {
 	}
 	if strings.ContainsRune(s.Script, 0) {
 		return errors.New("snippet script must not contain NUL characters")
+	}
+	return nil
+}
+
+// MaxActivityMessage bounds one log line.
+const MaxActivityMessage = 500
+
+// NormalizeActivity makes an entry safe to store: one line, bounded, with a known kind.
+func NormalizeActivity(e *ActivityEntry) error {
+	switch e.Kind {
+	case ActConnect, ActDisconnect, ActHostKey, ActForward, ActSFTP, ActTransfer, ActVault, ActSync:
+	default:
+		return fmt.Errorf("invalid activity kind %q", e.Kind)
+	}
+	e.Message = strings.Join(strings.Fields(strings.ReplaceAll(e.Message, "\x00", "")), " ")
+	if r := []rune(e.Message); len(r) > MaxActivityMessage {
+		e.Message = string(r[:MaxActivityMessage-1]) + "…"
+	}
+	if e.Message == "" {
+		return errors.New("an activity needs a message")
+	}
+	if e.At.IsZero() {
+		e.At = time.Now()
 	}
 	return nil
 }

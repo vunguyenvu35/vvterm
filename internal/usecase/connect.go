@@ -52,6 +52,13 @@ func (c *Core) hopFor(h domain.Host) (sshx.Hop, error) {
 		if err != nil {
 			return hop, fmt.Errorf("identity %q: %w", id.Name, err)
 		}
+		if id.Certificate != "" {
+			cs, err := certSigner(id.Certificate, signer)
+			if err != nil {
+				return hop, fmt.Errorf("identity %q: %w", id.Name, err)
+			}
+			signer = cs
+		}
 		hop.Auth = []ssh.AuthMethod{sshx.KeyAuth(signer)}
 	default:
 		return hop, fmt.Errorf("unknown auth type %q", id.AuthType)
@@ -87,6 +94,9 @@ func (c *Core) connect(hostID, promptKey string, abort <-chan struct{}) (*sshx.C
 		}
 	}
 	cl, err := c.dialHops(hops, promptKey, abort)
+	if errors.Is(err, sshx.ErrHostKeyChanged) {
+		c.record(domain.ActHostKey, target.ID, target.Label, "HOST KEY CHANGED: connection blocked (possible man-in-the-middle)", false)
+	}
 	return cl, target, err
 }
 
@@ -103,6 +113,11 @@ func (c *Core) dialHops(hops []sshx.Hop, promptKey string, abort <-chan struct{}
 			c.emit("term:hostkey:"+promptKey, payload)
 			select {
 			case ok := <-ch:
+				if ok {
+					c.record(domain.ActHostKey, "", host, "Trusted the host key "+fp, true)
+				} else {
+					c.record(domain.ActHostKey, "", host, "Did not trust the host key "+fp, false)
+				}
 				return ok, nil
 			case <-abort:
 				return false, errors.New("cancelled")
@@ -112,4 +127,17 @@ func (c *Core) dialHops(hops []sshx.Hop, promptKey string, abort <-chan struct{}
 		},
 	}}
 	return d.Dial(hops)
+}
+
+// certSigner makes a signer that presents the certificate along with the key.
+func certSigner(line string, signer ssh.Signer) (ssh.Signer, error) {
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		return nil, fmt.Errorf("stored certificate: %w", err)
+	}
+	cert, ok := parsed.(*ssh.Certificate)
+	if !ok {
+		return nil, errors.New("stored certificate is not a certificate")
+	}
+	return ssh.NewCertSigner(cert, signer)
 }

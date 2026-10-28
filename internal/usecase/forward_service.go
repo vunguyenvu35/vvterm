@@ -115,6 +115,7 @@ func (s *ForwardService) Start(forwardID string) error {
 	delete(s.lastErr, forwardID)
 	s.mu.Unlock()
 	s.state(forwardID, f.Addr, "running", "")
+	s.c.record(domain.ActForward, spec.HostID, "", fmt.Sprintf("Started %s forward %s (listening on %s)", spec.Type, forwardName(spec), f.Addr), true)
 	if own != nil {
 		go func() { // dedicated link dropped: tear the forward down
 			_ = own.Wait()
@@ -125,6 +126,9 @@ func (s *ForwardService) Start(forwardID string) error {
 }
 
 func (s *ForwardService) fail(id string, err error) {
+	if spec, gerr := s.c.Store.GetForward(id); gerr == nil {
+		s.c.record(domain.ActForward, spec.HostID, "", fmt.Sprintf("Could not start %s forward %s: %v", spec.Type, forwardName(spec), err), false)
+	}
 	s.mu.Lock()
 	s.lastErr[id] = err.Error()
 	s.mu.Unlock()
@@ -142,7 +146,18 @@ func (s *ForwardService) Stop(forwardID string) error {
 		return fmt.Errorf("forward is not running")
 	}
 	s.shutdown(forwardID, r)
+	if spec, err := s.c.Store.GetForward(forwardID); err == nil {
+		s.c.record(domain.ActForward, spec.HostID, "", fmt.Sprintf("Stopped %s forward %s", spec.Type, forwardName(spec)), true)
+	}
 	return nil
+}
+
+// forwardName is how a rule is called in the log: its label, or its type.
+func forwardName(f domain.PortForward) string {
+	if f.Label != "" {
+		return "\"" + f.Label + "\""
+	}
+	return fmt.Sprintf("%s:%d", f.BindAddr, f.BindPort)
 }
 
 func (s *ForwardService) stopIf(id string, f *forward.Forward) {

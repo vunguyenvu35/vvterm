@@ -9,6 +9,8 @@ export interface ActionDef {
   label: string
   group: 'General' | 'Tabs' | 'Terminal' | 'View'
   default: string
+  /** the default on a Mac, when it differs (Cmd+C copies there; Ctrl+C is the interrupt key everywhere else) */
+  defaultMac?: string
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -19,8 +21,11 @@ export const ACTIONS: ActionDef[] = [
   {id: 'next_tab', label: 'Next tab', group: 'Tabs', default: 'Ctrl+Tab'},
   {id: 'prev_tab', label: 'Previous tab', group: 'Tabs', default: 'Ctrl+Shift+Tab'},
   {id: 'close_pane', label: 'Close the focused pane', group: 'Terminal', default: 'Mod+Shift+W'},
+  {id: 'broadcast_input', label: 'Broadcast input to every pane of the tab', group: 'Terminal', default: 'Mod+Alt+B', defaultMac: 'Mod+B'},
   {id: 'split_right', label: 'Split the pane right', group: 'Terminal', default: 'Mod+D'},
   {id: 'split_down', label: 'Split the pane down', group: 'Terminal', default: 'Mod+Shift+D'},
+  {id: 'terminal_copy', label: 'Copy the selection', group: 'Terminal', default: 'Mod+Shift+C', defaultMac: 'Mod+C'},
+  {id: 'terminal_paste', label: 'Paste into the terminal', group: 'Terminal', default: 'Mod+Shift+V', defaultMac: 'Mod+V'},
   {id: 'terminal_search', label: 'Search the terminal scrollback', group: 'Terminal', default: 'Mod+F'},
   {id: 'zoom_in', label: 'Zoom in', group: 'View', default: 'Mod+='},
   {id: 'zoom_out', label: 'Zoom out', group: 'View', default: 'Mod+-'},
@@ -36,10 +41,13 @@ export const FIXED_SHORTCUTS: {label: string; keys: string}[] = [
 
 export const isMac = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '')
 
+/** The default combination of an action on this platform. */
+export const defaultOf = (a: ActionDef, mac = isMac()): string => (mac && a.defaultMac) || a.default
+
 /** The combination in effect for every action: the override when there is one, else the default. */
-export function effective(overrides: Record<string, string> | undefined): Record<string, string> {
+export function effective(overrides: Record<string, string> | undefined, mac = isMac()): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const a of ACTIONS) out[a.id] = overrides?.[a.id] || a.default
+  for (const a of ACTIONS) out[a.id] = overrides?.[a.id] || defaultOf(a, mac)
   return out
 }
 

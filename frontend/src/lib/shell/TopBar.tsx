@@ -1,3 +1,4 @@
+import {useEffect, useState} from 'react'
 import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSplitH, IconSplitV} from '../ui/Icons'
 import type {Tab} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
@@ -14,12 +15,35 @@ interface Props {
   onSettings(): void
   /** a double click on an empty part of the title bar zooms the window, like any Mac app */
   onToggleMaximise?(): void
+  /** a tab was given a new name (double-click its title) */
+  onRename?(id: string, name: string): void
+  /** right-click menu: a new tab on the same host, next to this one */
+  onDuplicate?(id: string): void
+  /** right-click menu: split the tab's focused pane */
+  onSplitTab?(id: string, dir: 'row' | 'col'): void
   snippets: Snippet[]
   onRunSnippet(s: Snippet, execute: boolean): void
 }
 
 /** Title bar with the Vaults (home) tab, one tab per terminal, and split controls. */
 export function TopBar(p: Props) {
+  const [editing, setEditing] = useState<{id: string; value: string} | null>(null)
+  const [menu, setMenu] = useState<{id: string; x: number; y: number} | null>(null)
+  // the menu goes away on any click, Esc, or when the window loses focus
+  useEffect(() => {
+    if (!menu) return
+    const off = () => setMenu(null)
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); off() } }
+    window.addEventListener('mousedown', off)
+    window.addEventListener('keydown', esc, true)
+    window.addEventListener('blur', off)
+    return () => { window.removeEventListener('mousedown', off); window.removeEventListener('keydown', esc, true); window.removeEventListener('blur', off) }
+  }, [menu])
+  const menuTab = menu ? p.tabs.find(t => t.id === menu.id) : undefined
+  const commit = () => {
+    if (editing) p.onRename?.(editing.id, editing.value)
+    setEditing(null)
+  }
   const current = p.tabs.find(t => t.id === p.active)
   const inTerminal = !!current && current.kind !== 'sftp'
   return (
@@ -31,9 +55,17 @@ export function TopBar(p: Props) {
         <IconKey size={15} /> <span>Vaults</span>
       </button>
       {p.tabs.map(t => (
-        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}>
+        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
+          onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
           {t.kind === 'sftp' ? <IconFolder size={15} /> : <IconTerminal />}
-          <span className="tab-title">{t.title}</span>
+          {editing?.id === t.id ? (
+            <input className="tab-rename" aria-label="Tab name" autoFocus value={editing.value} maxLength={60}
+              onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} onChange={e => setEditing({id: t.id, value: e.target.value})}
+              onFocus={e => e.currentTarget.select()} onBlur={commit}
+              onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') commit(); else if (e.key === 'Escape') setEditing(null) }} />
+          ) : (
+            <span className="tab-title" title={t.pinned ? undefined : 'Double-click to rename'} onDoubleClick={() => { if (!t.pinned && p.onRename) setEditing({id: t.id, value: t.title}) }}>{t.title}</span>
+          )}
           {!t.pinned && (
             <span className="x" role="button" aria-label={`Close ${t.title}`} onClick={e => { e.stopPropagation(); p.onClose(t.id) }}>
               <IconClose size={13} />
@@ -41,6 +73,16 @@ export function TopBar(p: Props) {
           )}
         </div>
       ))}
+      {menu && menuTab && (
+        <div className="ctx-menu" role="menu" aria-label={'Tab ' + menuTab.title} style={{left: menu.x, top: menu.y}} onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
+          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onDuplicate} onClick={() => { setMenu(null); p.onDuplicate?.(menuTab.id) }}>Duplicate</button>
+          <button role="menuitem" disabled={!p.onRename} onClick={() => { setMenu(null); setEditing({id: menuTab.id, value: menuTab.title}) }}>Rename</button>
+          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'row') }}>Split right</button>
+          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'col') }}>Split down</button>
+          <div className="ctx-sep" role="separator" />
+          <button role="menuitem" onClick={() => { setMenu(null); p.onClose(menuTab.id) }}>Close</button>
+        </div>
+      )}
       <button className="tab add" aria-label="New connection" title="New connection" onClick={p.onNew}><IconPlus size={16} /></button>
       <div className="spacer" />
       <div className="top-tools">

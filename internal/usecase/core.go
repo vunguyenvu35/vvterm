@@ -19,20 +19,25 @@ import (
 
 // Settings is persisted in settings.json and never synced.
 type Settings struct {
-	Theme           string `json:"theme"`          // app appearance: auto | light | dark
-	TerminalTheme   string `json:"terminal_theme"` // "auto" (follow the app) or a theme id from the UI catalogue
-	FontSize        int    `json:"font_size"`
-	FontFamily      string `json:"font_family"`
-	CursorStyle     string `json:"cursor_style"` // block | bar | underline
-	CursorBlink     bool   `json:"cursor_blink"`
+	Theme         string `json:"theme"`          // app appearance: auto | light | dark
+	TerminalTheme string `json:"terminal_theme"` // "auto" (follow the app) or a theme id from the UI catalogue
+	FontSize      int    `json:"font_size"`
+	FontFamily    string `json:"font_family"`
+	CursorStyle   string `json:"cursor_style"` // block | bar | underline
+	CursorBlink   bool   `json:"cursor_blink"`
+	// CopyOnSelect copies the selection to the clipboard as soon as it is made, like Termius.
+	CopyOnSelect bool `json:"copy_on_select"`
+	// RightClick is what a right click in a terminal does: paste | menu | none.
+	RightClick      string `json:"right_click"`
 	Scrollback      int    `json:"scrollback"`
 	AutoLockMinutes int    `json:"auto_lock_minutes"`
 	SyncURL         string `json:"sync_url"`
 
 	// General
-	Zoom         int  `json:"zoom"`          // interface scale in percent (80..160)
-	ConfirmClose bool `json:"confirm_close"` // ask before closing a terminal or SFTP tab
-	ReduceMotion bool `json:"reduce_motion"` // turn animations off
+	Zoom            int  `json:"zoom"`              // interface scale in percent (80..160)
+	ConfirmTabClose bool `json:"confirm_tab_close"` // ask before closing a terminal tab or pane (off by default)
+	Highlight       bool `json:"highlight"`         // colour URLs, IPs, paths and error/warning/success words in terminal output
+	ReduceMotion    bool `json:"reduce_motion"`     // turn animations off
 
 	// Account: a local profile today, the hook for sign-in and team features later
 	AccountName  string `json:"account_name"`
@@ -45,8 +50,8 @@ type Settings struct {
 
 func defaultSettings() Settings {
 	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace",
-		CursorStyle: "block", CursorBlink: true, Scrollback: 10000, AutoLockMinutes: 15,
-		Zoom: 100, ConfirmClose: true, Shortcuts: map[string]string{}}
+		CursorStyle: "block", CursorBlink: true, CopyOnSelect: true, RightClick: "paste", Scrollback: 10000, AutoLockMinutes: 15,
+		Zoom: 100, Highlight: true, Shortcuts: map[string]string{}}
 }
 
 // Core wires the packages together; the services below share one instance.
@@ -62,10 +67,13 @@ type Core struct {
 	// OpenLocalShell, OpenSerial and ListSerial back the Terminal and Serial features; nil disables them.
 	OpenLocalShell ShellOpener
 	OpenSerial     SerialOpener
+	OpenTelnet     TelnetOpener
 	ListSerial     SerialLister
-	emit           Emitter
-	setMu          sync.Mutex
-	settings       Settings
+	// Activity is the log shown on the Logs page; nil keeps no history.
+	Activity ActivityLog
+	emit     Emitter
+	setMu    sync.Mutex
+	settings Settings
 
 	prompts *prompter
 }
@@ -81,7 +89,10 @@ type Options struct {
 	// Local terminal and serial adapters (optional).
 	OpenLocalShell ShellOpener
 	OpenSerial     SerialOpener
+	OpenTelnet     TelnetOpener
 	ListSerial     SerialLister
+	// Activity stores the activity log (optional).
+	Activity ActivityLog
 }
 
 // NewCore wires the use cases around the given ports. dir is the root of user data.
@@ -91,7 +102,7 @@ func NewCore(dir string, opt Options) (*Core, error) {
 	}
 	c := &Core{Dir: dir, DataDir: filepath.Join(dir, "data"), SyncDir: filepath.Join(dir, "sync"), emit: opt.Emit,
 		Store: opt.Store, Vault: opt.Vault, prompts: newPrompter(), OpenRemoteFS: opt.OpenRemoteFS,
-		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, ListSerial: opt.ListSerial}
+		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, OpenTelnet: opt.OpenTelnet, ListSerial: opt.ListSerial, Activity: opt.Activity}
 	if c.emit == nil {
 		c.emit = func(string, ...any) {}
 	}

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rsa"
 	"encoding/pem"
@@ -25,16 +26,35 @@ func (s *VaultService) Status() vault.Status { return s.c.Vault.Status() }
 
 func (s *VaultService) Create(pw string) error { return s.c.Vault.Create(pw) }
 
-func (s *VaultService) Unlock(pw string) error { return s.c.Vault.Unlock(pw) }
+func (s *VaultService) Unlock(pw string) error {
+	err := s.c.Vault.Unlock(pw)
+	if err != nil {
+		s.c.record(domain.ActVault, "", "", "Unlock failed", false)
+	} else {
+		s.c.record(domain.ActVault, "", "", "Vault unlocked", true)
+	}
+	return err
+}
 
 // UnlockBiometric unlocks with the DEK stored in the OS keychain.
-func (s *VaultService) UnlockBiometric() error { return s.c.Vault.UnlockKeychain() }
+func (s *VaultService) UnlockBiometric() error {
+	err := s.c.Vault.UnlockKeychain()
+	if err != nil {
+		s.c.record(domain.ActVault, "", "", "Unlock with the Keychain failed", false)
+	} else {
+		s.c.record(domain.ActVault, "", "", "Vault unlocked with the Keychain", true)
+	}
+	return err
+}
 
 func (s *VaultService) EnableBiometric() error { return s.c.Vault.EnableKeychain() }
 
 func (s *VaultService) DisableBiometric() error { return s.c.Vault.DisableKeychain() }
 
-func (s *VaultService) Lock() { s.c.Vault.Lock() }
+func (s *VaultService) Lock() {
+	s.c.Vault.Lock()
+	s.c.record(domain.ActVault, "", "", "Vault locked", true)
+}
 
 // ResetConfirmation is the text the user must type to reset the vault.
 const ResetConfirmation = "RESET"
@@ -101,11 +121,23 @@ func (s *VaultService) AddKey(name, path, passphrase string) (domain.Identity, e
 }
 
 // AddKeyPEM imports a pasted private key.
+// AddKeyPair imports a private key together with its public key and OpenSSH user certificate, the way the
+// New Key form offers them. The last two may be empty; when given they must belong to the private key.
+func (s *VaultService) AddKeyPair(name, pemText, passphrase, publicKey, certificate string) (domain.Identity, error) {
+	return s.c.importKeyPair(name, []byte(pemText), []byte(passphrase), publicKey, certificate)
+}
+
 func (s *VaultService) AddKeyPEM(name, pemText, passphrase string) (domain.Identity, error) {
 	return s.c.importKey(name, []byte(pemText), []byte(passphrase))
 }
 
 func (c *Core) importKey(name string, pemBytes, passphrase []byte) (domain.Identity, error) {
+	return c.importKeyPair(name, pemBytes, passphrase, "", "")
+}
+
+// importKeyPair stores a private key and, when given, checks that the public key and the certificate
+// belong to it. Both are optional: the public key is always worked out from the private one.
+func (c *Core) importKeyPair(name string, pemBytes, passphrase []byte, publicKey, certificate string) (domain.Identity, error) {
 	if !c.Vault.Status().Unlocked {
 		return domain.Identity{}, errNotUnlocked
 	}
@@ -113,6 +145,10 @@ func (c *Core) importKey(name string, pemBytes, passphrase []byte) (domain.Ident
 		return domain.Identity{}, errors.New("identity name is required")
 	}
 	signer, err := vault.ParsePrivateKey(pemBytes, passphrase)
+	if err != nil {
+		return domain.Identity{}, err
+	}
+	certLine, err := checkPublicAndCertificate(signer, publicKey, certificate)
 	if err != nil {
 		return domain.Identity{}, err
 	}
@@ -132,7 +168,7 @@ func (c *Core) importKey(name string, pemBytes, passphrase []byte) (domain.Ident
 	if err != nil {
 		return domain.Identity{}, err
 	}
-	id, err := c.Store.SaveIdentity(domain.Identity{Name: name, AuthType: domain.AuthKey, SecretRef: ref, PublicKey: vault.PublicLine(signer)})
+	id, err := c.Store.SaveIdentity(domain.Identity{Name: name, AuthType: domain.AuthKey, SecretRef: ref, PublicKey: vault.PublicLine(signer), Certificate: certLine})
 	if err != nil {
 		_ = c.Vault.DeleteSecret(ref)
 		return id, err
@@ -222,4 +258,44 @@ func (s *VaultService) DeleteIdentity(id string) error {
 		_ = s.c.Vault.DeleteSecret(x.SecretRef)
 	}
 	return nil
+}
+
+// checkPublicAndCertificate verifies the optional public key and certificate against the private key and
+// returns the certificate as one normalised line (or "").
+func checkPublicAndCertificate(signer ssh.Signer, publicKey, certificate string) (string, error) {
+	own := signer.PublicKey().Marshal()
+	if pk := strings.TrimSpace(publicKey); pk != "" {
+		parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(pk))
+		if err != nil {
+			return "", errors.New("the public key is not in OpenSSH format (ssh-ed25519 AAAA…)")
+		}
+		if cert, ok := parsed.(*ssh.Certificate); ok {
+			parsed = cert.Key // a certificate pasted into the public key box still names the key
+		}
+		if !bytes.Equal(parsed.Marshal(), own) {
+			return "", errors.New("the public key does not belong to this private key")
+		}
+	}
+	cl := strings.TrimSpace(certificate)
+	if cl == "" {
+		return "", nil
+	}
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(cl))
+	if err != nil {
+		return "", errors.New("the certificate is not in OpenSSH format (ssh-ed25519-cert-v01@openssh.com AAAA…)")
+	}
+	cert, ok := parsed.(*ssh.Certificate)
+	if !ok {
+		return "", errors.New("that is a plain public key, not a certificate")
+	}
+	if cert.CertType != ssh.UserCert {
+		return "", errors.New("this is a host certificate: a login needs a user certificate")
+	}
+	if !bytes.Equal(cert.Key.Marshal(), own) {
+		return "", errors.New("the certificate was issued for a different key")
+	}
+	if cert.ValidBefore != ssh.CertTimeInfinity && time.Now().After(time.Unix(int64(cert.ValidBefore), 0)) {
+		return "", errors.New("the certificate has expired")
+	}
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert))), nil
 }

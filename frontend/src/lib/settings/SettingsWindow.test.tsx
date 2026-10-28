@@ -267,7 +267,7 @@ describe('SettingsWindow: General', () => {
     setup()
     expect(screen.getByRole('tab', {name: 'General', selected: true})).toBeInTheDocument()
     expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
-    expect(screen.getByRole('switch', {name: 'Confirm before closing a tab'})).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', {name: 'Confirm before closing a tab'})).toHaveAttribute('aria-checked', 'false') // closing a tab does not ask unless you want it to
     expect(screen.getByRole('switch', {name: 'Reduce motion'})).toHaveAttribute('aria-checked', 'false')
   })
 
@@ -293,7 +293,7 @@ describe('SettingsWindow: General', () => {
     await userEvent.click(screen.getByRole('switch', {name: 'Reduce motion'}))
     await waitFor(() => expect(be.state.settings.reduce_motion).toBe(true))
     await userEvent.click(screen.getByRole('switch', {name: 'Confirm before closing a tab'}))
-    await waitFor(() => expect(be.state.settings.confirm_close).toBe(false))
+    await waitFor(() => expect(be.state.settings.confirm_tab_close).toBe(true))
   })
 })
 
@@ -425,5 +425,16 @@ describe('Switch', () => {
     expect(screen.getByRole('switch', {name: 'Demo'})).toHaveAttribute('aria-checked', 'true')
     rerender(<Switch label="Demo" checked disabled onChange={onChange} />)
     expect(screen.getByRole('switch', {name: 'Demo'})).toBeDisabled()
+  })
+})
+
+describe('SettingsWindow: Highlight output', () => {
+  it('is on by default in the Terminal tab and can be switched off', async () => {
+    const {be} = setup()
+    await tab('Terminal')
+    const sw = screen.getByRole('switch', {name: 'Highlight output'})
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(sw)
+    await waitFor(() => expect(be.state.settings.highlight).toBe(false))
   })
 })

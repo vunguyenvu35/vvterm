@@ -19,6 +19,8 @@ type Services struct {
 	Sftp      *SftpService
 	Local     *LocalService
 	Serial    *SerialService
+	Log       *LogService
+	KnownHost *KnownHostsService
 	Settings  *SettingsService
 }
 
@@ -38,6 +40,8 @@ func New(core *Core) *Services {
 		Sftp:      NewSftpService(core),
 		Local:     NewLocalService(),
 		Serial:    NewSerialService(core),
+		Log:       NewLogService(core),
+		KnownHost: NewKnownHostsService(core),
 	}
 }
 
@@ -72,9 +76,12 @@ func (s *SettingsService) Save(in Settings) (Settings, error) {
 	s.c.settings.FontSize = in.FontSize
 	s.c.settings.CursorStyle = in.CursorStyle
 	s.c.settings.CursorBlink = in.CursorBlink
+	s.c.settings.CopyOnSelect = in.CopyOnSelect
+	s.c.settings.RightClick = in.RightClick
 	s.c.settings.Scrollback = in.Scrollback
 	s.c.settings.Zoom = in.Zoom
-	s.c.settings.ConfirmClose = in.ConfirmClose
+	s.c.settings.ConfirmTabClose = in.ConfirmTabClose
+	s.c.settings.Highlight = in.Highlight
 	s.c.settings.ReduceMotion = in.ReduceMotion
 	s.c.settings.AccountName = strings.TrimSpace(in.AccountName)
 	s.c.settings.AccountEmail = strings.TrimSpace(in.AccountEmail)
@@ -88,6 +95,11 @@ func (s *SettingsService) Save(in Settings) (Settings, error) {
 var themeID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 func validateSettings(in Settings) error {
+	switch in.RightClick {
+	case "paste", "menu", "none":
+	default:
+		return errors.New("right click must be paste, menu or none")
+	}
 	switch in.Theme {
 	case "auto", "light", "dark":
 	default:

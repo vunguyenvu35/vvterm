@@ -145,7 +145,7 @@ func testCore(t *testing.T, dir string, emit Emitter) (*Core, error) {
 	}
 	v.SetKDF(vault.KDFParams{Memory: 64, Time: 1, Threads: 1})
 	return NewCore(dir, Options{Store: st, Vault: v, Emit: emit,
-		OpenRemoteFS: func(c *sshx.Client) (RemoteFS, error) { return sftpx.Open(c.Client) }})
+		OpenRemoteFS: func(c *sshx.Client) (RemoteFS, error) { return sftpx.Open(c.Client) }, Activity: db.ActivityLog()})
 }
 
 func newHarness(t *testing.T) *harness {

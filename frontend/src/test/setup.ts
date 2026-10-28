@@ -34,3 +34,22 @@ if (!(globalThis as any).PointerEvent) {
     constructor(type: string, init: any = {}) { super(type, init); this.pointerId = init.pointerId ?? 1 }
   }
 }
+
+// The test runtime may not give jsdom a usable localStorage: provide a small in-memory one.
+function memoryStorage(): Storage {
+  const data = new Map<string, string>()
+  return {
+    get length() { return data.size },
+    clear: () => data.clear(),
+    getItem: k => (data.has(k) ? data.get(k)! : null),
+    key: i => Array.from(data.keys())[i] ?? null,
+    removeItem: k => { data.delete(k) },
+    setItem: (k, v) => { data.set(k, String(v)) },
+  }
+}
+try {
+  if (typeof window.localStorage?.getItem !== 'function') throw new Error('no storage')
+} catch {
+  Object.defineProperty(window, 'localStorage', {value: memoryStorage(), configurable: true})
+  Object.defineProperty(globalThis, 'localStorage', {value: window.localStorage, configurable: true})
+}

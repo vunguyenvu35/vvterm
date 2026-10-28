@@ -318,3 +318,122 @@ func TestUpgradeFromSchemaV2AddsServerTypeAndForwardLabel(t *testing.T) {
 		t.Fatalf("not persisted: %v %+v %+v", err, again.Hosts, again.Forwards)
 	}
 }
+
+func TestHostTelnetAndThemeRoundTrip(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now()
+	data := domain.Data{Hosts: []domain.Host{
+		{Meta: domain.Meta{ID: "a", UpdatedAt: now}, Label: "switch", Hostname: "10.0.0.2", Port: 22, CreatedAt: now, TelnetEnabled: true, TelnetPort: 2323, TerminalTheme: "dracula", OS: "linux"},
+		{Meta: domain.Meta{ID: "b", UpdatedAt: now}, Label: "plain", Hostname: "10.0.0.3", Port: 22, CreatedAt: now},
+	}}
+	if err := d.StorePersister().Save(data); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := d.StorePersister().Load()
+	if err != nil || len(got.Hosts) != 2 {
+		t.Fatalf("%v %+v", err, got.Hosts)
+	}
+	a, b := got.Hosts[0], got.Hosts[1]
+	if !a.TelnetEnabled || a.TelnetPort != 2323 || a.TerminalTheme != "dracula" || a.OS != "linux" {
+		t.Fatalf("%+v", a)
+	}
+	if b.TelnetEnabled || b.TelnetPort != 0 || b.TerminalTheme != "" {
+		t.Fatalf("%+v", b)
+	}
+}
+
+func TestIdentityCertificateRoundTrips(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "c.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now()
+	data := domain.Data{Identities: []domain.Identity{
+		{Meta: domain.Meta{ID: "i1", UpdatedAt: now}, Name: "with", AuthType: domain.AuthKey, Certificate: "ssh-ed25519-cert-v01@openssh.com AAAA"},
+		{Meta: domain.Meta{ID: "i2", UpdatedAt: now}, Name: "without", AuthType: domain.AuthPassword},
+	}}
+	if err := d.StorePersister().Save(data); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := d.StorePersister().Load()
+	if err != nil || len(got.Identities) != 2 || got.Identities[0].Certificate == "" || got.Identities[1].Certificate != "" {
+		t.Fatalf("%v %+v", err, got.Identities)
+	}
+}
+
+// Regression: a database that an intermediate build had already taken to "v3" had only some of the later
+// additions, and the app refused to open it ("no such column: telnet_enabled"). The newer steps are
+// "add what is missing", so such a database is completed instead.
+func TestADatabaseThatStoppedHalfWayIsCompletedOnOpen(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "half.db")
+	raw, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migrations {
+		if _, err := raw.Exec(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// what the first v3 contained: the server type and the rule name, nothing else
+	if _, err := raw.Exec(`ALTER TABLE hosts ADD COLUMN os TEXT NOT NULL DEFAULT ''; ALTER TABLE port_forwards ADD COLUMN label TEXT NOT NULL DEFAULT '';`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`INSERT INTO hosts(id,label,hostname,port,os,created_at,updated_at) VALUES('h1','kept','10.0.0.1',22,'ubuntu','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 3`); err != nil {
+		t.Fatal(err)
+	}
+	raw.Close()
+
+	d, err := Open(p)
+	if err != nil {
+		t.Fatalf("must open: %v", err)
+	}
+	defer d.Close()
+	var v int
+	_ = d.db.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != schemaVersion {
+		t.Fatalf("user_version=%d want %d", v, schemaVersion)
+	}
+	data, found, err := d.StorePersister().Load()
+	if err != nil || !found || len(data.Hosts) != 1 || data.Hosts[0].Label != "kept" || data.Hosts[0].OS != "ubuntu" {
+		t.Fatalf("data lost: %v %v %+v", err, found, data.Hosts)
+	}
+	data.Hosts[0].TelnetEnabled, data.Hosts[0].TelnetPort, data.Hosts[0].TerminalTheme = true, 23, "nord"
+	data.Identities = []domain.Identity{{Meta: domain.Meta{ID: "i", UpdatedAt: time.Now()}, Name: "n", AuthType: domain.AuthKey, Certificate: "c"}}
+	if err := d.StorePersister().Save(data); err != nil {
+		t.Fatalf("the new columns must be usable: %v", err)
+	}
+	if err := d.ActivityLog().Add(domain.ActivityEntry{Kind: domain.ActConnect, Message: "x", OK: true}); err != nil {
+		t.Fatalf("the activity table must exist: %v", err)
+	}
+}
+
+func TestEveryAdditionIsPresentOnAFreshDatabaseAndTheStepCanRunTwice(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "fresh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for _, a := range additions {
+		var n int
+		if err := d.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, a.table, a.column).Scan(&n); err != nil || n != 1 {
+			t.Errorf("%s.%s: %d %v", a.table, a.column, n, err)
+		}
+	}
+	tx, err := d.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err := ensureAdditions(tx); err != nil {
+		t.Fatalf("running it again must change nothing: %v", err)
+	}
+}

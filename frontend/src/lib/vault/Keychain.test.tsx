@@ -89,11 +89,12 @@ describe('New key panel', () => {
     const save = screen.getByRole('button', {name: 'Save key'})
     expect(save).toBeDisabled()
     await userEvent.type(screen.getByLabelText('Label'), 'k')
-    await userEvent.type(screen.getByLabelText('Private key'), '-----BEGIN-----')
+    expect(screen.queryByLabelText('Passphrase')).toBeNull() // only an encrypted key needs one
+    fireEvent.change(screen.getByLabelText('Private key'), {target: {value: '-----BEGIN ENCRYPTED PRIVATE KEY-----'}})
     await userEvent.type(screen.getByLabelText('Passphrase'), 'pp')
     await userEvent.click(save)
-    await waitFor(() => expect(calls(be, 'vault.addKeyPEM')).toHaveLength(1))
-    expect(calls(be, 'vault.addKeyPEM')[0].slice(1)).toEqual(['k', '-----BEGIN-----', 'pp'])
+    await waitFor(() => expect(calls(be, 'vault.addKeyPair')).toHaveLength(1))
+    expect(calls(be, 'vault.addKeyPair')[0].slice(1)).toEqual(['k', '-----BEGIN ENCRYPTED PRIVATE KEY-----', 'pp', '', ''])
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByTestId('draft-card')).toBeNull()
   })
@@ -140,12 +141,12 @@ describe('New key panel', () => {
 
   it('shows the error from the vault and keeps the panel open', async () => {
     const be = setup()
-    be.vault.addKeyPEM = async () => { throw 'wrong passphrase' }
+    be.vault.addKeyPair = async () => { throw 'the public key does not belong to this private key' }
     await userEvent.click(screen.getByRole('button', {name: 'New key'}))
     await userEvent.type(screen.getByLabelText('Label'), 'k')
     await userEvent.type(screen.getByLabelText('Private key'), PEM)
     await userEvent.click(screen.getByRole('button', {name: 'Save key'}))
-    expect(await screen.findByRole('alert')).toHaveTextContent('wrong passphrase')
+    expect(await screen.findByRole('alert')).toHaveTextContent('does not belong to this private key')
     expect(screen.getByRole('dialog', {name: 'New Key'})).toBeInTheDocument()
   })
 
@@ -174,5 +175,51 @@ describe('New key panel', () => {
     await userEvent.type(screen.getByLabelText('Label'), 'agent-1')
     await userEvent.click(screen.getByRole('button', {name: 'Add identity'}))
     await waitFor(() => expect(calls(be, 'vault.addAgent')).toHaveLength(1))
+  })
+})
+
+describe('New Key panel: the design', () => {
+  const open = async () => { setup(); await userEvent.click(screen.getByRole('button', {name: 'New key'})) }
+
+  it('has Label, Private key, Public key and Certificate in that order, then the drop area and the import button', async () => {
+    await open()
+    const order = [screen.getByLabelText('Label'), screen.getByLabelText('Private key'), screen.getByLabelText('Public key'), screen.getByLabelText('Certificate'),
+      screen.getByTestId('key-drop'), screen.getByRole('button', {name: 'Import from key file'})]
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING, 'element ' + i).toBeTruthy()
+    }
+    expect(screen.getByText('Private key *', {selector: 'label'})).toBeInTheDocument() // required, marked
+    expect(screen.getByText('Public key', {selector: 'label'})).toBeInTheDocument()
+    expect(screen.getByTestId('key-drop').querySelector('svg')).not.toBeNull() // the icon
+  })
+
+  it('a field name floats onto its border once the field has something in it', async () => {
+    await open()
+    const field = screen.getByLabelText('Public key').closest('.float-field')!
+    expect(field).not.toHaveClass('filled')
+    await userEvent.type(screen.getByLabelText('Public key'), 'ssh-ed25519 AAAA')
+    expect(field).toHaveClass('filled')
+  })
+
+  it('sends the public key and the certificate with the private key', async () => {
+    const be = setup()
+    await userEvent.click(screen.getByRole('button', {name: 'New key'}))
+    await userEvent.type(screen.getByLabelText('Label'), 'ca-signed')
+    await userEvent.type(screen.getByLabelText('Private key'), PEM)
+    await userEvent.type(screen.getByLabelText('Public key'), 'ssh-ed25519 AAAApublic')
+    await userEvent.type(screen.getByLabelText('Certificate'), 'ssh-ed25519-cert-v01@openssh.com AAAAcert')
+    await userEvent.click(screen.getByRole('button', {name: 'Save key'}))
+    await waitFor(() => expect(calls(be, 'vault.addKeyPair')).toHaveLength(1))
+    expect(calls(be, 'vault.addKeyPair')[0].slice(1)).toEqual(['ca-signed', PEM, '', 'ssh-ed25519 AAAApublic', 'ssh-ed25519-cert-v01@openssh.com AAAAcert'])
+    expect((await screen.findAllByText('ca-signed', {selector: '.label'})).length).toBeGreaterThan(0)
+  })
+
+  it('asks for a passphrase when the key is encrypted in the OpenSSH way too', async () => {
+    await open()
+    const body = btoa('openssh-key-v1\0\0\0\0\naes256-ctr\0\0\0\x06bcrypt')
+    fireEvent.change(screen.getByLabelText('Private key'), {target: {value: '-----BEGIN OPENSSH PRIVATE KEY-----\n' + body + '\n-----END OPENSSH PRIVATE KEY-----'}})
+    expect(screen.getByLabelText('Passphrase')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Private key'), {target: {value: PEM}})
+    expect(screen.queryByLabelText('Passphrase')).toBeNull()
   })
 })

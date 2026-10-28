@@ -148,17 +148,11 @@ describe('draft card', () => {
   })
 })
 
-describe('HostList: SFTP action', () => {
-  it('shows an SFTP button per host that opens the file browser for that host', async () => {
-    const onSftp = vi.fn()
-    setup({onSftp})
-    await userEvent.click(screen.getByRole('button', {name: 'SFTP db-1'}))
-    expect(onSftp).toHaveBeenCalledWith(expect.objectContaining({id: 'b'}))
-  })
-
-  it('hides the button when the action is not provided', () => {
+describe('HostList: no SFTP button on a card', () => {
+  it('SFTP lives in its own tab next to Vaults, so a card has no SFTP button, not even on hover', () => {
     setup()
-    expect(screen.queryByRole('button', {name: /^SFTP /})).toBeNull()
+    expect(screen.queryByRole('button', {name: /SFTP/})).toBeNull()
+    expect(document.querySelector('.sftp-chip')).toBeNull()
   })
 })
 
@@ -177,5 +171,78 @@ describe('HostList: server type icon', () => {
     const plain = card('mystery').querySelector('.tile') as HTMLElement
     expect(plain).toHaveClass('env-dev')
     expect(plain).not.toHaveAttribute('data-os')
+  })
+})
+
+describe('HostList: Telnet action', () => {
+  it('is offered only for hosts that have Telnet on, and opens that host with Telnet', async () => {
+    const onTelnet = vi.fn()
+    setup({onTelnet, hosts: [host({id: 't', label: 'switch', telnet_enabled: true, telnet_port: 2323} as never), host({id: 'p', label: 'plain'})]})
+    expect(screen.queryByRole('button', {name: 'Telnet plain'})).toBeNull()
+    const btn = screen.getByRole('button', {name: 'Telnet switch'})
+    expect(btn).toHaveAttribute('title', expect.stringContaining('2323'))
+    expect(btn).toHaveAttribute('title', expect.stringContaining('unencrypted'))
+    await userEvent.click(btn)
+    expect(onTelnet).toHaveBeenCalledWith(expect.objectContaining({id: 't'}))
+  })
+
+  it('is not shown without a handler', () => {
+    setup({hosts: [host({id: 't', label: 'switch', telnet_enabled: true} as never)]})
+    expect(screen.queryByRole('button', {name: 'Telnet switch'})).toBeNull()
+  })
+})
+
+describe('HostList: Grid / List view', () => {
+  beforeEach(() => { try { localStorage.removeItem('vvterm.hostsView') } catch { /* ignore */ } })
+  const hostsEl = () => screen.getByRole('list', {name: 'Hosts'})
+
+  it('starts as a grid; the View menu has a check on the current view', async () => {
+    setup()
+    expect(hostsEl()).toHaveAttribute('data-view', 'grid')
+    expect(hostsEl()).not.toHaveClass('as-list')
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    const menu = screen.getByRole('menu', {name: 'View'})
+    expect(within(menu).getByRole('menuitemradio', {name: /Grid/})).toHaveAttribute('aria-checked', 'true')
+    expect(within(menu).getByRole('menuitemradio', {name: /List/})).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('List shows the same hosts as rows, closes the menu, and is remembered', async () => {
+    const {unmount} = (() => { setup(); return {unmount: () => {}} })()
+    void unmount
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(hostsEl()).toHaveAttribute('data-view', 'list')
+    expect(hostsEl()).toHaveClass('as-list')
+    expect(labels().sort()).toEqual(['box', 'db-1'])
+    expect(screen.getByRole('button', {name: 'View'})).toHaveAttribute('title', 'List view')
+    expect(localStorage.getItem('vvterm.hostsView')).toBe('list')
+  })
+
+  it('opens in the remembered view', () => {
+    localStorage.setItem('vvterm.hostsView', 'list')
+    setup()
+    expect(hostsEl()).toHaveAttribute('data-view', 'list')
+  })
+
+  it('Esc and a click elsewhere close the menu', async () => {
+    setup()
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('works when the browser storage is unavailable', async () => {
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied') })
+    setup()
+    expect(hostsEl()).toHaveAttribute('data-view', 'grid')
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(hostsEl()).toHaveAttribute('data-view', 'list') // it just is not remembered
+    get.mockRestore(); set.mockRestore()
   })
 })

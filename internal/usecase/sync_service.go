@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"vvterm/internal/domain"
 	"vvterm/internal/syncgit"
 )
 
@@ -85,8 +86,10 @@ func (s *SyncService) end(err error) {
 	s.status.Syncing = false
 	if err != nil {
 		s.status.LastError = err.Error()
+		s.c.record(domain.ActSync, "", "", "Sync failed: "+err.Error(), false)
 		return
 	}
+	s.c.record(domain.ActSync, "", "", "Synced with the repository", true)
 	s.status.LastError = ""
 	s.status.LastSync = time.Now().UTC()
 }

@@ -72,7 +72,7 @@ export function KeychainPage({identities, draft, onNew, onChanged}: Props) {
             <span className="tile key-tile">{icon(i)}</span>
             <div className="meta">
               <div className="label">{i.name}</div>
-              <div className="addr">Type {keyType(i)}{i.username ? ` · ${i.username}` : ''}</div>
+              <div className="addr">Type {keyType(i)}{i.certificate ? ' · certificate' : ''}{i.username ? ` · ${i.username}` : ''}</div>
             </div>
             <div className="actions">
               {i.public_key && <button className="icon ghost" aria-label={`Copy public key of ${i.name}`} title="Copy public key" onClick={() => copy(i.public_key!)}><IconCopy size={14} /></button>}

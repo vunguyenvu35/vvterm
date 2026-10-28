@@ -70,3 +70,34 @@ func TestNormalizeForwardLabel(t *testing.T) {
 		t.Fatalf("80 characters are fine, even when each is two bytes: %v", err)
 	}
 }
+
+func TestNormalizeHostTelnetAndTheme(t *testing.T) {
+	h := Host{Hostname: "x", TelnetEnabled: true}
+	if err := NormalizeHost(&h); err != nil || h.TelnetPort != 23 {
+		t.Fatalf("Telnet defaults to port 23: %+v %v", h, err)
+	}
+	h = Host{Hostname: "x", TelnetEnabled: true, TelnetPort: 2323}
+	if err := NormalizeHost(&h); err != nil || h.TelnetPort != 2323 {
+		t.Fatalf("%+v %v", h, err)
+	}
+	h = Host{Hostname: "x", TelnetPort: 2323}
+	if err := NormalizeHost(&h); err != nil || h.TelnetPort != 0 {
+		t.Fatalf("a port without Telnet means nothing: %+v %v", h, err)
+	}
+	for _, bad := range []Host{
+		{Hostname: "x", TelnetEnabled: true, TelnetPort: 70000},
+		{Hostname: "x", TelnetEnabled: true, TelnetPort: -1},
+		{Hostname: "x", TerminalTheme: "has space"},
+		{Hostname: "x", TerminalTheme: "../etc"},
+		{Hostname: "x", TerminalTheme: strings.Repeat("a", 41)},
+	} {
+		b := bad
+		if err := NormalizeHost(&b); err == nil {
+			t.Errorf("%+v must be rejected", bad)
+		}
+	}
+	h = Host{Hostname: "x", TerminalTheme: "tokyo-night"}
+	if err := NormalizeHost(&h); err != nil {
+		t.Fatal(err)
+	}
+}

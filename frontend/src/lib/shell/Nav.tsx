@@ -1,8 +1,8 @@
 import type {ReactNode} from 'react'
 import {Brand} from '../ui/Brand'
-import {IconBraces, IconData, IconForward, IconGear, IconKey, IconLock, IconServer} from '../ui/Icons'
+import {IconBraces, IconClock, IconData, IconFingerprint, IconForward, IconGear, IconKey, IconLock, IconServer} from '../ui/Icons'
 
-export type Page = 'hosts' | 'keychain' | 'forwards' | 'snippets'
+export type Page = 'hosts' | 'keychain' | 'forwards' | 'snippets' | 'knownhosts' | 'logs'
 
 interface Props {
   page: Page
@@ -32,6 +32,8 @@ export function Nav(p: Props) {
         <Item icon={<IconKey />} label="Keychain" active={p.page === 'keychain'} onClick={() => p.onPage('keychain')} />
         <Item icon={<IconForward />} label="Port Forwarding" active={p.page === 'forwards'} onClick={() => p.onPage('forwards')} />
         <Item icon={<IconBraces />} label="Snippets" active={p.page === 'snippets'} onClick={() => p.onPage('snippets')} />
+        <Item icon={<IconFingerprint />} label="Known Hosts" active={p.page === 'knownhosts'} onClick={() => p.onPage('knownhosts')} />
+        <Item icon={<IconClock />} label="Logs" active={p.page === 'logs'} onClick={() => p.onPage('logs')} />
       </div>
       <div className="nav-group bottom">
         <Item icon={<IconData />} label="Import / Export" onClick={p.onData} />

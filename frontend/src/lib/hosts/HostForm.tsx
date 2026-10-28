@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from 'react'
 import {Field, SidePanel, Section} from '../ui/Modal'
+import {TERMINAL_THEMES} from '../terminal/themes'
 import {Select} from '../ui/Select'
 import {useBackend} from '../backend'
 import {errMsg, parseTags} from '../util'
@@ -44,6 +45,9 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
     env: host?.env ?? '',
     tags: (host?.tags ?? []).join(', '),
     keepalive_sec: String(host?.keepalive_sec ?? 30),
+    // an empty Telnet port means Telnet is off for this host
+    telnet_port: host?.telnet_enabled ? String(host.telnet_port || 23) : '',
+    terminal_theme: host?.terminal_theme ?? '',
   })
   const [showPw, setShowPw] = useState(false)
   const [err, setErr] = useState('')
@@ -64,9 +68,14 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
     if (!f.hostname.trim()) { setErr('Hostname is required'); return null }
     if (/\s/.test(f.hostname) || /\s/.test(f.username)) { setErr('Hostname and username cannot contain spaces'); return null }
     if (!Number.isInteger(port) || port < 1 || port > 65535) { setErr('Port must be between 1 and 65535'); return null }
+    const telnet = f.telnet_port.trim() === '' ? 0 : Number(f.telnet_port)
+    if (f.telnet_port.trim() !== '' && (!Number.isInteger(telnet) || telnet < 1 || telnet > 65535)) { setErr('Telnet port must be between 1 and 65535'); return null }
     setErr('')
     return {
       ...(existing ? host : {}),
+      telnet_enabled: telnet > 0,
+      telnet_port: telnet,
+      terminal_theme: f.terminal_theme,
       label: f.label.trim(),
       hostname: f.hostname.trim(),
       port,
@@ -163,6 +172,8 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
 
       <Section>
         <div className="inline-field"><span>SSH on</span><input aria-label="Port" className="port" value={f.port} onChange={set('port')} /><span>port</span></div>
+        <div className="inline-field"><span>Telnet on</span><input aria-label="Telnet port" className="port" placeholder="23" value={f.telnet_port} onChange={set('telnet_port')} inputMode="numeric" /><span>port</span></div>
+        {f.telnet_port.trim() !== '' && <div className="muted telnet-warning" role="note">Telnet is not encrypted: everything you type, the password included, crosses the network in clear text. Use it only on a network you trust, for devices that offer nothing else.</div>}
       </Section>
 
       <Section title="Credentials">
@@ -177,6 +188,11 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
             options={[{value: '', label: 'None', hint: 'use the password above or ssh-agent'}, ...identities.map(i => ({value: i.id, label: i.name, hint: i.auth_type === 'key' ? 'SSH key' : i.auth_type === 'password' ? 'saved password' : 'ssh-agent'}))]} />
         </Field>
         {f.password && <div className="muted">The password is stored encrypted in the vault, never in the host list.</div>}
+      </Section>
+
+      <Section title="Terminal theme">
+        <Select label="Terminal theme" value={f.terminal_theme} onChange={v => setF(x => ({...x, terminal_theme: v}))}
+          options={[{value: '', label: 'Use the app setting', hint: 'Settings → Terminal'}, ...TERMINAL_THEMES.map(t => ({value: t.id, label: t.name, hint: t.dark ? 'dark' : 'light'}))]} />
       </Section>
 
       <Section title="Options">

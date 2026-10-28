@@ -24,6 +24,11 @@ export interface Host {
   keepalive_sec: number
   /** server type learned on the first connection (ubuntu, debian, freebsd…); '' until then */
   os?: string
+  /** also reachable with Telnet (unencrypted) on this port */
+  telnet_enabled?: boolean
+  telnet_port?: number
+  /** this host's own terminal colour theme (an id from the catalogue); empty follows Settings */
+  terminal_theme?: string
 }
 
 export interface Identity {
@@ -32,6 +37,8 @@ export interface Identity {
   username?: string
   auth_type: AuthType
   public_key?: string
+  /** an OpenSSH user certificate for the key (public, not a secret) */
+  certificate?: string
 }
 
 export interface PortForward {
@@ -71,11 +78,17 @@ export interface Settings {
   font_family: string
   cursor_style: CursorStyle
   cursor_blink: boolean
+  /** copy the selection to the clipboard as soon as it is made */
+  copy_on_select: boolean
+  /** what a right click in a terminal does */
+  right_click: 'paste' | 'menu' | 'none'
   scrollback: number
   auto_lock_minutes: number
   sync_url: string
   zoom: number // interface scale in percent
-  confirm_close: boolean
+  confirm_tab_close: boolean
+  /** colour URLs, IP addresses, paths and error / warning / success words in terminal output */
+  highlight: boolean
   reduce_motion: boolean
   account_name: string
   account_email: string
@@ -152,6 +165,24 @@ export interface SftpInfo {
   sid: string
   home: string
   host: string
+}
+
+/** A machine whose host key was trusted (a line of known_hosts). */
+export interface KnownHost {
+  host: string
+  key_type: string
+  fingerprint: string
+}
+
+/** One line of the activity log. */
+export interface ActivityEntry {
+  id: number
+  at: string
+  kind: 'connect' | 'disconnect' | 'hostkey' | 'forward' | 'sftp' | 'transfer' | 'vault' | 'sync'
+  host_id?: string
+  host_label?: string
+  message: string
+  ok: boolean
 }
 
 /** What a multi-file transfer did (see usecase.TransferResult). */

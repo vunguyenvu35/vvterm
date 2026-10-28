@@ -82,6 +82,11 @@ type Host struct {
 	CreatedAt    time.Time `json:"created_at"`
 	// OS is the server type learned on the first connection (see ParseOS); it picks the host's icon.
 	OS string `json:"os,omitempty"`
+	// Telnet: the host can also be reached with Telnet on TelnetPort (unencrypted: opt in per host).
+	TelnetEnabled bool `json:"telnet_enabled,omitempty"`
+	TelnetPort    int  `json:"telnet_port,omitempty"`
+	// TerminalTheme is this host's own colour theme (an id from the UI catalogue); empty follows Settings.
+	TerminalTheme string `json:"terminal_theme,omitempty"`
 }
 
 type PortForward struct {
@@ -106,6 +111,9 @@ type Identity struct {
 	AuthType  AuthType `json:"auth_type"`
 	SecretRef string   `json:"secret_ref,omitempty"`
 	PublicKey string   `json:"public_key,omitempty"`
+	// Certificate is an OpenSSH user certificate for the key (public, not a secret): the server trusts the
+	// authority that signed it instead of listing the key.
+	Certificate string `json:"certificate,omitempty"`
 }
 
 // Secret is an encrypted record stored in vault.json.
@@ -151,4 +159,35 @@ type RemoteEntry struct {
 	ModTime time.Time `json:"mod_time"`
 	IsDir   bool      `json:"is_dir"`
 	IsLink  bool      `json:"is_link"`
+}
+
+// ActivityEntry is one line of the activity log: something that happened that the user may want to look up
+// later (a connection, a transfer, a forward, an unlock). It never contains a secret.
+type ActivityEntry struct {
+	ID        int64     `json:"id"`
+	At        time.Time `json:"at"`
+	Kind      string    `json:"kind"`
+	HostID    string    `json:"host_id,omitempty"`
+	HostLabel string    `json:"host_label,omitempty"`
+	Message   string    `json:"message"`
+	OK        bool      `json:"ok"`
+}
+
+// Activity kinds.
+const (
+	ActConnect    = "connect"
+	ActDisconnect = "disconnect"
+	ActHostKey    = "hostkey"
+	ActForward    = "forward"
+	ActSFTP       = "sftp"
+	ActTransfer   = "transfer"
+	ActVault      = "vault"
+	ActSync       = "sync"
+)
+
+// ActivityFilter narrows the log. Empty fields match everything.
+type ActivityFilter struct {
+	Kinds []string `json:"kinds"`
+	Query string   `json:"query"`
+	Limit int      `json:"limit"`
 }

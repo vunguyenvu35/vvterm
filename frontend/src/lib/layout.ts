@@ -31,6 +31,10 @@ export interface Tab {
   /** SFTP tab: the host a host card asked to browse, and a counter that makes asking again for the same host count */
   sftpLabel?: string
   sftpNonce?: number
+  /** what is typed in one pane of this tab is typed in all of them */
+  broadcast?: boolean
+  /** a pane shown alone, filling the tab (the others keep running behind it) */
+  zoomPane?: string
 }
 
 let counter = 0
@@ -52,6 +56,16 @@ export function pinnedSftpTab(): Tab {
   return {...newSftpTab('', 'SFTP'), id: SFTP_TAB_ID, pinned: true}
 }
 
+/** A name no other tab has: "web", then "web (2)", "web (3)"… the lowest number that is free. */
+export function uniqueTitle(tabs: Pick<Tab, 'title'>[], wanted: string): string {
+  const taken = new Set(tabs.map(t => t.title))
+  if (!taken.has(wanted)) return wanted
+  for (let n = 2; ; n++) if (!taken.has(`${wanted} (${n})`)) return `${wanted} (${n})`
+}
+
+/** The longest name a tab can be given. */
+export const MAX_TAB_TITLE = 60
+
 export const isSftp = (t: Tab) => t.kind === 'sftp'
 
 export function leaves(n: Node): Leaf[] {
@@ -72,7 +86,8 @@ export function splitPane(tab: Tab, paneId: string, dir: Dir): Tab {
     return {...n, a: walk(n.a), b: walk(n.b)}
   }
   const root = walk(tab.root)
-  return created ? {...tab, root, activePane: created} : tab
+  // a new pane is meant to be seen: leave the zoomed view
+  return created ? {...tab, root, activePane: created, zoomPane: undefined} : tab
 }
 
 /** Remove a pane; its sibling takes the parent's place. Returns null when the last pane closes. */
@@ -88,7 +103,34 @@ export function closePane(tab: Tab, paneId: string): Tab | null {
   const root = walk(tab.root)
   if (!root) return null
   const ids = leaves(root).map(l => l.id)
-  return {...tab, root, activePane: ids.includes(tab.activePane) ? tab.activePane : ids[0]}
+  return tidy({...tab, root, activePane: ids.includes(tab.activePane) ? tab.activePane : ids[0]})
+}
+
+/** Broadcast and zoom only mean something with two panes or more, and zoom needs its pane to exist. */
+function tidy(tab: Tab): Tab {
+  const ids = leaves(tab.root).map(l => l.id)
+  const out = {...tab}
+  if (ids.length < 2) { delete out.broadcast; delete out.zoomPane }
+  else if (out.zoomPane && !ids.includes(out.zoomPane)) delete out.zoomPane
+  return out
+}
+
+export function toggleBroadcast(tab: Tab): Tab {
+  if (leaves(tab.root).length < 2) return tab
+  return {...tab, broadcast: !tab.broadcast}
+}
+
+/** Show one pane alone, or bring the others back. */
+export function toggleZoom(tab: Tab, paneId: string): Tab {
+  if (leaves(tab.root).length < 2 || !hasPane(tab, paneId)) return tab
+  return tab.zoomPane === paneId ? {...tab, zoomPane: undefined} : {...tab, zoomPane: paneId, activePane: paneId}
+}
+
+/** A new tab on the same host as the focused pane of a terminal tab. */
+export function duplicateOf(tab: Tab, title: string): Tab | null {
+  if (tab.kind === 'sftp') return null
+  const leaf = leaves(tab.root).find(x => x.id === tab.activePane) ?? leaves(tab.root)[0]
+  return {...newTab(leaf.hostId, title)}
 }
 
 export function hasPane(tab: Tab, paneId: string): boolean {

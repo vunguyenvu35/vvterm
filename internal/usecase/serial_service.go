@@ -2,9 +2,12 @@ package usecase
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"vvterm/internal/domain"
 )
 
 // Special host ids understood by SessionService.Open: a shell on this computer, or a serial port.
@@ -39,7 +42,9 @@ func ParseSerialID(id string) (path string, baud int, err error) {
 	return path, baud, nil
 }
 
-func isDeviceID(id string) bool { return id == LocalHostID || strings.HasPrefix(id, serialPrefix) }
+func isDeviceID(id string) bool {
+	return id == LocalHostID || strings.HasPrefix(id, serialPrefix) || strings.HasPrefix(id, telnetPrefix)
+}
 
 // SerialService lists serial ports for the Serial panel.
 type SerialService struct{ c *Core }
@@ -56,4 +61,36 @@ func (s *SerialService) Ports() ([]string, error) {
 		p = []string{}
 	}
 	return p, err
+}
+
+const telnetPrefix = "telnet:"
+
+// TelnetID is the session host id that opens a saved host over Telnet instead of SSH.
+func TelnetID(hostID string) string { return telnetPrefix + hostID }
+
+// telnetCredentials returns the address and what to type at the login prompt: the host's user name (or
+// the identity's) and the identity's password, when it is a password identity. Keys and agents do not
+// exist in Telnet, so those identities give no password.
+func (c *Core) telnetCredentials(h domain.Host) (addr, user, pass string, err error) {
+	if !h.TelnetEnabled {
+		return "", "", "", fmt.Errorf("Telnet is not enabled for %q: edit the host and turn it on", h.Label)
+	}
+	user = h.Username
+	if h.IdentityID != "" {
+		id, ierr := c.Store.GetIdentity(h.IdentityID)
+		if ierr != nil {
+			return "", "", "", fmt.Errorf("identity of %q: %w", h.Label, ierr)
+		}
+		if user == "" {
+			user = id.Username
+		}
+		if id.AuthType == domain.AuthPassword {
+			pw, gerr := c.Vault.GetSecret(id.SecretRef)
+			if gerr != nil {
+				return "", "", "", vaultErr(gerr)
+			}
+			pass = string(pw)
+		}
+	}
+	return net.JoinHostPort(h.Hostname, strconv.Itoa(h.TelnetPort)), user, pass, nil
 }

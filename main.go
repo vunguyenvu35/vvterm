@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
@@ -43,14 +44,15 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
-		OnStartup:        a.Startup,
+		OnStartup:        func(ctx context.Context) { a.Startup(ctx); setDockIcon(appIcon) },
 		OnShutdown:       a.Shutdown,
+		Menu:             a.Menu(),
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 			About:    &mac.AboutInfo{Title: "VVTerm", Message: "SSH client with an encrypted vault.\nVersion " + app.Version, Icon: appIcon},
 		},
 		Bind: []interface{}{
-			a.Host, a.Vault, a.Session, a.Forward, a.Sync, a.ImportExp, a.Settings, a.Snippet, a.Sftp, a.Local, a.Serial, a.System,
+			a.Host, a.Vault, a.Session, a.Forward, a.Sync, a.ImportExp, a.Settings, a.Snippet, a.Sftp, a.Local, a.Serial, a.Log, a.KnownHost, a.System,
 		},
 	})
 	if err != nil {
@@ -73,7 +75,7 @@ func runSettings(dir string) {
 		MinHeight:        480,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
-		OnStartup:        w.Startup,
+		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
 		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{w.Bridge, w.System},
 	})

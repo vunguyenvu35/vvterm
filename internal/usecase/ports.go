@@ -107,5 +107,17 @@ type ShellOpener func(cols, rows int, onData func([]byte)) (Shell, error)
 // SerialOpener opens a serial device at a baud rate.
 type SerialOpener func(path string, baud int, onData func([]byte)) (Shell, error)
 
+// TelnetOpener connects to host:port over Telnet and types the user name and password at the login prompt.
+type TelnetOpener func(addr string, cols, rows int, user, pass string, onData func([]byte)) (Shell, error)
+
 // SerialLister lists the serial ports this computer has.
 type SerialLister func() ([]string, error)
+
+// ActivityLog stores what happened (connections, transfers, forwards, unlocks) for the Logs page.
+// Implemented by internal/sqlitedb.
+type ActivityLog interface {
+	Add(domain.ActivityEntry) error
+	// List returns the newest lines first.
+	List(domain.ActivityFilter) ([]domain.ActivityEntry, error)
+	Clear() error
+}

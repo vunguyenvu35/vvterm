@@ -239,3 +239,23 @@ describe('New Port Forwarding panel', () => {
     expect(screen.getByRole('dialog', {name: 'Local Port Forwarding'})).toBeInTheDocument()
   })
 })
+
+describe('Select Host step: groups', () => {
+  it('lists hosts under their group, and hosts of an unknown group with the ungrouped ones', async () => {
+    const be = makeFake({forwards: []})
+    const grouped = host({id: 'g1', label: 'in-group', group_id: 'grp'})
+    const orphan = host({id: 'g2', label: 'orphan', group_id: 'deleted-group'})
+    const free = host({id: 'g3', label: 'free'})
+    render(
+      <Providers be={be}>
+        <ForwardPanel hosts={[grouped, orphan, free]} groups={[{id: 'grp', name: 'Production', sort_order: 0}]} onClose={vi.fn()} onChanged={vi.fn()} onDraft={vi.fn()} />
+      </Providers>,
+    )
+    await userEvent.click(screen.getByRole('button', {name: 'Continue'}))
+    await userEvent.type(screen.getByLabelText('Local port number'), '8080')
+    await userEvent.click(screen.getByRole('button', {name: 'Continue'}))
+    const panel = screen.getByRole('dialog', {name: 'Select Host'})
+    expect(within(panel).getByRole('heading', {name: 'Production'})).toBeInTheDocument()
+    for (const name of ['in-group', 'orphan', 'free']) expect(within(panel).getByRole('button', {name: `Use host ${name}`})).toBeInTheDocument()
+  })
+})

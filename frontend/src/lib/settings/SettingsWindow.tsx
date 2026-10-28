@@ -177,7 +177,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                     <h4>Behaviour</h4>
                     <div className="setting-row">
                       <div><b>Confirm before closing a tab</b><div className="muted">Ask first, because closing a terminal or SFTP tab ends its connection.</div></div>
-                      <Switch label="Confirm before closing a tab" checked={s.confirm_close} onChange={v => update({confirm_close: v})} />
+                      <Switch label="Confirm before closing a tab" checked={s.confirm_tab_close} onChange={v => update({confirm_tab_close: v})} />
                     </div>
                   </section>
                 </>
@@ -250,6 +250,19 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                     <div className="setting-row">
                       <b>Blinking cursor</b>
                       <Switch label="Blinking cursor" checked={s.cursor_blink} onChange={v => update({cursor_blink: v})} />
+                    </div>
+                    <div className="setting-row">
+                      <div><b>Copy on select</b><div className="muted">Selecting text copies it to the clipboard at once.</div></div>
+                      <Switch label="Copy on select" checked={s.copy_on_select} onChange={v => update({copy_on_select: v})} />
+                    </div>
+                    <div className="setting-row">
+                      <div><b>Right click</b><div className="muted">What a right click does inside a terminal. Copy and paste keys are in Shortcuts.</div></div>
+                      <Select label="Right click" className="inline" value={s.right_click} onChange={v => update({right_click: v as Settings['right_click']})}
+                        options={[{value: 'paste', label: 'Paste', hint: 'like Termius'}, {value: 'menu', label: 'Show a menu', hint: 'Copy, Paste, Select all, Clear'}, {value: 'none', label: 'Do nothing'}]} />
+                    </div>
+                    <div className="setting-row">
+                      <div><b>Highlight output</b><div className="muted">Colour URLs, IP addresses, paths, dates and the words error, warning and success. Colours chosen by a program are kept.</div></div>
+                      <Switch label="Highlight output" checked={s.highlight} onChange={v => update({highlight: v})} />
                     </div>
                     <div className="setting-row">
                       <div><b>Scrollback</b><div className="muted">Lines kept per terminal (500 to 100000).</div></div>

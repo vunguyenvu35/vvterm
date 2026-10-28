@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"vvterm/internal/domain"
 )
 
 // Limits that keep one drag from running away with a whole disk or a hostile server's endless listing.
@@ -46,12 +48,13 @@ func newResult() TransferResult { return TransferResult{Skipped: []string{}, Ign
 
 // UploadAll sends files and folders (with everything inside) into remoteDir. Folders merge with ones that
 // already exist; files that exist are skipped unless overwrite is true.
-func (s *SftpService) UploadAll(sid string, locals []string, remoteDir string, overwrite bool) (TransferResult, error) {
-	res := newResult()
+func (s *SftpService) UploadAll(sid string, locals []string, remoteDir string, overwrite bool) (res TransferResult, err error) {
+	res = newResult()
 	x, err := s.get(sid)
 	if err != nil {
 		return res, err
 	}
+	defer func() { s.logTransfer(x, "Uploaded", "upload", res, remoteDir, err) }()
 	if len(locals) == 0 {
 		return res, errors.New("nothing to upload")
 	}
@@ -92,12 +95,13 @@ func (s *SftpService) UploadAll(sid string, locals []string, remoteDir string, o
 
 // DownloadAll saves remote files and folders into localDir. Names come from the server, so each one is
 // checked before it becomes a local path.
-func (s *SftpService) DownloadAll(sid string, remotes []string, localDir string, overwrite bool) (TransferResult, error) {
-	res := newResult()
+func (s *SftpService) DownloadAll(sid string, remotes []string, localDir string, overwrite bool) (res TransferResult, err error) {
+	res = newResult()
 	x, err := s.get(sid)
 	if err != nil {
 		return res, err
 	}
+	defer func() { s.logTransfer(x, "Saved", "download", res, localDir, err) }()
 	if len(remotes) == 0 {
 		return res, errors.New("nothing to download")
 	}
@@ -287,4 +291,17 @@ func planDownload(rfs RemoteFS, remotes []string, localDir string, res *Transfer
 		}
 	}
 	return jobs, nil
+}
+
+// logTransfer writes one line per batch: what moved, or why it stopped.
+func (s *SftpService) logTransfer(x *sftpSession, verb, direction string, res TransferResult, where string, err error) {
+	if err != nil {
+		s.c.record(domain.ActTransfer, x.hostID, x.label, fmt.Sprintf("%s failed: %v", strings.ToUpper(direction[:1])+direction[1:], err), false)
+		return
+	}
+	prep := "to"
+	if direction == "download" {
+		prep = "into"
+	}
+	s.c.record(domain.ActTransfer, x.hostID, x.label, summarizeTransfer(verb, res, prep+" "+where), true)
 }

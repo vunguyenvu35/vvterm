@@ -604,7 +604,7 @@ func TestSyncRequiresUnlockedVaultAndRepoWithBundle(t *testing.T) {
 // ---- settings ----
 
 func goodSettings() Settings {
-	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 14, FontFamily: "Menlo, monospace", CursorStyle: "block", CursorBlink: true, Scrollback: 10000, Zoom: 100, ConfirmClose: true, Shortcuts: map[string]string{}}
+	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 14, FontFamily: "Menlo, monospace", CursorStyle: "block", CursorBlink: true, Scrollback: 10000, Zoom: 100, ConfirmTabClose: true, RightClick: "paste", CopyOnSelect: true, Shortcuts: map[string]string{}}
 }
 
 func TestSettingsValidationAndPersistence(t *testing.T) {
@@ -900,7 +900,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 	h := newHarness(t)
 	s := h.app.Settings
 	d := s.Get()
-	if d.Zoom != 100 || !d.ConfirmClose || d.ReduceMotion || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
+	if d.Zoom != 100 || d.ConfirmTabClose || d.ReduceMotion || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
 		t.Fatalf("defaults: %+v", d)
 	}
 	bad := map[string]func(*Settings){
@@ -921,7 +921,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 		}
 	}
 	in := goodSettings()
-	in.Zoom, in.ConfirmClose, in.ReduceMotion = 120, false, true
+	in.Zoom, in.ConfirmTabClose, in.ReduceMotion = 120, false, true
 	in.AccountName, in.AccountEmail = "  Vu Nguyen  ", " me@example.com "
 	in.Shortcuts = map[string]string{"open_settings": "Mod+Shift+,", "new_connection": "Mod+T"}
 	got, err := s.Save(in)
@@ -940,7 +940,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := c2.settings
-	if g.Zoom != 120 || g.ConfirmClose || !g.ReduceMotion || g.AccountEmail != "me@example.com" || g.Shortcuts["open_settings"] != "Mod+Shift+," {
+	if g.Zoom != 120 || g.ConfirmTabClose || !g.ReduceMotion || g.AccountEmail != "me@example.com" || g.Shortcuts["open_settings"] != "Mod+Shift+," {
 		t.Fatalf("not persisted: %+v", g)
 	}
 }
@@ -953,7 +953,7 @@ func TestOldSettingsWithoutShortcutsGetsNonNilMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.settings.Shortcuts == nil || c.settings.Zoom != 100 || !c.settings.ConfirmClose {
+	if c.settings.Shortcuts == nil || c.settings.Zoom != 100 || c.settings.ConfirmTabClose { // closing a tab does not ask unless asked to
 		t.Fatalf("%+v", c.settings)
 	}
 	b, _ := json.Marshal(New(c).Settings.Get())
@@ -1049,5 +1049,70 @@ func TestSFTPConnectionAlsoLearnsTheServerType(t *testing.T) {
 	h.rec.wait(t, "hosts:changed")
 	if got, _ := h.app.Core.Store.GetHost(host.ID); got.OS != "freebsd" {
 		t.Fatalf("got %q", got.OS)
+	}
+}
+
+func TestHighlightOutputIsOnForNewAndOldSettingsFilesAndCanBeSwitchedOff(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "data"), 0o700)
+	os.WriteFile(filepath.Join(dir, "data", "settings.json"), []byte(`{"theme":"dark","font_size":14}`), 0o600)
+	c, err := testCore(t, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := New(c)
+	if !app.Settings.Get().Highlight {
+		t.Fatal("a settings file from before this option existed keeps the feature on")
+	}
+	s := app.Settings.Get()
+	s.Highlight = false
+	saved, err := app.Settings.Save(s)
+	if err != nil || saved.Highlight {
+		t.Fatalf("%+v %v", saved, err)
+	}
+	c2, err := testCore(t, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if New(c2).Settings.Get().Highlight {
+		t.Fatal("switched off must survive a restart")
+	}
+}
+
+func TestTerminalMouseSettingsDefaultsAndValidation(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "data"), 0o700)
+	os.WriteFile(filepath.Join(dir, "data", "settings.json"), []byte(`{"theme":"dark","font_size":14}`), 0o600)
+	c, err := testCore(t, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := New(c)
+	got := app.Settings.Get()
+	if !got.CopyOnSelect || got.RightClick != "paste" {
+		t.Fatalf("copy on select and right-click paste are on for a settings file from before they existed: %+v", got)
+	}
+	for _, mode := range []string{"paste", "menu", "none"} {
+		in := app.Settings.Get()
+		in.RightClick = mode
+		in.CopyOnSelect = mode != "none"
+		saved, err := app.Settings.Save(in)
+		if err != nil || saved.RightClick != mode || saved.CopyOnSelect != (mode != "none") {
+			t.Fatalf("%s: %+v %v", mode, saved, err)
+		}
+	}
+	for _, bad := range []string{"", "copy", "PASTE", "paste "} {
+		in := app.Settings.Get()
+		in.RightClick = bad
+		if _, err := app.Settings.Save(in); err == nil {
+			t.Errorf("right click %q must be refused", bad)
+		}
+	}
+	if app.Settings.Get().RightClick != "none" {
+		t.Fatal("a refused save changes nothing")
+	}
+	c2, _ := testCore(t, dir, nil)
+	if g := New(c2).Settings.Get(); g.RightClick != "none" || g.CopyOnSelect {
+		t.Fatalf("persisted: %+v", g)
 	}
 }

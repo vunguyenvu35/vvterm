@@ -2,7 +2,7 @@ import {ReactNode} from 'react'
 import {BackendContext, Backend} from '../lib/backend'
 import {ToastProvider} from '../lib/ui/Toast'
 import {DEFAULT_SETTINGS} from '../lib/settings/defaults'
-import type {RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus} from '../lib/types'
+import type {ActivityEntry, KnownHost, RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus} from '../lib/types'
 
 export interface Fake extends Backend {
   state: {
@@ -23,6 +23,11 @@ export interface Fake extends Backend {
     nativeSettings: boolean
     /** serial devices the Serial panel finds */
     serialPorts: string[]
+    /** the system clipboard */
+    clipboard: string
+    knownHosts: KnownHost[]
+    /** the activity log, newest first */
+    logs: ActivityEntry[]
     testResult: ConnectionTest
     calls: Array<[string, ...unknown[]]>
   }
@@ -75,6 +80,9 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     },
     nativeSettings: false,
     serialPorts: ['/dev/cu.usbserial-1410', '/dev/cu.usbmodem1101'],
+    clipboard: '',
+    knownHosts: [],
+    logs: [],
     testResult: {ok: true, message: 'Connected to 10.0.0.1 as root', server_version: 'SSH-2.0-OpenSSH_9.6', latency_ms: 42, hops: 1},
     calls: [],
     ...init,
@@ -113,6 +121,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       disableBiometric: async () => { state.vault = {...state.vault, keychain_enabled: false} },
       listIdentities: async () => [...state.identities],
       addKey: async (name, path, pass) => { rec('vault.addKey', name, path, pass); return upsert(state.identities, {name, auth_type: 'key', public_key: 'ssh-ed25519 AAAAimported'}, 'i') },
+      addKeyPair: async (name, pem, pass, pub, cert) => { rec('vault.addKeyPair', name, pem, pass, pub, cert); return upsert(state.identities, {name, auth_type: 'key', public_key: pub.trim() || 'ssh-ed25519 AAAApasted', certificate: cert.trim() || undefined}, 'i') },
       addKeyPEM: async (name, pem, pass) => { rec('vault.addKeyPEM', name, pem, pass); return upsert(state.identities, {name, auth_type: 'key', public_key: 'ssh-ed25519 AAAApasted'}, 'i') },
       addPassword: async (name, user, pw) => { rec('vault.addPassword', name, user, pw); return upsert(state.identities, {name, username: user, auth_type: 'password'}, 'i') },
       addAgent: async (name, user) => { rec('vault.addAgent', name, user); return upsert(state.identities, {name, username: user, auth_type: 'agent'}, 'i') },
@@ -223,6 +232,26 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     serial: {
       ports: async () => [...state.serialPorts],
     },
+    knownHosts: {
+      list: async () => [...state.knownHosts],
+      forget: async (h, f) => {
+        rec('knownHosts.forget', h, f)
+        const n = state.knownHosts.length
+        state.knownHosts = state.knownHosts.filter(k => !(k.host === h && k.fingerprint === f))
+        if (state.knownHosts.length === n) throw 'that host is not in known_hosts'
+      },
+    },
+    logs: {
+      list: async f => {
+        rec('logs.list', f)
+        const q = f.query.trim().toLowerCase()
+        return state.logs
+          .filter(e => !f.kinds.length || f.kinds.includes(e.kind))
+          .filter(e => !q || (e.message + ' ' + (e.host_label ?? '')).toLowerCase().includes(q))
+          .slice(0, f.limit || 500)
+      },
+      clear: async () => { rec('logs.clear'); state.logs = [] },
+    },
     local: {
       home: async () => '/Users/me',
       list: async dir => {
@@ -265,6 +294,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       openUrl: async u => { rec('system.openUrl', u) },
       info: async () => ({version: '1.1.0-test'}),
       toggleMaximise: async () => { rec('system.toggleMaximise') },
+      readClipboard: async () => { rec('system.readClipboard'); return state.clipboard },
+      writeClipboard: async t => { rec('system.writeClipboard', t); state.clipboard = t },
       openSettings: async () => {
         rec('system.openSettings')
         if (!state.nativeSettings) throw new Error('native windows are not available')

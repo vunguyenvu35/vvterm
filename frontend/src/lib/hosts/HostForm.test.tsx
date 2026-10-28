@@ -251,3 +251,63 @@ describe('GroupForm', () => {
   })
 })
 
+
+describe('HostForm: Telnet and terminal theme', () => {
+  it('Telnet follows the SSH port; an empty Telnet port means it is off', async () => {
+    const {be} = setup()
+    const ssh = screen.getByLabelText('Port'), telnet = screen.getByLabelText('Telnet port')
+    expect(ssh.compareDocumentPosition(telnet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(telnet).toHaveValue('')
+    expect(telnet).toHaveAttribute('placeholder', '23')
+    expect(screen.queryByRole('note')).toBeNull()
+    await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: false, telnet_port: 0}))
+  })
+
+  it('typing a Telnet port enables it, warns that it is not encrypted, and saves the port', async () => {
+    const {be} = setup()
+    await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
+    await userEvent.type(screen.getByLabelText('Telnet port'), '2323')
+    expect(screen.getByRole('note')).toHaveTextContent(/not encrypted/)
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: true, telnet_port: 2323}))
+  })
+
+  it('refuses a Telnet port that is not a port', async () => {
+    const {be} = setup()
+    await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
+    for (const bad of ['0', '70000', 'abc', '2.5']) {
+      await userEvent.clear(screen.getByLabelText('Telnet port'))
+      await userEvent.type(screen.getByLabelText('Telnet port'), bad)
+      await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+      expect(await screen.findByRole('alert')).toHaveTextContent('Telnet port must be between 1 and 65535')
+    }
+    expect(be.state.calls.some(c => c[0] === 'hosts.saveHost')).toBe(false)
+  })
+
+  it('editing a host shows its Telnet port, and clearing it turns Telnet off', async () => {
+    const {be} = setup(host({id: 'h1', label: 'sw', telnet_enabled: true, telnet_port: 2323} as never))
+    expect(screen.getByLabelText('Telnet port')).toHaveValue('2323')
+    await userEvent.clear(screen.getByLabelText('Telnet port'))
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: false, telnet_port: 0}))
+  })
+
+  it('a host can have its own terminal theme, or follow the app', async () => {
+    const {be} = setup()
+    expect(screen.getByRole('combobox', {name: /^Terminal theme, Use the app setting/})).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Hostname'), 'prod.example')
+    await userEvent.selectOptions(screen.getByLabelText('Terminal theme'), 'dracula')
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({terminal_theme: 'dracula'}))
+  })
+
+  it('an existing host keeps its theme when edited, and can go back to the app setting', async () => {
+    const {be} = setup(host({id: 'h1', label: 'sw', terminal_theme: 'nord'} as never))
+    expect(screen.getByRole('combobox', {name: /^Terminal theme, Nord/})).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Terminal theme'), '')
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({terminal_theme: ''}))
+  })
+})

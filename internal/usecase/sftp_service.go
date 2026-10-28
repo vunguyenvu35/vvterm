@@ -20,6 +20,8 @@ type SftpInfo struct {
 }
 
 type sftpSession struct {
+	hostID string
+	label  string
 	fs     RemoteFS
 	client *sshx.Client
 	stop   chan struct{}
@@ -58,6 +60,7 @@ func (s *SftpService) Open(hostID, promptKey string) (SftpInfo, error) {
 	}
 	cl, host, err := s.c.connect(hostID, promptKey, make(chan struct{}))
 	if err != nil {
+		s.c.record(domain.ActSFTP, hostID, "", "SFTP connection failed: "+err.Error(), false)
 		return SftpInfo{}, err
 	}
 	fs, err := s.c.OpenRemoteFS(cl)
@@ -71,7 +74,8 @@ func (s *SftpService) Open(hostID, promptKey string) (SftpInfo, error) {
 		_ = cl.Close()
 		return SftpInfo{}, fmt.Errorf("read the remote home directory: %w", err)
 	}
-	sess := &sftpSession{fs: fs, client: cl, stop: make(chan struct{})}
+	sess := &sftpSession{hostID: host.ID, label: host.Label, fs: fs, client: cl, stop: make(chan struct{})}
+	s.c.record(domain.ActSFTP, host.ID, host.Label, "SFTP connection opened", true)
 	sid := domain.NewID()
 	s.mu.Lock()
 	s.sessions[sid] = sess
@@ -88,6 +92,7 @@ func (s *SftpService) Open(hostID, promptKey string) (SftpInfo, error) {
 		sess.close()
 		if still {
 			s.c.emit("sftp:closed:"+sid, map[string]any{"reason": "connection lost"})
+			s.c.record(domain.ActSFTP, sess.hostID, sess.label, "SFTP connection lost", false)
 		}
 	}()
 	return SftpInfo{SID: sid, Home: home, Host: host.Label}, nil

@@ -87,7 +87,7 @@ await page.addInitScript(() => {
 })
 
 const L = (label) => page.getByLabel(label, {exact: true})
-const nav = name => page.getByRole('navigation', {name: 'Main'}).getByRole('button', {name})
+const nav = name => page.getByRole('navigation', {name: 'Main'}).getByRole('button', {name, exact: true})
 const goHome = () => page.getByRole('tab', {name: 'Vaults'}).click()
 const termText = () => page.locator('.xterm-rows').evaluateAll(els => els.map(e => e.textContent).join('\n'))
 const waitTerm = async (text) => page.waitForFunction(t => Array.from(document.querySelectorAll('.xterm-rows')).some(e => e.textContent.includes(t)), text)
@@ -151,7 +151,10 @@ try {
 
   step('Create a group, then a host with Test connection (wrong password first)')
   await nav('Hosts').click()
-  await L('New group').click()
+  await L('More ways to add hosts').click()
+  await page.getByRole('menu', {name: 'Add'}).waitFor()
+  await shot(page, 'new-host-menu')
+  await page.getByRole('menuitem', {name: 'New group'}).click()
   await L('Group name').fill('vl24h-prod')
   await page.getByRole('button', {name: 'Save'}).click()
   await panelClosed()
@@ -342,11 +345,15 @@ try {
   fs.mkdirSync(path.join(tmp, 'downloads'))
   const mod = ['ControlOrMeta']
 
-  await nav('Hosts').click()
-  await L('Search hosts').fill('app-server')
-  await page.getByRole('button', {name: 'SFTP app-server'}).click()
+  await page.getByRole('tab', {name: 'SFTP'}).click()
   const sftp = page.getByTestId('sftp')
   await sftp.waitFor()
+  assert.equal(await page.getByRole('button', {name: /^SFTP /}).count(), 0, 'a host card has no SFTP button: the tab is the way in')
+  await sftp.getByRole('region', {name: 'Remote'}).getByText('Connect to host').waitFor()
+  await shot(page, 'sftp-connect-to-host')
+  await sftp.getByRole('button', {name: 'Select host'}).click()
+  await shot(page, 'sftp-select-host')
+  await sftp.getByRole('button', {name: 'Connect to app-server'}).click()
   const tabNames = (await page.getByRole('tab').allTextContents()).map(t => t.trim())
   assert.deepEqual(tabNames.slice(0, 2), ['Vaults', 'SFTP'], 'the SFTP tab sits right after Vaults')
   assert.equal(await page.getByRole('button', {name: /^Close SFTP/}).count(), 0, 'the SFTP tab has no close button')
@@ -426,7 +433,47 @@ try {
   await rrow('bundle').waitFor({state: 'detached'})
   await rrow('extra-renamed.txt').waitFor({state: 'detached'})
   await goHome()
-  await L('Search hosts').fill('')
+  await nav('Hosts').click()
+
+  step('Terminal on this computer: a real shell, highlighting, numbered and renamed tabs')
+  await goHome()
+  await nav('Hosts').click()
+  await page.getByRole('button', {name: 'Terminal', exact: true}).click()
+  await page.getByRole('tab', {name: 'Local', selected: true}).waitFor()
+  await page.locator('.pane').last().click()
+  await page.keyboard.type('echo vvterm-local-$((6*7))')
+  await page.keyboard.press('Enter')
+  await waitTerm('vvterm-local-42')
+  // finished lines get Termius-style colours: the word ERROR is red, an IP address yellow, a path blue
+  await page.keyboard.type('echo ERROR 10.0.0.1 /tmp/vvterm')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('echo done-line')
+  await page.keyboard.press('Enter')
+  await waitTerm('done-line')
+  const colourOf = word => page.waitForFunction(w => {
+    const spans = Array.from(document.querySelectorAll('.xterm-rows span'))
+    const hit = spans.find(s => s.textContent === w)
+    return hit ? getComputedStyle(hit).color : false
+  }, word).then(h => h.jsonValue())
+  const red = await colourOf('ERROR').catch(() => '')
+  console.log('  ERROR is drawn in', red || '(not found as its own span)')
+  await shot(page, 'local-terminal')
+
+  await goHome()
+  await page.getByRole('button', {name: 'Terminal', exact: true}).click()
+  await page.getByRole('tab', {name: 'Local (2)', selected: true}).waitFor()
+  // double-click a tab to rename it
+  await page.getByText('Local (2)', {exact: true}).dblclick()
+  await page.getByLabel('Tab name').fill('build shell')
+  await page.getByLabel('Tab name').press('Enter')
+  await page.getByRole('tab', {name: 'build shell'}).waitFor()
+  await shot(page, 'tabs-numbered-renamed')
+  for (const name of ['build shell', 'Local']) {
+    await page.getByRole('button', {name: 'Close ' + name, exact: true}).click()
+    assert.equal(await page.getByRole('alertdialog').count(), 0, 'closing a tab does not ask')
+    await page.getByRole('tab', {name, exact: true}).waitFor({state: 'detached'})
+  }
+  await goHome()
 
   step('Find, filter and quick connect')
   await L('Search hosts').fill('maria')
@@ -442,6 +489,14 @@ try {
   await shot(page, 'quick-connect')
   await page.keyboard.press('Escape')
   await L('Search hosts').fill('')
+
+  step('Known Hosts: every key you trusted is listed')
+  await nav('Known Hosts').click()
+  const known = page.getByRole('list', {name: 'Known hosts'})
+  await known.getByText('[127.0.0.1]:2201').waitFor()
+  await known.getByText('[127.0.0.1]:2202').waitFor()
+  assert.match(await known.textContent(), /ssh-ed25519 · SHA256:/)
+  await shot(page, 'known-hosts')
 
   step('Settings opens as its own window: theme, terminal theme, security, sync')
   await nav('Settings').click()
@@ -565,7 +620,30 @@ try {
   await shot(page, 'unlock-wrong-password')
   await L('Master password').fill(MASTER)
   await page.getByRole('button', {name: 'Unlock'}).click()
+  await nav('Hosts').click() // the app comes back to the page that was open when it locked
   await page.getByPlaceholder(/Find a host or ssh user@hostname/).waitFor()
+
+  step('Logs: what happened, newest first, filterable')
+  await nav('Logs').click()
+  const table = page.getByRole('table', {name: 'Activity'})
+  await table.getByText(/Connected to 127\.0\.0\.1:2202/).first().waitFor()
+  await table.getByText(/Trusted the host key SHA256:/).first().waitFor()
+  await table.getByText(/Uploaded .* to \//).first().waitFor()
+  await table.getByText(/Connection lost/).first().waitFor()
+  await table.getByText(/HOST KEY CHANGED/).first().waitFor()
+  await table.getByText('Unlock failed').first().waitFor()
+  assert.ok(!(await table.textContent()).includes(MASTER), 'the master password is never logged')
+  assert.ok(!(await table.textContent()).includes('demo-password'), 'no password is ever logged')
+  await shot(page, 'logs')
+  await page.getByRole('button', {name: 'Security', exact: true}).click()
+  await table.getByText('Unlock failed').first().waitFor()
+  // the list is reloaded by the backend: wait until the connection lines are gone
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('[aria-label=Activity] [role=row]')).some(r => /Connected to/.test(r.textContent)))
+  await page.getByRole('button', {name: 'All', exact: true}).click()
+  await page.getByLabel('Search logs').fill('lost')
+  await table.getByText(/Connection lost/).first().waitFor()
+  await page.getByLabel('Search logs').fill('')
+  await goHome()
 
   step('Forgot the master password: reset the vault, keep the hosts')
   await nav('Lock vault').click()
@@ -589,8 +667,8 @@ try {
   await page.getByRole('button', {name: 'Open group vl24h-prod'}).click()
   await page.locator('.host', {hasText: 'app-server'}).waitFor() // hosts survived the reset
   await nav('Keychain').click()
-  await page.getByText('No identities yet.').waitFor() // saved passwords did not
-  await page.getByRole('tab', {name: 'Add password'}).waitFor()
+  await page.getByText(/No keys yet/).waitFor() // saved passwords and keys did not
+  await page.getByRole('button', {name: 'New password'}).waitFor()
 
   step('Narrow window: nothing overflows and the search box stays usable')
   await page.setViewportSize({width: 960, height: 640})

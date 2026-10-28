@@ -1,7 +1,7 @@
 import {createContext, useContext} from 'react'
 import type {
   ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
-  RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
+  ActivityEntry, KnownHost, RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
 } from './types'
 
 /**
@@ -22,6 +22,7 @@ export interface Backend {
     disableBiometric(): Promise<void>
     listIdentities(): Promise<Identity[]>
     addKey(name: string, path: string, passphrase: string): Promise<Identity>
+    addKeyPair(name: string, pem: string, passphrase: string, publicKey: string, certificate: string): Promise<Identity>
     addKeyPEM(name: string, pem: string, passphrase: string): Promise<Identity>
     addPassword(name: string, user: string, pw: string): Promise<Identity>
     addAgent(name: string, user: string): Promise<Identity>
@@ -87,6 +88,15 @@ export interface Backend {
   serial: {
     ports(): Promise<string[]>
   }
+  knownHosts: {
+    list(): Promise<KnownHost[]>
+    /** Forget a host's key: the next connection asks to trust it again. */
+    forget(host: string, fingerprint: string): Promise<void>
+  }
+  logs: {
+    list(f: {kinds: string[]; query: string; limit: number}): Promise<ActivityEntry[]>
+    clear(): Promise<void>
+  }
   /** This computer's files (the Local pane of the SFTP screen). */
   local: {
     home(): Promise<string>
@@ -110,6 +120,9 @@ export interface Backend {
     openSettings(): Promise<void>
     /** Zoom the native window (the green button / a double click on the title bar). A no-op in a browser. */
     toggleMaximise(): Promise<void>
+    /** The system clipboard: through the native runtime (a webview often refuses to read it), else the browser. */
+    readClipboard(): Promise<string>
+    writeClipboard(text: string): Promise<void>
   }
   /** Subscribe to a backend event; returns an unsubscribe function. */
   on(event: string, cb: (data: any) => void): () => void
@@ -151,6 +164,7 @@ export function wailsBackend(): Backend {
       listIdentities: () => u('VaultService', 'ListIdentities'),
       addKey: (n, p, pp) => u('VaultService', 'AddKey', n, p, pp),
       addKeyPEM: (n, p, pp) => u('VaultService', 'AddKeyPEM', n, p, pp),
+      addKeyPair: (n, p, pp, pub, cert) => u('VaultService', 'AddKeyPair', n, p, pp, pub, cert),
       addPassword: (n, user, pw) => u('VaultService', 'AddPassword', n, user, pw),
       addAgent: (n, user) => u('VaultService', 'AddAgent', n, user),
       generateKey: n => u('VaultService', 'GenerateKey', n, 'ed25519'),
@@ -210,6 +224,14 @@ export function wailsBackend(): Backend {
       uploadAll: (s, l, d, o) => u('SftpService', 'UploadAll', s, l, d, o),
       downloadAll: (s, r, d, o) => u('SftpService', 'DownloadAll', s, r, d, o),
     },
+    knownHosts: {
+      list: async () => (await call<KnownHost[]>('usecase', 'KnownHostsService', 'List')) ?? [],
+      forget: (h, f) => call('usecase', 'KnownHostsService', 'Forget', h, f),
+    },
+    logs: {
+      list: async f => (await call<ActivityEntry[]>('usecase', 'LogService', 'List', f)) ?? [],
+      clear: () => call('usecase', 'LogService', 'Clear'),
+    },
     serial: {
       ports: async () => (await call<string[]>('usecase', 'SerialService', 'Ports')) ?? [],
     },
@@ -239,6 +261,12 @@ export function wailsBackend(): Backend {
       info: () => call('app', 'SystemService', 'Info'),
       openSettings: () => call('app', 'SystemService', 'OpenSettings'),
       toggleMaximise: async () => { window.runtime?.WindowToggleMaximise?.() },
+      readClipboard: async () => {
+        try { return String((await call('app', 'SystemService', 'ClipboardText')) ?? '') } catch { return navigator.clipboard.readText() }
+      },
+      writeClipboard: async text => {
+        try { await call('app', 'SystemService', 'SetClipboardText', text) } catch { await navigator.clipboard.writeText(text) }
+      },
     },
     on: (event, cb) => {
       const rt = window.runtime

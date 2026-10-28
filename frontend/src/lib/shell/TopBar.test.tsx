@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react'
+import {fireEvent, render, screen, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {TopBar} from './TopBar'
 import {newTab} from '../layout'
@@ -39,7 +39,7 @@ describe('Nav', () => {
   it('every item has an accessible name and tooltip even when labels are hidden on narrow windows', () => {
     render(<Nav page="hosts" onPage={vi.fn()} onData={vi.fn()} onSettings={vi.fn()} onLock={vi.fn()} />)
     const names = screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))
-    expect(names).toEqual(['Hosts', 'Keychain', 'Port Forwarding', 'Snippets', 'Import / Export', 'Settings', 'Lock vault'])
+    expect(names).toEqual(['Hosts', 'Keychain', 'Port Forwarding', 'Snippets', 'Known Hosts', 'Logs', 'Import / Export', 'Settings', 'Lock vault'])
     for (const b of screen.getAllByRole('button')) expect(b).toHaveAttribute('title', b.getAttribute('aria-label')!)
     expect(screen.getByRole('button', {name: 'Hosts'})).toHaveAttribute('aria-current', 'page')
   })
@@ -94,5 +94,119 @@ describe('TopBar: double click zooms the window like a Mac app', () => {
   it('works without a handler (browser mode)', async () => {
     render(<TopBar tabs={[]} active="home" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} {...base} />)
     await userEvent.dblClick(document.querySelector('.topbar .spacer')!)
+  })
+})
+
+describe('TopBar: renaming a tab', () => {
+  const t = newTab('h1', 'web-1')
+  const pinned = {...newTab('', 'SFTP'), pinned: true, kind: 'sftp' as const}
+  const mount = (onRename = vi.fn()) => {
+    render(<TopBar tabs={[pinned, t]} active="home" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} {...base} onRename={onRename} />)
+    return onRename
+  }
+  const title = (n: string) => screen.getByText(n, {selector: '.tab-title'})
+
+  it('a double click turns the name into an input with the name selected; Enter saves it', async () => {
+    const rename = mount()
+    await userEvent.dblClick(title('web-1'))
+    const input = screen.getByLabelText('Tab name')
+    expect(input).toHaveValue('web-1')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'production db{Enter}')
+    expect(rename).toHaveBeenCalledWith(t.id, 'production db')
+    expect(screen.queryByLabelText('Tab name')).toBeNull()
+  })
+
+  it('Esc cancels, and leaving the field saves what was typed', async () => {
+    const rename = mount()
+    await userEvent.dblClick(title('web-1'))
+    await userEvent.type(screen.getByLabelText('Tab name'), 'xyz{Escape}')
+    expect(rename).not.toHaveBeenCalled()
+    expect(title('web-1')).toBeInTheDocument()
+    await userEvent.dblClick(title('web-1'))
+    await userEvent.type(screen.getByLabelText('Tab name'), '2')
+    await userEvent.tab()
+    expect(rename).toHaveBeenCalledWith(t.id, 'web-12')
+  })
+
+  it('the pinned SFTP tab cannot be renamed, and renaming does not select or close the tab', async () => {
+    const rename = mount()
+    await userEvent.dblClick(title('SFTP'))
+    expect(screen.queryByLabelText('Tab name')).toBeNull()
+    expect(rename).not.toHaveBeenCalled()
+  })
+
+  it('does nothing without a handler (the tooltip is not offered either)', async () => {
+    render(<TopBar tabs={[t]} active="home" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} {...base} />)
+    await userEvent.dblClick(screen.getByText('web-1', {selector: '.tab-title'}))
+    expect(screen.queryByLabelText('Tab name')).toBeNull()
+  })
+})
+
+describe('TopBar: the right-click menu of a tab', () => {
+  const t = newTab('h1', 'web-1')
+  const pinned = {...newTab('', 'SFTP'), pinned: true, kind: 'sftp' as const}
+  const mount = (over: Record<string, unknown> = {}) => {
+    const cb = {onDuplicate: vi.fn(), onSplitTab: vi.fn(), onRename: vi.fn(), onClose: vi.fn()}
+    render(<TopBar tabs={[pinned, t]} active="home" onHome={vi.fn()} onSelect={vi.fn()} {...base} {...cb} {...over} />)
+    return cb
+  }
+  const open = () => fireEvent.contextMenu(screen.getByRole('tab', {name: /web-1/}), {clientX: 30, clientY: 20})
+
+  it('opens at the pointer with Duplicate, Rename, Split right, Split down and Close', () => {
+    mount()
+    open()
+    const menu = screen.getByRole('menu', {name: 'Tab web-1'})
+    expect(menu).toHaveStyle({left: '30px', top: '20px'})
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Duplicate', 'Rename', 'Split right', 'Split down', 'Close'])
+  })
+
+  it('each item acts on that tab and closes the menu', async () => {
+    const cb = mount()
+    open()
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Duplicate'}))
+    expect(cb.onDuplicate).toHaveBeenCalledWith(t.id)
+    expect(screen.queryByRole('menu')).toBeNull()
+    open()
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Split right'}))
+    expect(cb.onSplitTab).toHaveBeenCalledWith(t.id, 'row')
+    open()
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Split down'}))
+    expect(cb.onSplitTab).toHaveBeenCalledWith(t.id, 'col')
+    open()
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Close'}))
+    expect(cb.onClose).toHaveBeenCalledWith(t.id)
+  })
+
+  it('Rename turns the tab name into the input', async () => {
+    mount()
+    open()
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Rename'}))
+    expect(screen.getByLabelText('Tab name')).toHaveValue('web-1')
+  })
+
+  it('closes on Escape and on a click elsewhere, and never shows the browser menu', async () => {
+    mount()
+    const ev = new MouseEvent('contextmenu', {bubbles: true, cancelable: true})
+    screen.getByRole('tab', {name: /web-1/}).dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    fireEvent.keyDown(window, {key: 'Escape'})
+    expect(screen.queryByRole('menu')).toBeNull()
+    open()
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('the pinned SFTP tab has no menu', () => {
+    mount()
+    fireEvent.contextMenu(screen.getByRole('tab', {name: /SFTP/}))
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('items that do not apply are disabled', () => {
+    mount({onDuplicate: undefined, onSplitTab: undefined, onRename: undefined})
+    open()
+    for (const n of ['Duplicate', 'Rename', 'Split right', 'Split down']) expect(screen.getByRole('menuitem', {name: n})).toBeDisabled()
+    expect(screen.getByRole('menuitem', {name: 'Close'})).toBeEnabled()
   })
 })

@@ -7,6 +7,7 @@ import '@xterm/xterm/css/xterm.css'
 import {useBackend} from '../backend'
 import {b64ToBytes, errMsg} from '../util'
 import {registerPane} from './panes'
+import {createHighlighter, HighlightTerm} from './highlight'
 import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
 import type {ClosedInfo, HostKeyPrompt} from '../types'
@@ -25,6 +26,17 @@ interface Props {
   cursorStyle: 'block' | 'bar' | 'underline'
   cursorBlink: boolean
   scrollback: number
+  /** colour URLs, IPs, paths and error / warning / success words (default on) */
+  highlight?: boolean
+  /** copy the selection to the clipboard as soon as it is made (default on) */
+  copyOnSelect?: boolean
+  /** what a right click does (default: paste) */
+  rightClick?: 'paste' | 'menu' | 'none'
+  /** key combinations for Copy and Paste (platform defaults when not given) */
+  copyCombo?: string
+  pasteCombo?: string
+  /** what the user typed in this pane (the Workspace sends it to the other panes while broadcasting) */
+  onTyped?(data: string): void
   onFocus(): void
   /** The remote shell ended cleanly (user typed exit): the pane can go away. */
   onExit(): void
@@ -39,6 +51,7 @@ export function TerminalPane(p: Props) {
   const term = useRef<Terminal>()
   const fit = useRef<FitAddon>()
   const search = useRef<SearchAddon>()
+  const highlighter = useRef<ReturnType<typeof createHighlighter>>()
   const sid = useRef('')
   const stateRef = useRef<State>('connecting')
   const [state, setState] = useState<State>('connecting')
@@ -49,9 +62,30 @@ export function TerminalPane(p: Props) {
   const onExit = useRef(p.onExit)
   const searchCombo = useRef(p.searchCombo ?? 'Mod+F')
   searchCombo.current = p.searchCombo ?? 'Mod+F'
+  const copyCombo = useRef(p.copyCombo ?? 'Mod+Shift+C')
+  const pasteCombo = useRef(p.pasteCombo ?? 'Mod+Shift+V')
+  const copyOnSelect = useRef(p.copyOnSelect ?? true)
+  const rightClick = useRef(p.rightClick ?? 'paste')
+  copyCombo.current = p.copyCombo ?? 'Mod+Shift+C'
+  pasteCombo.current = p.pasteCombo ?? 'Mod+Shift+V'
+  copyOnSelect.current = p.copyOnSelect ?? true
+  rightClick.current = p.rightClick ?? 'paste'
+  const [menu, setMenu] = useState<{x: number; y: number} | null>(null)
+  const onTyped = useRef(p.onTyped)
+  onTyped.current = p.onTyped
   onExit.current = p.onExit
 
   const setSt = (s: State) => { stateRef.current = s; setState(s) }
+
+  // The clipboard goes through the native runtime where there is one (a webview often refuses page scripts).
+  const copyText = (text: string) => { if (text) void be.system.writeClipboard(text).catch(() => {}) }
+  const pasteClipboard = async () => {
+    try {
+      const text = await be.system.readClipboard()
+      // the terminal turns it into bracketed paste when the shell asks for that, and the keys go out in order
+      if (text && stateRef.current === 'ready') term.current?.paste(text)
+    } catch { /* clipboard not available */ }
+  }
 
   useEffect(() => {
     const t = new Terminal({
@@ -69,12 +103,41 @@ export function TerminalPane(p: Props) {
     t.open(host.current!)
     try { f.fit() } catch { /* hidden */ }
 
+    // Termius-style colouring of finished lines, a moment after output stops arriving
+    const hl = createHighlighter(t as unknown as HighlightTerm)
+    highlighter.current = hl
+    let hlTimer = 0
+    const hlSub = (t as unknown as {onWriteParsed?(cb: () => void): {dispose(): void}}).onWriteParsed?.(() => {
+      window.clearTimeout(hlTimer)
+      hlTimer = window.setTimeout(() => hl.scan(), 60)
+    })
+    if (p.highlight === false) hl.dispose()
+
     let disposed = false
     const offs: Array<() => void> = []
 
+    // Keystrokes leave one call at a time and in order: separate calls that are in flight together may be
+    // run in any order by the backend (typing "echo" arrived as "ceho"). What is typed while a call is
+    // running goes out together in the next one.
+    let pendingKeys = ''
+    let sending = false
+    const sendKeys = (d: string) => {
+      pendingKeys += d
+      if (sending) return
+      const flush = () => {
+        if (!pendingKeys) { sending = false; return }
+        const chunk = pendingKeys
+        pendingKeys = ''
+        sending = true
+        be.session.write(sid.current, chunk).catch(() => {}).finally(flush)
+      }
+      flush()
+    }
+
     t.onData(d => {
       if (stateRef.current === 'ready') {
-        void be.session.write(sid.current, d).catch(() => {})
+        sendKeys(d)
+        onTyped.current?.(d)
       } else if (stateRef.current === 'closed' && (d === '\r' || d === '\n')) {
         // Never reconnect automatically: replaying commands unexpectedly is dangerous.
         setClosed(null)
@@ -87,18 +150,38 @@ export function TerminalPane(p: Props) {
     })
     const unregister = p.paneId ? registerPane(p.paneId, text => {
       if (stateRef.current !== 'ready') return false
-      void be.session.write(sid.current, text).catch(() => {})
+      sendKeys(text)
       return true
     }) : () => {}
     t.onResize(({cols, rows}) => {
       if (sid.current && cols > 0 && rows > 0) void be.session.resize(sid.current, cols, rows).catch(() => {})
     })
     t.attachCustomKeyEventHandler(e => {
-      if (e.type === 'keydown' && matches(e, searchCombo.current)) {
+      if (e.type !== 'keydown') return true
+      if (matches(e, searchCombo.current)) {
         setShowSearch(v => !v)
         return false
       }
+      if (matches(e, copyCombo.current)) {
+        const sel = t.getSelection()
+        if (!sel) return true // nothing selected: the key goes to the shell (Ctrl+C is the interrupt)
+        copyText(sel)
+        e.preventDefault()
+        return false
+      }
+      if (matches(e, pasteCombo.current)) {
+        e.preventDefault()
+        void pasteClipboard()
+        return false
+      }
       return true
+    })
+
+    // copy on select: once the selection stops changing
+    let selTimer = 0
+    const selSub = (t as unknown as {onSelectionChange?(cb: () => void): {dispose(): void}}).onSelectionChange?.(() => {
+      window.clearTimeout(selTimer)
+      selTimer = window.setTimeout(() => { if (copyOnSelect.current) copyText(t.getSelection()) }, 150)
     })
 
     ;(async () => {
@@ -127,6 +210,11 @@ export function TerminalPane(p: Props) {
 
     return () => {
       disposed = true
+      window.clearTimeout(hlTimer)
+      window.clearTimeout(selTimer)
+      hlSub?.dispose()
+      selSub?.dispose()
+      hl.dispose()
       unregister()
       ro.disconnect()
       offs.forEach(o => o())
@@ -149,12 +237,38 @@ export function TerminalPane(p: Props) {
     try { fit.current?.fit() } catch { /* hidden */ }
   }, [p.fontSize, p.fontFamily, p.termTheme, p.cursorStyle, p.cursorBlink, p.scrollback])
 
+  // the Highlight output switch in Settings
+  useEffect(() => {
+    const hl = highlighter.current
+    if (!hl) return
+    if (p.highlight === false) hl.dispose()
+    else { hl.reset(); hl.scan() }
+  }, [p.highlight])
+
   useEffect(() => {
     if (p.visible) {
       try { fit.current?.fit() } catch { /* hidden */ }
       if (p.focused) term.current?.focus()
     }
   }, [p.visible, p.focused])
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault() // never the browser's own menu
+    const mode = rightClick.current
+    if (mode === 'paste') void pasteClipboard()
+    else if (mode === 'menu') setMenu({x: e.clientX, y: e.clientY})
+  }
+  // the right-click menu goes away on any click, Esc, or when the pane loses its place
+  useEffect(() => {
+    if (!menu) return
+    const off = () => setMenu(null)
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); off() } }
+    window.addEventListener('mousedown', off)
+    window.addEventListener('keydown', esc, true)
+    window.addEventListener('blur', off)
+    return () => { window.removeEventListener('mousedown', off); window.removeEventListener('keydown', esc, true); window.removeEventListener('blur', off) }
+  }, [menu])
+  const hasSelection = !!menu && !!term.current?.hasSelection()
 
   const trust = (ok: boolean) => {
     if (!prompt) return
@@ -163,8 +277,16 @@ export function TerminalPane(p: Props) {
   }
 
   return (
-    <div className={'pane' + (p.focused ? ' focused' : '')} onMouseDown={p.onFocus} data-testid="pane" style={{background: p.termTheme.background}}>
+    <div className={'pane' + (p.focused ? ' focused' : '')} onMouseDown={p.onFocus} onContextMenu={onContextMenu} data-testid="pane" style={{background: p.termTheme.background}}>
       <div ref={host} style={{height: '100%', background: p.termTheme.background}} />
+      {menu && (
+        <div className="ctx-menu" role="menu" aria-label="Terminal" style={{left: menu.x, top: menu.y}} onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
+          <button role="menuitem" disabled={!hasSelection} onClick={() => { copyText(term.current?.getSelection() ?? ''); setMenu(null); term.current?.focus() }}>Copy</button>
+          <button role="menuitem" onClick={() => { void pasteClipboard(); setMenu(null); term.current?.focus() }}>Paste</button>
+          <button role="menuitem" onClick={() => { term.current?.selectAll(); setMenu(null) }}>Select all</button>
+          <button role="menuitem" onClick={() => { term.current?.clear(); setMenu(null); term.current?.focus() }}>Clear</button>
+        </div>
+      )}
       {showSearch && (
         <div className="searchbar">
           <input autoFocus aria-label="Search terminal" value={needle} placeholder="Find…"

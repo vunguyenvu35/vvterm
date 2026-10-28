@@ -83,3 +83,21 @@ func TestNativeDialogsCanBeDisabledByEnvironment(t *testing.T) {
 		t.Fatal("PickDirectory must fail so the UI falls back to a prompt")
 	}
 }
+
+func TestClipboardNeedsANativeWindow(t *testing.T) {
+	s := NewSystemService()
+	if _, err := s.ClipboardText(); err == nil {
+		t.Fatal("no window: the frontend must fall back to the browser clipboard")
+	}
+	if err := s.SetClipboardText("x"); err == nil {
+		t.Fatal("no window")
+	}
+	s.SetContext(context.Background())
+	t.Setenv("VVTERM_NO_NATIVE_DIALOGS", "1")
+	if _, err := s.ClipboardText(); err == nil {
+		t.Fatal("the e2e switch keeps the browser clipboard")
+	}
+	if err := s.SetClipboardText(strings.Repeat("x", maxClipboard+1)); err == nil {
+		t.Fatal("too much text")
+	}
+}

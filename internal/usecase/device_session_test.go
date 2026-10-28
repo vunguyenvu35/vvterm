@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"vvterm/internal/domain"
 )
 
 // fakeShell is an in-memory Shell: what is written comes back as "echo:<text>".
@@ -202,5 +204,147 @@ func TestSerialPortsNeverNull(t *testing.T) {
 	h.app.Core.ListSerial = func() ([]string, error) { return nil, nil }
 	if p, _ := h.app.Serial.Ports(); p == nil {
 		t.Fatal("a nil list becomes an empty one: Go sends null to the UI otherwise")
+	}
+}
+
+// ---- Telnet ----
+
+type telnetCall struct {
+	addr, user, pass string
+	cols, rows       int
+}
+
+func installTelnet(h *harness, calls *[]telnetCall, fk *deviceFakes) {
+	h.app.Core.OpenTelnet = func(addr string, cols, rows int, user, pass string, onData func([]byte)) (Shell, error) {
+		*calls = append(*calls, telnetCall{addr, user, pass, cols, rows})
+		s := newFakeShell(onData)
+		fk.mu.Lock()
+		fk.shells = append(fk.shells, s)
+		fk.mu.Unlock()
+		return s, nil
+	}
+}
+
+func telnetHost(t *testing.T, h *harness, over domain.Host) domain.Host {
+	t.Helper()
+	over.Label, over.Hostname = "switch", "10.0.0.2"
+	saved, err := h.app.Host.SaveHost(over)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return saved
+}
+
+func TestTelnetSessionUsesTheHostAndTheIdentityPassword(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var calls []telnetCall
+	var fk deviceFakes
+	installTelnet(h, &calls, &fk)
+	id, err := h.app.Vault.AddPassword("switch-login", "admin", "hunter2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := telnetHost(t, h, domain.Host{TelnetEnabled: true, TelnetPort: 2323, IdentityID: id.ID})
+	sid, err := h.open(TelnetID(host.ID), 100, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := h.rec.wait(t, "term:ready:"+sid).data.(map[string]any)["host"]; r != "switch" {
+		t.Fatalf("%v", r)
+	}
+	if len(calls) != 1 || calls[0] != (telnetCall{"10.0.0.2:2323", "admin", "hunter2", 100, 30}) {
+		t.Fatalf("%+v", calls)
+	}
+	if e := h.waitLog(t, "Connected with Telnet (unencrypted) to switch"); !e.OK || e.HostLabel != "switch" {
+		t.Fatalf("%+v", e)
+	}
+	for _, e := range h.logs(t, domain.ActivityFilter{}) {
+		if strings.Contains(e.Message, "hunter2") {
+			t.Fatal("the password must never reach the log")
+		}
+	}
+	if err := h.app.Session.Write(sid, "show version\r"); err != nil {
+		t.Fatal(err)
+	}
+	h.rec.waitOutput(t, sid, "echo:show version\r")
+	fk.last().end(nil) // the device logged us out
+	if m := h.rec.wait(t, "term:closed:"+sid).data.(map[string]any); m["clean"] != true {
+		t.Fatalf("%+v", m)
+	}
+	if err := h.app.Session.Reconnect(sid, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	h.rec.waitCount(t, "term:ready:"+sid, 2)
+}
+
+func TestTelnetNeedsTheHostToOptIn(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var calls []telnetCall
+	var fk deviceFakes
+	installTelnet(h, &calls, &fk)
+	host := telnetHost(t, h, domain.Host{})
+	if _, err := h.app.Session.Open(TelnetID(host.ID), 80, 24); err == nil || !strings.Contains(err.Error(), "not enabled") {
+		t.Fatalf("%v", err)
+	}
+	if _, err := h.app.Session.Open(TelnetID("missing"), 80, 24); err == nil {
+		t.Fatal("unknown host")
+	}
+	if len(calls) != 0 {
+		t.Fatal("nothing may be dialled")
+	}
+}
+
+func TestTelnetWithoutPasswordIdentityTypesNoPassword(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var calls []telnetCall
+	var fk deviceFakes
+	installTelnet(h, &calls, &fk)
+	agent, err := h.app.Vault.AddAgent("agent", "fromidentity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := telnetHost(t, h, domain.Host{TelnetEnabled: true, IdentityID: agent.ID})
+	sid, _ := h.open(TelnetID(host.ID), 80, 24)
+	h.rec.wait(t, "term:ready:"+sid)
+	if len(calls) != 1 || calls[0].user != "fromidentity" || calls[0].pass != "" || calls[0].addr != "10.0.0.2:23" {
+		t.Fatalf("keys and agents mean nothing to Telnet; the default port is 23: %+v", calls)
+	}
+	bare := telnetHost(t, h, domain.Host{TelnetEnabled: true, Username: "root"})
+	sid2, _ := h.open(TelnetID(bare.ID), 80, 24)
+	h.rec.wait(t, "term:ready:"+sid2)
+	if calls[1].user != "root" || calls[1].pass != "" {
+		t.Fatalf("%+v", calls[1])
+	}
+}
+
+func TestTelnetFailuresAreShownInTheTab(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	id, _ := h.app.Vault.AddPassword("p", "u", "pw")
+	host := telnetHost(t, h, domain.Host{TelnetEnabled: true, IdentityID: id.ID})
+	sid, _ := h.open(TelnetID(host.ID), 80, 24) // no adapter installed
+	if r := h.rec.wait(t, "term:closed:"+sid).data.(map[string]any)["reason"].(string); !strings.Contains(r, "not available") {
+		t.Fatal(r)
+	}
+	var calls []telnetCall
+	var fk deviceFakes
+	installTelnet(h, &calls, &fk)
+	h.app.Vault.Lock()
+	sid2, _ := h.open(TelnetID(host.ID), 80, 24)
+	if r := h.rec.wait(t, "term:closed:"+sid2).data.(map[string]any)["reason"].(string); !strings.Contains(strings.ToLower(r), "unlock") {
+		t.Fatalf("a locked vault cannot give its password: %s", r)
+	}
+	if len(calls) != 0 {
+		t.Fatal("must not dial without the password")
+	}
+	h.app.Core.OpenTelnet = func(string, int, int, string, string, func([]byte)) (Shell, error) {
+		return nil, errors.New("connection refused")
+	}
+	_ = h.app.Vault.Unlock(masterPW)
+	sid3, _ := h.open(TelnetID(host.ID), 80, 24)
+	if r := h.rec.wait(t, "term:closed:"+sid3).data.(map[string]any)["reason"].(string); r != "connection refused" {
+		t.Fatal(r)
+	}
+	if e := h.waitLog(t, "Connection failed: connection refused"); e.OK || e.HostLabel != "switch" {
+		t.Fatalf("%+v", e)
 	}
 }

@@ -1,9 +1,8 @@
-import {DragEvent, useRef, useState} from 'react'
+import {DragEvent, ReactNode, useRef, useState} from 'react'
 import {Section, SidePanel} from '../ui/Modal'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {errMsg} from '../util'
-import {IconUpload} from '../ui/Icons'
 import type {KeyMode} from './KeychainPage'
 import type {Identity} from '../types'
 
@@ -24,6 +23,28 @@ export async function readKeyFile(file: File): Promise<string> {
 
 const TITLES: Record<KeyMode, string> = {key: 'New Key', generate: 'Generate Key', password: 'New Password', agent: 'New ssh-agent identity'}
 
+/** A text area whose name floats up onto its border once it has the focus or something in it. */
+function FloatArea(p: {label: string; value: string; onChange(v: string): void; required?: boolean; autoFocus?: boolean; mono?: boolean}) {
+  return (
+    <div className={'float-field' + (p.value ? ' filled' : '')}>
+      <textarea aria-label={p.label} className={p.mono === false ? '' : 'key-area'} spellCheck={false} autoFocus={p.autoFocus} value={p.value} onChange={e => p.onChange(e.target.value)} />
+      <label aria-hidden="true">{p.label}{p.required ? ' *' : ''}</label>
+    </div>
+  )
+}
+
+/** The little "file with a plus" of the drop area. */
+function DropIcon() {
+  return (
+    <svg className="drop-icon" width="46" height="46" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="6" y="18" width="22" height="26" rx="4" stroke="currentColor" strokeWidth="2" />
+      <rect x="26" y="4" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
+      <path d="M33 8v6M30 11h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M20 30l8 8m0-6v6h-6" stroke="#3a82f7" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 interface Props {
   mode: KeyMode
   onClose(): void
@@ -33,13 +54,19 @@ interface Props {
   onDraft(label: string): void
 }
 
-/** The docked panel next to the Keychain list: import a key (paste, drop a file or choose one), generate one, or add a password / agent identity. */
+/**
+ * The docked panel next to the Keychain list. New Key: label, private key, public key and certificate (all
+ * but the private key optional), a drop area and an "Import from key file" button. Also: generate a key,
+ * add a password, add an ssh-agent identity.
+ */
 export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
   const be = useBackend()
   const toast = useToast()
   const fileInput = useRef<HTMLInputElement>(null)
   const [label, setLabelState] = useState('')
   const [pem, setPem] = useState('')
+  const [pub, setPub] = useState('')
+  const [cert, setCert] = useState('')
   const [pass, setPass] = useState('')
   const [user, setUser] = useState('')
   const [pw, setPw] = useState('')
@@ -49,6 +76,8 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
   const [created, setCreated] = useState<Identity | null>(null)
 
   const setLabel = (v: string) => { setLabelState(v); onDraft(v) }
+  // an encrypted key needs its passphrase: the field appears only then
+  const encrypted = /ENCRYPTED|bcrypt/.test(pem) || (/BEGIN OPENSSH PRIVATE KEY/.test(pem) && /aes\d+-(ctr|cbc|gcm)/i.test(atobSafe(pem)))
 
   const run = async (fn: () => Promise<Identity | void>, ok: string, keepOpen = false) => {
     setErr('')
@@ -82,27 +111,27 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
     void takeFile(e.dataTransfer.files?.[0])
   }
   const copy = async (text: string) => {
-    try { await navigator.clipboard.writeText(text); toast.info('Public key copied') } catch { toast.error('Clipboard not available') }
+    try { await be.system.writeClipboard(text); toast.info('Public key copied') } catch { toast.error('Clipboard not available') }
   }
 
-  const labelBox = (
-    <input aria-label="Label" value={label} onChange={e => setLabel(e.target.value)} placeholder="Label" autoFocus />
-  )
+  const labelBox = <input aria-label="Label" value={label} onChange={e => setLabel(e.target.value)} placeholder="Label" autoFocus />
+  const errBox = err && <div className="error" role="alert">{err}</div>
 
-  let body, footer
+  let cards: ReactNode
+  let footer: ReactNode
   if (mode === 'key') {
-    body = (
+    cards = (
       <>
         <Section>
           {labelBox}
-          <textarea aria-label="Private key" className="key-area" rows={5} spellCheck={false} value={pem} onChange={e => setPem(e.target.value)}
-            placeholder="Private key (-----BEGIN OPENSSH PRIVATE KEY-----)" />
-          <input aria-label="Passphrase" type="password" autoComplete="off" value={pass} onChange={e => setPass(e.target.value)} placeholder="Passphrase (only if the key is encrypted)" />
-          <div className="muted">The public key is worked out from the private key. The private key is stored encrypted in the vault and never shown again.</div>
+          <FloatArea label="Private key" required value={pem} onChange={setPem} />
+          <FloatArea label="Public key" value={pub} onChange={setPub} />
+          <FloatArea label="Certificate" value={cert} onChange={setCert} />
+          {encrypted && <input aria-label="Passphrase" type="password" autoComplete="off" value={pass} onChange={e => setPass(e.target.value)} placeholder="Passphrase of the private key" />}
         </Section>
         <Section>
           <div className={'drop-zone' + (over ? ' over' : '')} data-testid="key-drop" onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={drop}>
-            <IconUpload size={26} />
+            <DropIcon />
             <span>Drag and drop a private key file to import</span>
           </div>
           <input ref={fileInput} type="file" hidden aria-label="Key file" onChange={e => { void takeFile(e.target.files?.[0]); e.target.value = '' }} />
@@ -113,11 +142,12 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
     footer = (
       <>
         <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy || !label.trim() || !pem.trim()} onClick={() => run(() => be.vault.addKeyPEM(label.trim(), pem, pass), 'Key saved')}>Save key</button>
+        <button className="primary" disabled={busy || !label.trim() || !pem.trim()}
+          onClick={() => run(() => be.vault.addKeyPair(label.trim(), pem, pass, pub, cert), 'Key saved')}>Save key</button>
       </>
     )
   } else if (mode === 'generate') {
-    body = created ? (
+    cards = created ? (
       <Section title="Public key">
         <p className="ok">Key “{created.name}” created. Add this public key to <code>~/.ssh/authorized_keys</code> on your servers:</p>
         <div className="pubkey" data-testid="pubkey">{created.public_key}</div>
@@ -133,7 +163,7 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
       ? <button className="primary" onClick={onClose}>Done</button>
       : <><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !label.trim()} onClick={() => run(() => be.vault.generateKey(label.trim()), 'Key generated', true)}>Generate</button></>
   } else if (mode === 'password') {
-    body = (
+    cards = (
       <Section>
         {labelBox}
         <input aria-label="Username" value={user} onChange={e => setUser(e.target.value)} placeholder="Username" />
@@ -142,7 +172,7 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
     )
     footer = <><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !label.trim() || !pw} onClick={() => run(() => be.vault.addPassword(label.trim(), user, pw), 'Password saved')}>Save password</button></>
   } else {
-    body = (
+    cards = (
       <Section>
         {labelBox}
         <input aria-label="Username" value={user} onChange={e => setUser(e.target.value)} placeholder="Username" />
@@ -154,8 +184,17 @@ export function KeyPanel({mode, onClose, onChanged, onDraft}: Props) {
 
   return (
     <SidePanel title={TITLES[mode]} onClose={onClose} footer={footer}>
-      {body}
-      {err && <div className="error" role="alert">{err}</div>}
+      {cards}
+      {errBox}
     </SidePanel>
   )
+}
+
+/** The body of an OpenSSH private key, decoded to look for the cipher name of an encrypted key. */
+function atobSafe(pem: string): string {
+  try {
+    return atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''))
+  } catch {
+    return ''
+  }
 }
