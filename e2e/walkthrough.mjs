@@ -88,6 +88,11 @@ await page.addInitScript(() => {
 
 const L = (label) => page.getByLabel(label, {exact: true})
 const nav = name => page.getByRole('navigation', {name: 'Main'}).getByRole('button', {name, exact: true})
+// every host opens on "Choose protocol" first (SSH is the default)
+const continueProtocol = async () => {
+  await page.getByRole('radiogroup', {name: 'Protocol'}).waitFor({timeout: 10000})
+  await page.getByRole('button', {name: 'Continue'}).click()
+}
 const goHome = () => page.getByRole('tab', {name: 'Vaults'}).click()
 const termText = () => page.locator('.xterm-rows').evaluateAll(els => els.map(e => e.textContent).join('\n'))
 const waitTerm = async (text) => page.waitForFunction(t => Array.from(document.querySelectorAll('.xterm-rows')).some(e => e.textContent.includes(t)), text)
@@ -213,6 +218,8 @@ try {
   await L('Username').fill('demo')
   await L('Identity').selectOption({label: 'demo-login'})
   await page.getByRole('dialog', {name: 'New host'}).getByRole('button', {name: 'Connect', exact: true}).click()
+  await shot(page, 'choose-protocol')
+  await continueProtocol()
 
   // the terminal tab opens; the bastion is already trusted, the target is new: one prompt
   const dlg = page.getByRole('alertdialog', {name: 'Host key confirmation'})

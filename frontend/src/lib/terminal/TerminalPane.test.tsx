@@ -321,3 +321,41 @@ describe('TerminalPane: copy on select, right click, copy and paste keys', () =>
     expect(screen.queryByRole('menu')).toBeNull()
   })
 })
+
+describe('TerminalPane: the connecting screen', () => {
+  beforeEach(() => { created.length = 0 })
+  const info = {label: 'web-1', os: 'ubuntu', subtitle: 'SSH w1.example.com:22'}
+  async function mountWith(extra = {}) {
+    const be = makeFake()
+    render(<Providers be={be}><TerminalPane {...props} connect={info} onShowLogs={vi.fn()} onCloseTab={vi.fn()} onFocus={vi.fn()} onExit={vi.fn()} {...extra} /></Providers>)
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'session.attach')).toBe(true))
+    return {be, sid: be.state.calls.find(c => c[0] === 'session.attach')![1] as string}
+  }
+  const bar = () => document.querySelector('.connect-track .line i') as HTMLElement | null
+
+  it('shows who it connects to and a line that moves along while connecting', async () => {
+    await mountWith()
+    const screenEl = screen.getByRole('status', {name: 'Connecting'})
+    expect(within(screenEl).getByText('web-1')).toBeInTheDocument()
+    expect(within(screenEl).getByText('SSH w1.example.com:22')).toBeInTheDocument()
+    expect(within(screenEl).getByRole('button', {name: 'Show logs'})).toBeInTheDocument()
+    expect(within(screenEl).getByRole('button', {name: 'Close'})).toBeInTheDocument()
+    expect(bar()).toHaveAttribute('data-progress', '0.9')
+    await waitFor(() => expect(bar()!.style.width).toBe('90%'))
+  })
+
+  it('when the session is ready the line runs to its end, and only then does the terminal show', async () => {
+    const {be, sid} = await mountWith()
+    act(() => be.emit(`term:ready:${sid}`, {}))
+    expect(screen.getByRole('status', {name: 'Connecting'})).toBeInTheDocument() // still there for the last stretch
+    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '1'))
+    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 1500})
+  })
+
+  it('a failed connection does not pretend to finish: the screen goes and the reason shows', async () => {
+    const {be, sid} = await mountWith()
+    act(() => be.emit(`term:closed:${sid}`, {reason: 'connection refused', clean: false}))
+    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull())
+    expect(await screen.findByRole('alert')).toHaveTextContent('connection refused')
+  })
+})

@@ -1,4 +1,4 @@
-import type {ReactNode} from 'react'
+import {ReactNode, useEffect, useState} from 'react'
 import {OsIcon} from '../ui/OsIcon'
 import {IconPlug, IconServer, IconTerminal} from '../ui/Icons'
 
@@ -10,6 +10,8 @@ interface Props {
   /** the small line under the name: "SSH 10.0.0.1:22" */
   subtitle: string
   step: ConnectStep
+  /** how far along the line the connection is (0..1); it fills the line from the plug to the terminal */
+  progress?: number
   /** a button at the right of the header, e.g. Show logs */
   headerAction?: ReactNode
   children?: ReactNode
@@ -20,7 +22,13 @@ interface Props {
  * The screen of a tab that is not connected yet, like Termius: who we are connecting to, a line from "plug"
  * to "terminal" that shows how far it got, and room below for the protocol choice, the message or the buttons.
  */
-export function ConnectScreen({label, os, subtitle, step, headerAction, children, footer}: Props) {
+export function ConnectScreen({label, os, subtitle, step, progress, headerAction, children, footer}: Props) {
+  // the line starts empty and then moves to where it should be, so that the move is seen
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    const t = window.setTimeout(() => setShown(progress ?? 0), 30)
+    return () => window.clearTimeout(t)
+  }, [progress])
   return (
     <div className="connect-screen" data-step={step}>
       <div className="connect-card">
@@ -31,7 +39,7 @@ export function ConnectScreen({label, os, subtitle, step, headerAction, children
         </div>
         <div className={'connect-track ' + step} aria-hidden="true">
           <span className="node start">{step === 'connecting' && <i className="ring" />}<IconPlug size={14} /></span>
-          <span className="line" />
+          <span className={'line' + (progress !== undefined && progress >= 1 ? ' full' : '')}>{progress !== undefined && <i style={{width: Math.round(shown * 100) + '%'}} data-progress={progress} />}</span>
           <span className="node end"><IconTerminal size={13} /></span>
         </div>
         {children}

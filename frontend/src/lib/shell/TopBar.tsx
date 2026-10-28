@@ -2,8 +2,10 @@ import {useEffect, useState} from 'react'
 import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSidebar, IconSplitH, IconSplitV} from '../ui/Icons'
 import {isTerminalTab, type Tab} from '../layout'
 import {TabStatus} from './TabStatus'
+import {OS_INFO, OsIcon} from '../ui/OsIcon'
+import {leaves} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
-import type {Snippet} from '../types'
+import type {Host, Snippet} from '../types'
 
 interface Props {
   tabs: Tab[]
@@ -24,6 +26,8 @@ interface Props {
   onDuplicateWindow?(id: string): void
   /** right-click menu: split the tab's focused pane */
   onSplitTab?(id: string, dir: 'row' | 'col'): void
+  /** the saved hosts: a tab shows the icon of the server type (Ubuntu, Debian…) it is connected to */
+  hosts?: Host[]
   snippets: Snippet[]
   onRunSnippet(s: Snippet, execute: boolean): void
   /** the panel on the right of a terminal (hosts, snippets, history, themes) */
@@ -51,6 +55,16 @@ export function TopBar(p: Props) {
     setEditing(null)
   }
   const current = p.tabs.find(t => t.id === p.active)
+  /** the icon of a tab: the server type of its host, a plug for a serial port, a terminal for this computer */
+  const tabIcon = (t: Tab) => {
+    if (t.kind === 'sftp') return <IconFolder size={15} />
+    if (t.kind === 'new') return <IconPlus size={15} />
+    const hostId = leaves(t.root)[0]?.hostId ?? ''
+    const id = hostId.startsWith('telnet:') ? hostId.slice('telnet:'.length) : hostId
+    const os = p.hosts?.find(h => h.id === id)?.os
+    if (os && OS_INFO[os]) return <span className="tab-os" style={{background: OS_INFO[os].color}} data-os={os}><OsIcon os={os} size={12} /></span>
+    return <IconTerminal />
+  }
   const inTerminal = !!current && isTerminalTab(current)
   return (
     <div className="topbar" role="tablist" aria-label="Open tabs" onDoubleClick={e => {
@@ -63,7 +77,7 @@ export function TopBar(p: Props) {
       {p.tabs.map(t => (
         <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
           onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
-          {t.kind === 'sftp' ? <IconFolder size={15} /> : t.kind === 'new' ? <IconPlus size={15} /> : <IconTerminal />}
+          {tabIcon(t)}
           <TabStatus tab={t} />
           {editing?.id === t.id ? (
             <input className="tab-rename" aria-label="Tab name" autoFocus value={editing.value} maxLength={60}

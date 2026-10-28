@@ -14,6 +14,9 @@ import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
 import type {ClosedInfo, HostKeyPrompt} from '../types'
 
+/** how long the line takes to reach its end once the session is ready (see the CSS) */
+export const FINISH_MS = 220
+
 interface Props {
   hostId: string
   /** identifies the pane so other parts of the UI (snippets) can type into it */
@@ -83,6 +86,19 @@ export function TerminalPane(p: Props) {
   onExit.current = p.onExit
 
   const setSt = (s: State) => { stateRef.current = s; setState(s) }
+  // the connecting screen's line runs to its end when the session is ready, and only then makes room for the terminal
+  const [finishing, setFinishing] = useState(false)
+  const wasConnecting = useRef(false)
+  useEffect(() => {
+    if (state === 'connecting') { wasConnecting.current = true; return }
+    if (state === 'ready' && wasConnecting.current && p.connect) {
+      wasConnecting.current = false
+      setFinishing(true)
+      const t = window.setTimeout(() => setFinishing(false), FINISH_MS)
+      return () => window.clearTimeout(t)
+    }
+    setFinishing(false)
+  }, [state])
   // the tab that holds this pane shows whether it is connecting or closed
   useEffect(() => {
     if (!p.paneId) return
@@ -329,10 +345,10 @@ export function TerminalPane(p: Props) {
           <button className="icon" aria-label="Next match" onClick={() => search.current?.findNext(needle)}><IconArrowDown size={15} /></button>
         </div>
       )}
-      {state === 'connecting' && !prompt && (p.connect
+      {(state === 'connecting' || finishing) && !prompt && (p.connect
         ? (
           <div className="connect-over" role="status" aria-label="Connecting" style={{background: p.termTheme.background}}>
-            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting"
+            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting" progress={state === 'ready' ? 1 : 0.9}
               headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
               footer={p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : undefined}>
               <div className="connect-msg">Connecting…</div>
