@@ -52,7 +52,7 @@ type Settings struct {
 func defaultSettings() Settings {
 	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace",
 		CursorStyle: "block", CursorBlink: true, CopyOnSelect: true, RightClick: "paste", Scrollback: 10000, AutoLockMinutes: 15,
-		Zoom: 100, Highlight: true, Shortcuts: map[string]string{}}
+		Zoom: 100, Highlight: true, AskProtocol: true, Shortcuts: map[string]string{}}
 }
 
 // Core wires the packages together; the services below share one instance.
