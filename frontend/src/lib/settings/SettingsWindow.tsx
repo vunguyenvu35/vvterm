@@ -9,6 +9,7 @@ import {resolveTerminalTheme} from '../terminal/themes'
 import {SyncPanel} from '../panels/SyncPanel'
 import {IconArrowUpRight, IconUser} from '../ui/Icons'
 import {ShortcutsEditor} from './ShortcutsEditor'
+import {capture, formatCombo, matches} from '../shortcuts/shortcuts'
 import type {Appearance} from './appearance'
 import type {CursorStyle, Settings, ThemeMode, VaultStatus} from '../types'
 
@@ -64,6 +65,8 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   const be = useBackend()
   const toast = useToast()
   const [cat, setCat] = useState<Cat>('general')
+  const catRef = useRef(cat)
+  catRef.current = cat
   const [version, setVersion] = useState('')
   const [scroll, setScroll] = useState(String(s.scrollback))
   const [auto, setAuto] = useState(String(vault.auto_lock_minutes))
@@ -86,6 +89,20 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, native])
+  // Mod+1…6 jump to a category, Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous one (not while a shortcut is being recorded)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (capture.active) return
+      const go = (i: number) => { e.preventDefault(); setCat(CATS[(i + CATS.length) % CATS.length].id); setErr('') }
+      const n = CATS.findIndex((_, i) => matches(e, 'Mod+' + (i + 1)))
+      if (n >= 0) return go(n)
+      const at = CATS.findIndex(c => c.id === catRef.current)
+      if (matches(e, 'Ctrl+Tab')) go(at + 1)
+      else if (matches(e, 'Ctrl+Shift+Tab')) go(at - 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const startDrag = (e: ReactPointerEvent) => {
     if (maximized || (e.target as HTMLElement).closest('button')) return
@@ -141,9 +158,10 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
           <div className="win-body">
             <nav className="win-nav" aria-label="Settings menu">
               <div role="tablist" aria-orientation="vertical" className="win-tabs">
-                {CATS.map(c => (
+                {CATS.map((c, i) => (
                   <button key={c.id} role="tab" aria-selected={cat === c.id} className={'settings-tab' + (cat === c.id ? ' active' : '')} onClick={() => { setCat(c.id); setErr('') }}>
-                    {c.label}
+                    <span>{c.label}</span>
+                    <kbd className="settings-key" aria-hidden="true">{formatCombo('Mod+' + (i + 1))}</kbd>
                   </button>
                 ))}
               </div>

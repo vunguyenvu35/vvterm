@@ -1,6 +1,7 @@
 package app
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -187,4 +188,60 @@ func TestAppMenuIsSafeBeforeTheWindowExists(t *testing.T) {
 	}
 	click(t, find(submenu(m, "View"), "Enter Full Screen"))
 	click(t, submenu(m, "Help").SubMenu.Items[0])
+}
+
+func TestAcceleratorFromShortcutText(t *testing.T) {
+	cases := map[string]string{
+		"Mod+Shift+T":    "t|cmdorctrl,shift",
+		"Ctrl+Tab":       "tab|ctrl",
+		"Ctrl+Shift+Tab": "tab|ctrl,shift",
+		"Mod+,":          ",|cmdorctrl",
+		"Mod+Alt+B":      "b|cmdorctrl,optionoralt",
+		"Mod+ArrowUp":    "up|cmdorctrl",
+	}
+	for combo, want := range cases {
+		a := Accelerator(combo)
+		if a == nil {
+			t.Fatalf("%s: no accelerator", combo)
+		}
+		var mods []string
+		for _, m := range a.Modifiers {
+			mods = append(mods, string(m))
+		}
+		if got := a.Key + "|" + strings.Join(mods, ","); got != want {
+			t.Errorf("%s: got %q want %q", combo, got, want)
+		}
+	}
+	if Accelerator("Hyper+X") != nil {
+		t.Error("an unknown modifier has no menu form")
+	}
+}
+
+func TestMenuShowsTheCurrentShortcutsOnMac(t *testing.T) {
+	h := (&menuProbe{}).hooks()
+	h.Shortcuts = map[string]string{"close_tab": "Mod+W", "open_sftp": "Mod+Shift+S", "go_hosts": "Alt+1", "next_tab": "Ctrl+Tab"}
+	m := BuildMenu(h)
+	closeTab := find(submenu(m, "File"), "Close Tab")
+	sftp := find(submenu(m, "View"), "SFTP")
+	if runtime.GOOS != "darwin" {
+		if closeTab.Accelerator != nil || sftp.Accelerator != nil {
+			t.Fatal("off macOS the page owns the keys: the menu shows none")
+		}
+		return
+	}
+	if closeTab.Accelerator == nil || closeTab.Accelerator.Key != "w" {
+		t.Fatalf("Close Tab: %+v", closeTab.Accelerator)
+	}
+	if sftp.Accelerator == nil || sftp.Accelerator.Key != "s" || len(sftp.Accelerator.Modifiers) != 2 {
+		t.Fatalf("SFTP: %+v", sftp.Accelerator)
+	}
+	if hosts := find(submenu(m, "View"), "Hosts"); hosts.Accelerator == nil || hosts.Accelerator.Key != "1" {
+		t.Fatalf("a changed key shows: %+v", hosts.Accelerator)
+	}
+	if next := find(submenu(m, "File"), "Next Tab"); next.Accelerator == nil || next.Accelerator.Key != "tab" {
+		t.Fatalf("Next Tab: %+v", next.Accelerator)
+	}
+	if find(submenu(m, "File"), "New Group…").Accelerator != nil {
+		t.Fatal("an item with no shortcut shows none")
+	}
 }

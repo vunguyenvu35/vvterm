@@ -9,6 +9,7 @@ import (
 	runtime2 "runtime"
 	"strings"
 
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -18,6 +19,8 @@ type SystemService struct {
 	ctx          context.Context
 	openSettings func() error
 	openWindow   func(hostID, title string) error
+	menuFor      func(shortcuts map[string]string) *menu.Menu
+	menuKeys     map[string]string
 }
 
 func NewSystemService() *SystemService { return &SystemService{} }
@@ -31,6 +34,32 @@ type AppInfo struct {
 
 // SetSettingsOpener installs what OpenSettings runs (the launcher of the Settings window process).
 func (s *SystemService) SetSettingsOpener(f func() error) { s.openSettings = f }
+
+// SetMenuBuilder installs what makes this window's menu bar for a set of shortcuts.
+func (s *SystemService) SetMenuBuilder(f func(shortcuts map[string]string) *menu.Menu) { s.menuFor = f }
+
+// SetMenuShortcuts is called by the page with the effective shortcuts (every action id to its key): the menu
+// bar is made again so each item shows its key. It does nothing when the keys did not change.
+func (s *SystemService) SetMenuShortcuts(shortcuts map[string]string) {
+	if s.ctx == nil || s.menuFor == nil || runtime2.GOOS != "darwin" {
+		return
+	}
+	if len(shortcuts) == len(s.menuKeys) {
+		same := true
+		for k, v := range shortcuts {
+			if s.menuKeys[k] != v {
+				same = false
+				break
+			}
+		}
+		if same {
+			return
+		}
+	}
+	s.menuKeys = shortcuts
+	runtime.MenuSetApplicationMenu(s.ctx, s.menuFor(shortcuts))
+	runtime.MenuUpdateApplicationMenu(s.ctx)
+}
 
 // OpenSettings opens the Settings window (a second native window), or raises it. It fails when there
 // is no native window to open, and the frontend then shows its in-app Settings window instead.

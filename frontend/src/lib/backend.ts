@@ -125,6 +125,10 @@ export interface Backend {
     info(): Promise<{version: string}>
     /** Opens the Settings window (a second native window). Rejects where none exists: the UI then shows its in-app window. */
     openSettings(): Promise<void>
+    /** the window is in full screen (the macOS window buttons are gone then) */
+    isFullscreen(): Promise<boolean>
+    /** tells the native menu bar the effective shortcuts, so each menu item shows its key (macOS) */
+    setMenuShortcuts(shortcuts: Record<string, string>): Promise<void>
     /** Opens a new native window with a new session to the same place (host id, "local", "serial:..."). Rejects where there is none. */
     openWindow(hostId: string, title: string): Promise<void>
     /** Opens a file with the app the system has for it (never a file that runs programs). */
@@ -146,7 +150,7 @@ type Bound = Record<string, (...a: any[]) => Promise<any>>
 declare global {
   interface Window {
     go?: Record<string, Record<string, Bound>>
-    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void; WindowToggleMaximise?(): void; Quit?(): void}
+    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void; WindowToggleMaximise?(): void; WindowIsFullscreen?(): Promise<boolean>; Quit?(): void}
   }
 }
 
@@ -266,6 +270,7 @@ export function wailsBackend(): Backend {
       remove: id => u('SnippetService', 'Delete', id),
     },
     system: {
+      setMenuShortcuts: s => call('app', 'SystemService', 'SetMenuShortcuts', s),
       pickFile: t => call('app', 'SystemService', 'PickFile', t),
       pickDirectory: t => call('app', 'SystemService', 'PickDirectory', t),
       saveFile: (t, n) => call('app', 'SystemService', 'SaveFile', t, n),
@@ -282,6 +287,7 @@ export function wailsBackend(): Backend {
       openPath: p => call('app', 'SystemService', 'OpenPath', p),
       openPathWith: (p, a) => call('app', 'SystemService', 'OpenPathWith', p, a),
       toggleMaximise: async () => { window.runtime?.WindowToggleMaximise?.() },
+      isFullscreen: async () => (await window.runtime?.WindowIsFullscreen?.()) ?? false,
       readClipboard: async () => {
         try { return String((await call('app', 'SystemService', 'ClipboardText')) ?? '') } catch { return navigator.clipboard.readText() }
       },
@@ -333,7 +339,7 @@ export function bridgeBackend(): Backend {
       join: pw => rpc('SyncService', 'JoinExisting', pw),
       status: () => rpc('SyncService', 'Status'),
     },
-    system: {...base.system, openSettings: unavailable, openWindow: unavailable},
+    system: {...base.system, openSettings: unavailable, openWindow: unavailable, setMenuShortcuts: async () => {}},
   }
 }
 

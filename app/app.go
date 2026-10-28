@@ -102,6 +102,7 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 // Startup is the Wails OnStartup hook: it routes use case events to the frontend.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.System.SetMenuBuilder(a.menuWith)
 	a.System.SetContext(ctx)
 	a.Core.SetEmitter(func(event string, data ...any) {
 		runtime.EventsEmit(ctx, event, data...)
@@ -145,8 +146,11 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 // Menu is the application menu bar, wired to this window.
-func (a *App) Menu() *menu.Menu {
+func (a *App) Menu() *menu.Menu { return a.menuWith(nil) }
+
+func (a *App) menuWith(shortcuts map[string]string) *menu.Menu {
 	return BuildMenu(MenuHooks{
+		Shortcuts: shortcuts,
 		Emit: func(action string) {
 			if a.ctx != nil {
 				runtime.EventsEmit(a.ctx, MenuEvent, action)

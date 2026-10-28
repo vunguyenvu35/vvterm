@@ -581,6 +581,19 @@ describe('App: the SFTP tab next to Vaults', () => {
   })
 })
 
+describe('App: full screen', () => {
+  it('marks the page while the window is in full screen, so the room for the window buttons goes', async () => {
+    const be = setup()
+    await unlock(be)
+    be.system.isFullscreen = async () => true
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    await waitFor(() => expect(document.documentElement.dataset.fullscreen).toBe('true'), {timeout: 1500})
+    be.system.isFullscreen = async () => false
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    await waitFor(() => expect(document.documentElement.dataset.fullscreen).toBe('false'), {timeout: 1500})
+  })
+})
+
 describe('App: keyboard shortcuts', () => {
   const press = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, ...init})) })
 

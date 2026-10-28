@@ -78,6 +78,7 @@ label.field > span { display: block; color: var(--muted); font-size: 11px; margi
 /* custom properties inherit: only the empty parts of the bar drag the window */
 .topbar .tab, .topbar button, .topbar .top-tools, .topbar .snippet-picker { --wails-draggable: no-drag; }
 .traffic-space { width: 78px; flex: none; }
+:root[data-fullscreen=true] .traffic-space { width: 0; }
 .tab { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 9px; cursor: pointer; color: var(--muted); background: transparent; border: 1px solid transparent; max-width: 220px; white-space: nowrap; }
 .tab:hover { background: var(--bg-3); color: var(--text); }
 .tab.active { background: var(--card); color: var(--text); border-color: var(--line); box-shadow: 0 1px 0 #ffffff08 inset; }
@@ -258,7 +259,7 @@ input[type='color'] { width: 44px; height: 38px; padding: 3px; }
 /* ---------- settings page ---------- */
 .settings-page { display: flex; gap: 22px; max-width: 1100px; }
 .settings-nav { width: 190px; flex: none; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; align-self: flex-start; }
-.settings-tab { text-align: left; background: transparent; border: none; padding: 9px 12px; border-radius: 9px; color: var(--text); }
+.settings-tab { display: flex; align-items: center; justify-content: space-between; text-align: left; background: transparent; border: none; padding: 9px 12px; border-radius: 9px; color: var(--text); }
 .settings-tab:hover:not(:disabled) { background: var(--bg-3); border-color: transparent; }
 .settings-tab.active { background: var(--bg-3); font-weight: 600; }
 .settings-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
@@ -834,3 +835,5 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .rtab:hover { background: var(--bg-3); }
 .rtab.on { background: var(--bg-3); color: var(--text); font-weight: 600; }
 .rtab-name { overflow: hidden; text-overflow: ellipsis; }
+.settings-key { font: inherit; font-size: 11.5px; color: var(--muted); opacity: .7; }
+.settings-tab:hover .settings-key, .settings-tab.active .settings-key { opacity: 1; }

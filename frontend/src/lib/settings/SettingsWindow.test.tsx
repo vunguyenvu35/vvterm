@@ -1,4 +1,4 @@
-import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {useState} from 'react'
 import {readFileSync} from 'node:fs'
@@ -34,7 +34,7 @@ describe('SettingsWindow', () => {
   it('has categories on the left and theme, help links and version below them (Termius layout)', async () => {
     setup()
     const nav = screen.getByRole('navigation', {name: 'Settings menu'})
-    expect(within(nav).getAllByRole('tab').map(t => t.textContent)).toEqual(['General', 'Account', 'Terminal', 'Security', 'Sync', 'Shortcuts'])
+    expect(within(nav).getAllByRole('tab').map(t => t.querySelector('span')?.textContent)).toEqual(['General', 'Account', 'Terminal', 'Security', 'Sync', 'Shortcuts'])
     expect(within(nav).getByRole('combobox', {name: /^Theme,/})).toBeInTheDocument()
     for (const l of ['Documentation', 'Request a feature', 'Report a bug', 'Release notes', 'Support on Ko-fi']) {
       expect(within(nav).getByRole('button', {name: new RegExp(l)})).toBeInTheDocument()
@@ -167,6 +167,21 @@ describe('SettingsWindow', () => {
     await tab('Security')
     await userEvent.click(screen.getByRole('switch', {name: 'Ask on open'}))
     await waitFor(() => expect(be.state.settings.biometric_on_open).toBe(false))
+  })
+
+  it('Ctrl+1…6 jump to a category and Ctrl+Tab goes round them, with the keys shown on the tabs', async () => {
+    setup()
+    const key = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, ...init})) })
+    const on = () => screen.getByRole('tab', {selected: true}).textContent
+    expect(screen.getByRole('tab', {name: /^Security/})).toHaveTextContent('Ctrl+4')
+    key({key: '4', code: 'Digit4', ctrlKey: true})
+    expect(on()).toMatch(/^Security/)
+    key({key: '6', code: 'Digit6', ctrlKey: true})
+    expect(on()).toMatch(/^Shortcuts/)
+    key({key: 'Tab', code: 'Tab', ctrlKey: true}) // after the last one comes the first
+    expect(on()).toMatch(/^General/)
+    key({key: 'Tab', code: 'Tab', ctrlKey: true, shiftKey: true}) // and back
+    expect(on()).toMatch(/^Shortcuts/)
   })
 
   it('security: a password hint can be saved', async () => {

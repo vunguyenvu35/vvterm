@@ -293,6 +293,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       remove: async i => { state.snippets = state.snippets.filter(x => x.id !== i) },
     },
     system: {
+      isFullscreen: async () => false,
+      setMenuShortcuts: async s => { rec('system.setMenuShortcuts', s) },
       pickFile: async () => '/tmp/picked',
       pickDirectory: async () => '/tmp/dir',
       saveFile: async (_t, name) => '/tmp/' + name,

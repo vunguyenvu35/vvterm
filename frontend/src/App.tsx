@@ -129,6 +129,18 @@ export default function App({initial}: {/** an app window opened for this place 
   const bindings = effective(settings.shortcuts)
   const bindingsRef = useRef(bindings)
   bindingsRef.current = bindings
+  // in full screen macOS hides the window buttons, so the room kept for them on the title bar goes (CSS: data-fullscreen)
+  useEffect(() => {
+    const check = () => { void be.system.isFullscreen().then(f => { document.documentElement.dataset.fullscreen = f ? 'true' : 'false' }).catch(() => {}) }
+    check()
+    let t = 0
+    const later = () => { window.clearTimeout(t); t = window.setTimeout(check, 150) }
+    window.addEventListener('resize', later)
+    return () => { window.clearTimeout(t); window.removeEventListener('resize', later) }
+  }, [be])
+  // the native menu shows the keys the page uses (macOS): tell it now and whenever they change
+  const bindingsKey = JSON.stringify(bindings)
+  useEffect(() => { void be.system.setMenuShortcuts(JSON.parse(bindingsKey)).catch(() => {}) }, [be, bindingsKey])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (capture.active) return // the editor is recording a new shortcut

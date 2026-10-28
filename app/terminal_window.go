@@ -150,6 +150,7 @@ func (w *TerminalWindow) Call(service, method, argsJSON string) (string, error) 
 // main process relays into events of this window, where the terminal listens for them.
 func (w *TerminalWindow) Startup(ctx context.Context) {
 	w.ctx = ctx
+	w.System.SetMenuBuilder(w.menuWith)
 	w.System.SetContext(ctx)
 	quitWithMain(ctx, w.client)
 	go func() {
@@ -200,8 +201,11 @@ func (w *TerminalWindow) Shutdown(context.Context) {
 }
 
 // Menu is the app's menu bar, doing its items in this window.
-func (w *TerminalWindow) Menu() *menu.Menu {
+func (w *TerminalWindow) Menu() *menu.Menu { return w.menuWith(nil) }
+
+func (w *TerminalWindow) menuWith(shortcuts map[string]string) *menu.Menu {
 	return BuildMenu(MenuHooks{
+		Shortcuts: shortcuts,
 		Emit: func(action string) {
 			if w.ctx != nil {
 				runtime.EventsEmit(w.ctx, MenuEvent, action)
