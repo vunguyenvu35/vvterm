@@ -67,7 +67,11 @@ export default function App({initial}: {/** an app window opened for this place 
   const [settingsOpen, setSettingsOpen] = useState(false)
   // the panel on the right of a terminal (hosts, snippets, history, themes): open or closed is remembered
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('vvterm.sidebar') !== 'closed' } catch { return true } })
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('snippets')
+  const [sidebarTab, setSidebarTabState] = useState<SidebarTab>(() => {
+    try { const t = localStorage.getItem('vvterm.sidebar.tab'); if (t === 'hosts' || t === 'snippets' || t === 'history' || t === 'themes') return t } catch { /* default */ }
+    return 'hosts'
+  })
+  const setSidebarTab = (t: SidebarTab) => { setSidebarTabState(t); try { localStorage.setItem('vvterm.sidebar.tab', t) } catch { /* not remembered */ } }
   const toggleSidebar = () => setSidebarOpen(o => { try { localStorage.setItem('vvterm.sidebar', o ? 'closed' : 'open') } catch { /* not remembered */ } return !o })
   const [dialog, setDialog] = useState<Dialog>(null)
   const [draft, setDraft] = useState('')
@@ -416,7 +420,7 @@ export default function App({initial}: {/** an app window opened for this place 
         </div>
         <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onDropTab={dropTab} onPopPane={popPaneOut} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
         {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
-          <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} snippets={snippets} settings={settings} appearance={appearance}
+          <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} groups={groups} tabs={tabs} activeTab={termActive} onSelectTab={id => setActive(id)} onCloseTab={closeTab} snippets={snippets} settings={settings} appearance={appearance}
             onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings} />
         )}
       </div>

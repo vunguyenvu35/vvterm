@@ -33,3 +33,26 @@ export function buildTree(groups: Group[], hosts: Host[]): Tree {
 export function countHosts(n: GroupNode): number {
   return n.hosts.length + n.children.reduce((s, c) => s + countHosts(c), 0)
 }
+
+const matches = (h: Host, q: string) => `${h.label} ${h.hostname} ${h.username} ${(h.tags ?? []).join(' ')}`.toLowerCase().includes(q)
+
+/** Keep only the hosts matching `q`, and the groups that lead to one. A group whose own name matches keeps everything inside it. */
+export function filterTree(tree: Tree, query: string): Tree {
+  const q = query.trim().toLowerCase()
+  if (!q) return tree
+  const prune = (n: GroupNode): GroupNode | null => {
+    if (n.group.name.toLowerCase().includes(q)) return n
+    const children = n.children.map(prune).filter((c): c is GroupNode => !!c)
+    const hosts = n.hosts.filter(h => matches(h, q))
+    return children.length || hosts.length ? {group: n.group, children, hosts} : null
+  }
+  return {
+    roots: tree.roots.map(prune).filter((n): n is GroupNode => !!n),
+    ungrouped: tree.ungrouped.filter(h => matches(h, q)),
+  }
+}
+
+/** How many of the group's hosts (all levels) have a session open, given the open host ids. */
+export function countOpen(n: GroupNode, open: ReadonlyMap<string, unknown>): number {
+  return n.hosts.filter(h => open.has(h.id)).length + n.children.reduce((s, c) => s + countOpen(c, open), 0)
+}

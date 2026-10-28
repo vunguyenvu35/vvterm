@@ -1,8 +1,10 @@
 import {useEffect, useMemo, useState} from 'react'
 import {clearHistory, getHistory, subscribeHistory} from './history'
 import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
-import {IconBraces, IconChevron, IconChevronDown, IconClock, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconTrash} from '../ui/Icons'
-import type {Host, Settings, Snippet} from '../types'
+import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconTrash} from '../ui/Icons'
+import {buildTree, countHosts, countOpen, filterTree, type GroupNode} from '../hosts/tree'
+import {isTerminalTab, leaves, type Tab} from '../layout'
+import type {Group, Host, Settings, Snippet} from '../types'
 import type {Appearance} from '../settings/appearance'
 
 export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes'
@@ -15,6 +17,13 @@ interface Props {
   tab: SidebarTab
   onTab(t: SidebarTab): void
   hosts: Host[]
+  /** the host groups, shown as a tree (nested through parent_id) */
+  groups?: Group[]
+  /** the open tabs: a host with a session open shows a dot, and a click on it switches to that tab */
+  tabs?: Tab[]
+  activeTab?: string
+  onSelectTab?(id: string): void
+  onCloseTab?(id: string): void
   snippets: Snippet[]
   settings: Settings
   appearance: Appearance
@@ -58,7 +67,7 @@ export function TerminalSidebar(p: Props) {
         ))}
       </div>
       <div className="side-body">
-        {p.tab === 'hosts' && <HostsTab hosts={p.hosts} onConnect={p.onConnect} />}
+        {p.tab === 'hosts' && <HostsTab hosts={p.hosts} groups={p.groups ?? []} tabs={p.tabs ?? []} activeTab={p.activeTab ?? ''} onConnect={p.onConnect} onSelectTab={p.onSelectTab} onCloseTab={p.onCloseTab} />}
         {p.tab === 'snippets' && <SnippetsTab snippets={p.snippets} onInsert={p.onInsert} onNew={p.onNewSnippet} />}
         {p.tab === 'history' && <HistoryTab onInsert={p.onInsert} />}
         {p.tab === 'themes' && <ThemesTab settings={p.settings} appearance={p.appearance} onSettings={p.onSettings} />}
@@ -76,20 +85,110 @@ function SearchBox({value, onChange, label}: {value: string; onChange(v: string)
   )
 }
 
-function HostsTab({hosts, onConnect}: {hosts: Host[]; onConnect?(h: Host): void}) {
+const FOLD_KEY = 'vvterm.sidebar.folded'
+function loadFolded(): Set<string> {
+  try { return new Set<string>(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')) } catch { return new Set() }
+}
+
+/** host id -> the terminal tabs that have a session on it (a split tab counts once per host) */
+function openByHost(tabs: Tab[]): Map<string, Tab[]> {
+  const m = new Map<string, Tab[]>()
+  for (const t of tabs) {
+    if (!isTerminalTab(t)) continue
+    for (const id of new Set(leaves(t.root).map(l => l.hostId.replace(/^telnet:/, '')))) m.set(id, [...(m.get(id) ?? []), t])
+  }
+  return m
+}
+
+interface HostsTabProps {
+  hosts: Host[]; groups: Group[]; tabs: Tab[]; activeTab: string
+  onConnect?(h: Host): void; onSelectTab?(id: string): void; onCloseTab?(id: string): void
+}
+
+/**
+ * Every host in its group, as a tree. A host with a session open has a dot: a click jumps to that tab
+ * (again to the next one when there are several), Alt/Shift-click always opens a new one. Typing a search
+ * unfolds the groups that lead to a match.
+ */
+function HostsTab({hosts, groups, tabs, activeTab, onConnect, onSelectTab, onCloseTab}: HostsTabProps) {
   const [q, setQ] = useState('')
-  const shown = hosts.filter(h => `${h.label} ${h.hostname} ${h.username}`.toLowerCase().includes(q.trim().toLowerCase()))
+  const [folded, setFolded] = useState(loadFolded)
+  const searching = q.trim() !== ''
+  const open = useMemo(() => openByHost(tabs), [tabs])
+  const tree = useMemo(() => filterTree(buildTree(groups, hosts), q), [groups, hosts, q])
+  const toggle = (id: string) => setFolded(f => {
+    const n = new Set(f)
+    if (!n.delete(id)) n.add(id)
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...n])) } catch { /* not remembered */ }
+    return n
+  })
+  const pick = (h: Host, fresh: boolean) => {
+    const mine = open.get(h.id)
+    if (fresh || !mine?.length) return onConnect?.(h)
+    // already open: go to it; when this is one of several, go to the next
+    const i = mine.findIndex(t => t.id === activeTab)
+    onSelectTab?.(mine[(i + 1) % mine.length].id)
+  }
+  const hostRow = (h: Host, depth: number) => {
+    const mine = open.get(h.id) ?? []
+    return (
+      <button key={h.id} role="treeitem" aria-level={depth + 1} className={'side-item tree-host' + (mine.some(t => t.id === activeTab) ? ' on' : '')}
+        style={{paddingLeft: 10 + depth * 14}} onClick={e => pick(h, e.altKey || e.shiftKey)}
+        title={mine.length ? `Switch to ${h.label} (Alt-click: new tab)` : `Open ${h.label} in a new tab`}>
+        <span className="tree-lead">
+          <IconServer size={15} />
+          {h.env && <i className={'env-pip env-' + h.env} aria-label={h.env} />}
+        </span>
+        <span className="side-main"><b>{h.label}</b><small>{h.username ? h.username + '@' : ''}{h.hostname}</small></span>
+        {mine.length > 0 && <span className="tree-live" aria-label={`${mine.length} open`}>{mine.length > 1 ? mine.length : ''}</span>}
+      </button>
+    )
+  }
+  const groupRow = (n: GroupNode, depth: number): JSX.Element => {
+    const isOpen = searching || !folded.has(n.group.id)
+    const live = countOpen(n, open)
+    return (
+      <div key={n.group.id} role="group">
+        <button role="treeitem" aria-level={depth + 1} aria-expanded={isOpen} className="side-item tree-group" style={{paddingLeft: 6 + depth * 14}}
+          onClick={() => toggle(n.group.id)}>
+          {isOpen ? <IconChevronDown size={14} /> : <IconChevron size={14} />}
+          <span className="tree-name" style={n.group.color ? {color: n.group.color} : undefined}>{n.group.name}</span>
+          <small className="tree-count">{live > 0 && <b>{live}/</b>}{countHosts(n)}</small>
+        </button>
+        {isOpen && <>
+          {n.children.map(c => groupRow(c, depth + 1))}
+          {n.hosts.map(h => hostRow(h, depth + 1))}
+        </>}
+      </div>
+    )
+  }
+  const active = tabs.filter(isTerminalTab)
+  const hostOf = (t: Tab) => hosts.find(h => h.id === leaves(t.root)[0]?.hostId.replace(/^telnet:/, ''))
+  const empty = tree.roots.length === 0 && tree.ungrouped.length === 0
   return (
     <>
       <SearchBox value={q} onChange={setQ} label="Search hosts in the sidebar" />
-      <div className="side-list" role="list" aria-label="Hosts">
-        {shown.map(h => (
-          <button key={h.id} className="side-item" onClick={() => onConnect?.(h)} title={`Open ${h.label} in a new tab`}>
-            <IconServer size={15} />
-            <span className="side-main"><b>{h.label}</b><small>{h.username ? h.username + '@' : ''}{h.hostname}</small></span>
-          </button>
-        ))}
-        {shown.length === 0 && <div className="side-empty">{hosts.length ? 'No hosts match.' : 'No hosts yet.'}</div>}
+      {active.length > 0 && !searching && (
+        <div className="side-list tree-active" role="list" aria-label="Active sessions">
+          <h4 className="side-sub">Active <small>{active.length}</small></h4>
+          {active.map(t => {
+            const h = hostOf(t)
+            return (
+              <div key={t.id} role="listitem" className={'side-item tree-session' + (t.id === activeTab ? ' on' : '')}>
+                <button className="tree-session-main" aria-label={'Switch to ' + t.title} aria-current={t.id === activeTab} onClick={() => onSelectTab?.(t.id)}>
+                  <span className="tree-lead"><IconServer size={15} />{h?.env && <i className={'env-pip env-' + h.env} aria-label={h.env} />}</span>
+                  <span className="side-main"><b>{t.title}</b>{h && <small>{h.hostname}</small>}</span>
+                </button>
+                {onCloseTab && <button className="icon ghost" aria-label={'End session ' + t.title} onClick={() => onCloseTab(t.id)}><IconClose size={13} /></button>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className="side-list" role="tree" aria-label="Hosts">
+        {tree.roots.map(n => groupRow(n, 0))}
+        {tree.ungrouped.map(h => hostRow(h, 0))}
+        {empty && <div className="side-empty">{hosts.length ? 'No hosts match.' : 'No hosts yet.'}</div>}
       </div>
     </>
   )

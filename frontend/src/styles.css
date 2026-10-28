@@ -612,6 +612,19 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .side-main b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-main small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-cmd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-active { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.tree-active .side-sub small { color: #3ecf8e; margin-left: 4px; }
+.tree-session { padding: 0 4px 0 0; gap: 0; } .tree-session.on { background: var(--bg-3); } .tree-session.on b { color: #3ecf8e; }
+.tree-session-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 7px 10px; background: transparent; border: none; color: var(--text); text-align: left; }
+.tree-group { padding-top: 6px; padding-bottom: 6px; color: var(--muted); font-weight: 600; font-size: 12.5px; }
+.tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-count { font-weight: 400; } .tree-count b { color: #3ecf8e; font-weight: 600; }
+.tree-host { padding-top: 6px; padding-bottom: 6px; }
+.tree-host.on { background: var(--bg-3); } .tree-host.on b { color: #3ecf8e; }
+.tree-lead { position: relative; display: inline-flex; }
+.tree-lead .env-pip { right: -4px; bottom: -4px; width: 8px; height: 8px; border-width: 1.5px; }
+.tree-live { margin-left: auto; min-width: 8px; height: 8px; border-radius: 8px; background: #3ecf8e; font-size: 10px; line-height: 8px; color: #04140c; text-align: center; }
+.tree-live:not(:empty) { height: 14px; line-height: 14px; padding: 0 4px; font-weight: 700; }
 .side-empty { color: var(--muted); padding: 14px 4px; font-size: 13px; }
 .side-fold { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 4px; background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0; color: var(--text); }
 .side-fold.open { color: #3ecf8e; }
