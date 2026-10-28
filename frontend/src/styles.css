@@ -681,9 +681,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .connect-name small { color: var(--muted); font-size: 12px; }
 .connect-track { display: flex; align-items: center; }
 .connect-track .line { flex: 1; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
-.connect-track .line i { display: block; height: 100%; background: #2f7bf5; border-radius: 2px; transition: width 8s cubic-bezier(.1, .7, .3, 1); }
-.connect-track .line.full i { transition-duration: .2s; transition-timing-function: ease-in; }
-[data-motion=reduced] .connect-track .line i { transition: none; }
+.connect-track .line i { display: block; height: 100%; background: #2f7bf5; border-radius: 2px; } /* its width is set frame by frame (ConnectScreen) */
 .connect-track .node { position: relative; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-3); color: var(--text); flex: none; }
 .connect-track .node.start { background: #2f7bf5; color: #fff; }
 .connect-track.failed .node.start { background: var(--danger, #ef5b5b); }
@@ -747,3 +745,12 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .connect-error { color: var(--danger, #ef5b5b); display: flex; flex-direction: column; gap: 6px; line-height: 1.4; word-break: break-word; }
 .connect-error small { color: var(--muted); }
 .connect-track.failed .line i { background: var(--danger, #ef5b5b); }
+
+/* the connection state is a small badge on the tab's icon (like a presence dot), not a dot of its own between icon and name */
+.topbar .tab { --tab-bg: var(--bg-2); }
+.topbar .tab:hover { --tab-bg: var(--bg-3); }
+.topbar .tab.active { --tab-bg: var(--card); }
+.tab-ico { position: relative; display: inline-flex; flex: none; }
+.tab-ico > svg, .tab-ico > .tab-os { flex: none; }
+.tab-ico .tab-status { position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px; box-sizing: border-box; box-shadow: 0 0 0 2px var(--tab-bg); }
+.tab-ico .tab-status.connecting { border: 2px solid #2f7bf566; border-top-color: #2f7bf5; background: var(--tab-bg); }

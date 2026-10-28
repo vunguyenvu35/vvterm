@@ -14,9 +14,6 @@ import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
 import type {ClosedInfo, HostKeyPrompt} from '../types'
 
-/** how long the line takes to reach its end once the session is ready (see the CSS) */
-export const FINISH_MS = 220
-
 interface Props {
   hostId: string
   /** identifies the pane so other parts of the UI (snippets) can type into it */
@@ -89,30 +86,14 @@ export function TerminalPane(p: Props) {
   // how far the connection got (events from the backend) and where the line stood when it failed
   const [stage, setStage] = useState<'connecting' | 'authenticated'>('connecting')
   const retry = useRef<() => void>(() => {})
-  const frozen = useRef(0)
   const everReady = useRef(false)
   useEffect(() => { if (state === 'ready') everReady.current = true }, [state])
-  /** the line's fill right now as a fraction (read from the screen: it is mid-animation) */
-  const measureLine = () => {
-    const line = document.querySelector<HTMLElement>('[data-pane="' + (p.paneId ?? '') + '"] .connect-track .line')
-    const fill = line?.querySelector<HTMLElement>('i')
-    return line && fill && line.offsetWidth ? Math.min(1, fill.offsetWidth / line.offsetWidth) : 0
-  }
-  // slow while it waits, quicker once the login is done, quickest at the end
-  const lineFor = state === 'ready' ? {progress: 1, duration: FINISH_MS} : stage === 'authenticated' ? {progress: 0.92, duration: 3000} : {progress: 0.3, duration: 6000}
-  // the connecting screen's line runs to its end when the session is ready, and only then makes room for the terminal
-  const [finishing, setFinishing] = useState(false)
-  const wasConnecting = useRef(false)
-  useEffect(() => {
-    if (state === 'connecting') { wasConnecting.current = true; return }
-    if (state === 'ready' && wasConnecting.current && p.connect) {
-      wasConnecting.current = false
-      setFinishing(true)
-      const t = window.setTimeout(() => setFinishing(false), FINISH_MS)
-      return () => window.clearTimeout(t)
-    }
-    setFinishing(false)
-  }, [state])
+  // Where the connecting line is heading: slowly while the backend works, further once the login is done, and
+  // to the very end when the session is ready (still smoothly: the screen goes when the line has arrived).
+  const lineTarget = state === 'ready' ? 1 : stage === 'authenticated' ? 0.92 : 0.55
+  const lineRate = state === 'ready' ? 7 : stage === 'authenticated' ? 0.9 : 0.35
+  const [lineDone, setLineDone] = useState(true)
+  useEffect(() => { if (state === 'connecting') setLineDone(false); else if (state === 'closed') setLineDone(true) }, [state])
   // the tab that holds this pane shows whether it is connecting or closed
   useEffect(() => {
     if (!p.paneId) return
@@ -258,7 +239,6 @@ export function TerminalPane(p: Props) {
         offs.push(be.on(`term:hostkey:${id}`, (hk: HostKeyPrompt) => setPrompt(hk)))
         offs.push(be.on(`term:progress:${id}`, (e: {stage?: string}) => { if (e?.stage === 'authenticated') setStage('authenticated') }))
         offs.push(be.on(`term:closed:${id}`, (c: ClosedInfo) => {
-          frozen.current = measureLine() // the line stops where it was
           setPrompt(null)
           setSt('closed')
           if (c.clean) onExit.current()
@@ -365,29 +345,20 @@ export function TerminalPane(p: Props) {
           <button className="icon" aria-label="Next match" onClick={() => search.current?.findNext(needle)}><IconArrowDown size={15} /></button>
         </div>
       )}
-      {(state === 'connecting' || finishing) && !prompt && (p.connect
-        ? (
-          <div className="connect-over" role="status" aria-label="Connecting" style={{background: p.termTheme.background}}>
-            <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="connecting" progress={lineFor.progress} duration={lineFor.duration}
-              headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
-              footer={p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : undefined}>
-              <div className="connect-msg">Connecting…</div>
-            </ConnectScreen>
-          </div>
-        )
-        : <div className="banner info">Connecting…</div>)}
-      {state === 'closed' && closed && !everReady.current && p.connect && (
-        <div className="connect-over" aria-label="Connection failed" style={{background: p.termTheme.background}}>
-          <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step="failed" progress={frozen.current} duration={0}
+      {p.connect && !prompt && (state === 'connecting' || (state === 'ready' && !lineDone) || (state === 'closed' && closed && !everReady.current)) ? (
+        <div className="connect-over" role={state === 'closed' ? undefined : 'status'} aria-label={state === 'closed' ? 'Connection failed' : 'Connecting'} style={{background: p.termTheme.background}}>
+          <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step={state === 'closed' ? 'failed' : 'connecting'}
+            target={lineTarget} rate={lineRate} onFull={() => setLineDone(true)}
             headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}
-            footer={<>
-              {p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : <span />}
-              <button className="primary" onClick={() => retry.current()}>Retry</button>
-            </>}>
-            <div className="connect-error" role="alert">{closed.reason}<small>Press Enter to try again</small></div>
+            footer={state === 'closed'
+              ? <>{p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : <span />}<button className="primary" onClick={() => retry.current()}>Retry</button></>
+              : p.onCloseTab ? <button onClick={p.onCloseTab}>Close</button> : undefined}>
+            {state === 'closed' && closed
+              ? <div className="connect-error" role="alert">{closed.reason}<small>Press Enter to try again</small></div>
+              : <div className="connect-msg">{stage === 'authenticated' ? 'Opening the shell…' : 'Connecting…'}</div>}
           </ConnectScreen>
         </div>
-      )}
+      ) : (!p.connect && state === 'connecting' && !prompt ? <div className="banner info">Connecting…</div> : null)}
       {state === 'closed' && closed && !(!everReady.current && p.connect) && (
         <div className="banner" role="alert">
           <span>{closed.reason}</span>

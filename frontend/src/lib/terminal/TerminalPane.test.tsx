@@ -332,63 +332,69 @@ describe('TerminalPane: the connecting screen', () => {
     return {be, sid: be.state.calls.find(c => c[0] === 'session.attach')![1] as string}
   }
   const bar = () => document.querySelector('.connect-track .line i') as HTMLElement | null
+  const at = () => Number(bar()!.getAttribute('data-progress'))
+  const sleep = (ms: number) => act(() => new Promise<void>(r => setTimeout(r, ms)))
 
-  it('shows who it connects to and a line that moves along while connecting', async () => {
+  it('shows who it connects to, and a line that creeps along without ever jumping', async () => {
     await mountWith()
     const screenEl = screen.getByRole('status', {name: 'Connecting'})
     expect(within(screenEl).getByText('web-1')).toBeInTheDocument()
     expect(within(screenEl).getByText('SSH w1.example.com:22')).toBeInTheDocument()
     expect(within(screenEl).getByRole('button', {name: 'Show logs'})).toBeInTheDocument()
     expect(within(screenEl).getByRole('button', {name: 'Close'})).toBeInTheDocument()
-    // it waits slowly: a third of the way over several seconds
-    expect(bar()).toHaveAttribute('data-progress', '0.3')
-    expect(bar()!.style.transitionDuration).toBe('6000ms')
-    await waitFor(() => expect(bar()!.style.width).toBe('30.0%'))
+    await waitFor(() => expect(at()).toBeGreaterThan(0))
+    const samples: number[] = []
+    for (let k = 0; k < 6; k++) { await sleep(60); samples.push(at()) }
+    for (let k = 1; k < samples.length; k++) {
+      expect(samples[k]).toBeGreaterThanOrEqual(samples[k - 1]) // forward only
+      expect(samples[k] - samples[k - 1]).toBeLessThan(0.05) // in small steps
+    }
+    expect(at()).toBeLessThan(0.55) // it does not reach its target while the backend is still working
   })
 
-  it('when the session is ready the line runs to its end, and only then does the terminal show', async () => {
+  it('the target moves on when the backend says the login is done, and the line follows smoothly', async () => {
     const {be, sid} = await mountWith()
-    act(() => be.emit(`term:ready:${sid}`, {}))
-    expect(screen.getByRole('status', {name: 'Connecting'})).toBeInTheDocument() // still there for the last stretch
-    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '1'))
-    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 1500})
-  })
-
-  it('a failed connection does not pretend to finish: the screen goes and the reason shows', async () => {
-    const {be, sid} = await mountWith()
-    act(() => be.emit(`term:closed:${sid}`, {reason: 'connection refused', clean: false}))
-    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull())
-    expect(await screen.findByRole('alert')).toHaveTextContent('connection refused')
-  })
-
-  it('moves faster when the backend says the login is done, and fastest at the end', async () => {
-    const {be, sid} = await mountWith()
+    expect(bar()).toHaveAttribute('data-target', '0.55')
     act(() => be.emit('term:progress:' + sid, {stage: 'authenticated'}))
-    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '0.92'))
-    expect(bar()!.style.transitionDuration).toBe('3000ms')
-    act(() => be.emit('term:ready:' + sid, {}))
-    await waitFor(() => expect(bar()).toHaveAttribute('data-progress', '1'))
-    expect(bar()!.style.transitionDuration).toBe('220ms')
+    await waitFor(() => expect(bar()).toHaveAttribute('data-target', '0.92'))
+    expect(screen.getByText('Opening the shell…')).toBeInTheDocument()
+    const before = at()
+    await sleep(80)
+    expect(at() - before).toBeLessThan(0.1) // no jump to the new target
   })
 
-  it('a failure turns the screen into the error: red line, the reason, Retry, Show logs and Close', async () => {
+  it('when the session is ready the line runs the rest of the way, and the terminal shows when it has arrived', async () => {
     const {be, sid} = await mountWith()
+    act(() => be.emit('term:ready:' + sid, {}))
+    expect(bar()).toHaveAttribute('data-target', '1')
+    expect(screen.getByRole('status', {name: 'Connecting'})).toBeInTheDocument() // not gone at once
+    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 4000})
+  })
+
+  it('a failure stops the line where it was and shows the error with Retry, Show logs and Close', async () => {
+    const {be, sid} = await mountWith()
+    await sleep(120)
     act(() => be.emit('term:closed:' + sid, {reason: 'ssh: handshake failed: unable to authenticate', clean: false}))
     const failed = await screen.findByLabelText('Connection failed')
     expect(within(failed).getByRole('alert')).toHaveTextContent('unable to authenticate')
     expect(failed.querySelector('.connect-track')).toHaveClass('failed')
+    const stopped = at()
+    await sleep(120)
+    expect(at()).toBe(stopped) // frozen
+    expect(stopped).toBeLessThan(0.55)
     expect(within(failed).getByRole('button', {name: 'Show logs'})).toBeInTheDocument()
     expect(within(failed).getByRole('button', {name: 'Close'})).toBeInTheDocument()
     await userEvent.click(within(failed).getByRole('button', {name: 'Retry'}))
     expect(be.state.calls.some(c => c[0] === 'session.reconnect')).toBe(true)
     expect(await screen.findByRole('status', {name: 'Connecting'})).toBeInTheDocument()
     expect(screen.queryByLabelText('Connection failed')).toBeNull()
+    await waitFor(() => expect(at()).toBeLessThan(stopped)) // a new try starts from the plug again
   })
 
   it('a connection lost after it was up keeps the old banner, not the connecting screen', async () => {
     const {be, sid} = await mountWith()
     act(() => be.emit('term:ready:' + sid, {}))
-    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 1500})
+    await waitFor(() => expect(screen.queryByRole('status', {name: 'Connecting'})).toBeNull(), {timeout: 4000})
     act(() => be.emit('term:closed:' + sid, {reason: 'connection lost: EOF', clean: false}))
     expect(await screen.findByText('Press Enter to reconnect')).toBeInTheDocument()
     expect(screen.queryByLabelText('Connection failed')).toBeNull()

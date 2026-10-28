@@ -77,8 +77,7 @@ export function TopBar(p: Props) {
       {p.tabs.map(t => (
         <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
           onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
-          {tabIcon(t)}
-          <TabStatus tab={t} />
+          <span className="tab-ico">{tabIcon(t)}<TabStatus tab={t} /></span>
           {editing?.id === t.id ? (
             <input className="tab-rename" aria-label="Tab name" autoFocus value={editing.value} maxLength={60}
               onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} onChange={e => setEditing({id: t.id, value: e.target.value})}
