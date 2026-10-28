@@ -2,6 +2,7 @@ import {fireEvent, render, screen, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {TopBar} from './TopBar'
 import {newTab} from '../layout'
+import {host} from '../../test/fakeBackend'
 
 const base = {snippets: [], onRunSnippet: vi.fn(), onSplit: vi.fn(), onNew: vi.fn(), onSettings: vi.fn()}
 
@@ -208,5 +209,18 @@ describe('TopBar: the right-click menu of a tab', () => {
     open()
     for (const n of ['Duplicate', 'Rename', 'Split right', 'Split down']) expect(screen.getByRole('menuitem', {name: n})).toBeDisabled()
     expect(screen.getByRole('menuitem', {name: 'Close'})).toBeEnabled()
+  })
+})
+
+describe('TopBar: tab icons', () => {
+  it('a tab shows the server type of its host, and a plain terminal icon for this computer', () => {
+    const web = newTab('h1', 'web'), local = newTab('local', 'Local'), sw = newTab('telnet:h2', 'switch (Telnet)')
+    render(<TopBar {...base} tabs={[web, local, sw]} active={web.id} onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()}
+      hosts={[host({id: 'h1', os: 'ubuntu'} as never), host({id: 'h2', os: 'debian'} as never)]} />)
+    const tabs = screen.getAllByRole('tab').filter(t => !t.classList.contains('tab-home'))
+    expect(tabs[0].querySelector('.tab-os')).toHaveAttribute('data-os', 'ubuntu')
+    expect(tabs[1].querySelector('.tab-os')).toBeNull()
+    expect(tabs[1].querySelector('svg')).not.toBeNull() // the terminal icon is still there
+    expect(tabs[2].querySelector('.tab-os')).toHaveAttribute('data-os', 'debian') // a Telnet tab belongs to the same host
   })
 })
