@@ -90,7 +90,7 @@ export function TerminalPane(p: Props) {
 
   useEffect(() => {
     const t = new Terminal({
-      fontSize: p.fontSize, fontFamily: p.fontFamily, cursorBlink: p.cursorBlink, cursorStyle: p.cursorStyle,
+      fontSize: p.fontSize, fontFamily: p.fontFamily, cursorBlink: p.cursorBlink, cursorStyle: p.cursorStyle, cursorInactiveStyle: 'bar', cursorWidth: 2,
       scrollback: p.scrollback, allowProposedApi: true, theme: p.termTheme,
     })
     const f = new FitAddon()
