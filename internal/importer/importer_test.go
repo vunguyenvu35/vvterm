@@ -84,7 +84,7 @@ func TestParseBasicBlocksAndWildcards(t *testing.T) {
 func TestIncludeGroupsByFileNameAndLoops(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "config"), "Include config.d/*\nHost solo\n  HostName solo.example\n")
-	write(t, filepath.Join(dir, "config.d", "vl24h-prod"), "Host web1\n  HostName 1.1.1.1\n")
+	write(t, filepath.Join(dir, "config.d", "acme-prod"), "Host web1\n  HostName 1.1.1.1\n")
 	write(t, filepath.Join(dir, "config.d", "staging.conf"), "Host web2\n  HostName 2.2.2.2\n")
 	write(t, filepath.Join(dir, "config.d", "loop"), "Include ../config\nHost lp\n  HostName 3.3.3.3\n")
 	p, err := ParseFile(filepath.Join(dir, "config"))
@@ -95,7 +95,7 @@ func TestIncludeGroupsByFileNameAndLoops(t *testing.T) {
 	for _, e := range p.Entries {
 		src[e.Alias] = e.Source
 	}
-	if src["web1"] != "vl24h-prod" || src["web2"] != "staging" || src["solo"] != "config" || src["lp"] != "loop" {
+	if src["web1"] != "acme-prod" || src["web2"] != "staging" || src["solo"] != "config" || src["lp"] != "loop" {
 		t.Fatalf("sources: %v", src)
 	}
 	if !strings.Contains(strings.Join(p.Warnings, "|"), "include loop") {

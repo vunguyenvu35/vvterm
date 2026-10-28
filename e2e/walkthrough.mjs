@@ -155,7 +155,7 @@ try {
   await page.getByRole('menu', {name: 'Add'}).waitFor()
   await shot(page, 'new-host-menu')
   await page.getByRole('menuitem', {name: 'New group'}).click()
-  await L('Group name').fill('vl24h-prod')
+  await L('Group name').fill('acme-prod')
   await page.getByRole('button', {name: 'Save'}).click()
   await panelClosed()
 
@@ -171,7 +171,7 @@ try {
   await panel.getByRole('combobox', {name: /^Group,/}).click() // the custom dropdown, not the native popup
   await page.getByRole('listbox', {name: 'Group'}).waitFor()
   await shot(page, 'custom-select')
-  await page.getByRole('option', {name: 'vl24h-prod'}).click()
+  await page.getByRole('option', {name: 'acme-prod'}).click()
   await panel.getByRole('combobox', {name: /^Environment,/}).click()
   await page.getByRole('option', {name: /^prod/}).click()
   await L('Tags').fill('edge, ssh')
@@ -206,7 +206,7 @@ try {
   await L('New host').click()
   await L('Hostname').fill('127.0.0.1')
   await L('Label').fill('app-server')
-  await L('Group').selectOption({label: 'vl24h-prod'})
+  await L('Group').selectOption({label: 'acme-prod'})
   await L('Environment').selectOption('staging')
   await L('Port').fill('2202')
   await L('Jump host').selectOption({label: 'Via bastion'})
@@ -229,7 +229,7 @@ try {
   await shot(page, 'terminal-via-jump-host')
 
   await goHome()
-  const groupCard = page.getByRole('button', {name: 'Open group vl24h-prod'})
+  const groupCard = page.getByRole('button', {name: 'Open group acme-prod'})
   await groupCard.waitFor()
   assert.match(await groupCard.textContent(), /2 Hosts/)
   await shot(page, 'hosts-groups')
@@ -667,7 +667,7 @@ try {
   await page.getByRole('button', {name: 'Create vault'}).click()
   await nav('Hosts').click() // the app returns to the page it was on (Logs)
   await page.getByPlaceholder(/Find a host or ssh user@hostname/).waitFor()
-  await page.getByRole('button', {name: 'Open group vl24h-prod'}).click()
+  await page.getByRole('button', {name: 'Open group acme-prod'}).click()
   await page.locator('.host', {hasText: 'app-server'}).waitFor() // hosts survived the reset
   await nav('Keychain').click()
   await page.getByText(/No keys yet/).waitFor() // saved passwords and keys did not

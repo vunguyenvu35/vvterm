@@ -274,7 +274,7 @@ Mọi dữ liệu phải ra được dạng chuẩn mà không cần app; sync c
 | Thư mục key | Chọn file private key, hỏi passphrase nếu có, lưu vào vault |
 | File backup JSON mã hoá | Khôi phục toàn bộ, hỏi mật khẩu backup |
 
-Group khi import từ ssh config lấy theo tên file trong `config.d/` (ví dụ `vl24h-prod` → group `vl24h-prod`). Host trùng tên thì hỏi ghi đè, bỏ qua hay tạo bản sao.
+Group khi import từ ssh config lấy theo tên file trong `config.d/` (ví dụ `acme-prod` → group `acme-prod`). Host trùng tên thì hỏi ghi đè, bỏ qua hay tạo bản sao.
 
 **Export**
 

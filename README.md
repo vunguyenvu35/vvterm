@@ -9,7 +9,7 @@
   Hosts, keys and passwords live in an encrypted vault on your Mac, export to standard formats at any time, and sync through a private Git repository you control.
 </p>
 
-<p align="center"><img src="docs/screenshots/17-split-panes.png" alt="VVTerm with two terminals side by side" width="900"></p>
+<p align="center"><img src="docs/screenshots/19-split-panes.png" alt="VVTerm with two terminals side by side" width="900"></p>
 
 ## What you can do
 
@@ -25,12 +25,12 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/13-hosts-in-group.png" alt="Hosts"><br><sub>Hosts and groups</sub></td>
-    <td width="50%"><img src="docs/screenshots/15-snippets-page.png" alt="Snippets"><br><sub>Snippets</sub></td>
+    <td width="50%"><img src="docs/screenshots/15-hosts-in-group.png" alt="Hosts"><br><sub>Hosts and groups</sub></td>
+    <td width="50%"><img src="docs/screenshots/17-snippets-page.png" alt="Snippets"><br><sub>Snippets</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/09-test-connection-ok.png" alt="New host with a successful connection test"><br><sub>New host: Test connection, Save or Connect</sub></td>
-    <td><img src="docs/screenshots/29-settings-terminal-theme.png" alt="Settings window with terminal themes"><br><sub>Settings window and terminal themes</sub></td>
+    <td><img src="docs/screenshots/11-test-connection-ok.png" alt="New host with a successful connection test"><br><sub>New host: Test connection, Save or Connect</sub></td>
+    <td><img src="docs/screenshots/41-settings-terminal-theme.png" alt="Settings window with terminal themes"><br><sub>Settings window and terminal themes</sub></td>
   </tr>
 </table>
 

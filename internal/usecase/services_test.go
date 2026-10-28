@@ -365,7 +365,7 @@ func TestImportSSHConfigWithKeysAndConflicts(t *testing.T) {
 	os.WriteFile(keyPath, priv, 0o600)
 	os.MkdirAll(filepath.Join(dir, "config.d"), 0o700)
 	os.WriteFile(filepath.Join(dir, "config"), []byte("Include config.d/*\n"), 0o600)
-	os.WriteFile(filepath.Join(dir, "config.d", "vl24h-prod"), []byte(
+	os.WriteFile(filepath.Join(dir, "config.d", "acme-prod"), []byte(
 		"Host bastion\n  HostName b.example.com\n  User ops\n  IdentityFile "+keyPath+"\n"+
 			"Host db\n  HostName 10.0.0.5\n  User dba\n  ProxyJump bastion\n  IdentityFile "+keyPath+"\n  LocalForward 3306 127.0.0.1:3306\n"), 0o600)
 

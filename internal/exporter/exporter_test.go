@@ -15,7 +15,7 @@ import (
 )
 
 func sampleData() domain.Data {
-	g := domain.Group{Meta: domain.Meta{ID: "g1"}, Name: "vl24h-prod"}
+	g := domain.Group{Meta: domain.Meta{ID: "g1"}, Name: "acme-prod"}
 	ident := domain.Identity{Meta: domain.Meta{ID: "i1aaaaaaaa"}, Name: "deploy key", AuthType: domain.AuthKey, SecretRef: "s1"}
 	pwid := domain.Identity{Meta: domain.Meta{ID: "i2bbbbbbbb"}, Name: "pw", AuthType: domain.AuthPassword, SecretRef: "s2"}
 	return domain.Data{
@@ -47,7 +47,7 @@ func TestSSHConfigRoundTripThroughImporter(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := importer.Build(parsed, domain.Data{}, importer.PolicySkip)
-	if len(plan.Hosts) != 3 || len(plan.Forwards) != 2 || len(plan.Groups) != 1 || plan.Groups[0].Name != "vl24h-prod" {
+	if len(plan.Hosts) != 3 || len(plan.Forwards) != 2 || len(plan.Groups) != 1 || plan.Groups[0].Name != "acme-prod" {
 		t.Fatalf("round trip lost data: hosts=%d fwd=%d groups=%+v", len(plan.Hosts), len(plan.Forwards), plan.Groups)
 	}
 	by := map[string]domain.Host{}
@@ -85,7 +85,7 @@ func TestSSHConfigKeysOnlyWhenRequestedWith0600(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "keys")); err == nil {
 		t.Fatal("keys dir created without opt-in")
 	}
-	cfg, _ := os.ReadFile(filepath.Join(dir, "config.d", "vl24h-prod"))
+	cfg, _ := os.ReadFile(filepath.Join(dir, "config.d", "acme-prod"))
 	if strings.Contains(string(cfg), "IdentityFile") || !strings.Contains(string(cfg), "not exported") {
 		t.Fatalf("config should explain missing key:\n%s", cfg)
 	}
@@ -102,7 +102,7 @@ func TestSSHConfigKeysOnlyWhenRequestedWith0600(t *testing.T) {
 	if st.Mode().Perm() != 0o600 {
 		t.Fatalf("key perm %v", st.Mode().Perm())
 	}
-	cfg2, _ := os.ReadFile(filepath.Join(dir2, "config.d", "vl24h-prod"))
+	cfg2, _ := os.ReadFile(filepath.Join(dir2, "config.d", "acme-prod"))
 	if !strings.Contains(string(cfg2), "IdentityFile "+rep.KeyFiles[0]) {
 		t.Fatalf("IdentityFile missing:\n%s", cfg2)
 	}
