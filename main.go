@@ -38,6 +38,7 @@ func main() {
 		log.Fatalf("open data: %v", err)
 	}
 
+	slimFullScreenBar() // a low bar with the app's name when macOS slides it over the page in full screen
 	err = wails.Run(&options.App{
 		Title:     "VVTerm",
 		Width:     1280,
@@ -98,6 +99,7 @@ func runTerminalWindow(dir, hostID, title string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	slimFullScreenBar()
 	err = wails.Run(&options.App{
 		Title:            "VVTerm",
 		Width:            1280,

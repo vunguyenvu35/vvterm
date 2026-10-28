@@ -5,6 +5,9 @@ package main
 // setDockIcon is only needed on macOS.
 func setDockIcon([]byte) {}
 
+// slimFullScreenBar is only needed on macOS.
+func slimFullScreenBar() {}
+
 // hideFromDock is only needed on macOS.
 func hideFromDock() {}
 
