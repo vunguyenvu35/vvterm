@@ -1,8 +1,11 @@
 name: ci
+# Paused: runs only when started by hand (Actions tab -> ci -> Run workflow).
+# To turn it back on, replace `workflow_dispatch:` with the two triggers below.
+#   push:
+#     branches: [main]
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   go:

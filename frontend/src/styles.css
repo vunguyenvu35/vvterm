@@ -82,7 +82,7 @@ label.field > span { display: block; color: var(--muted); font-size: 11px; margi
 .tab:hover { background: var(--bg-3); color: var(--text); }
 .tab.active { background: var(--card); color: var(--text); border-color: var(--line); box-shadow: 0 1px 0 #ffffff08 inset; }
 .tab-title { overflow: hidden; text-overflow: ellipsis; }
-.tab .x { display: inline-flex; opacity: .55; border-radius: 4px; padding: 1px; }
+.tab .x { display: inline-flex; opacity: .55; border-radius: 4px; padding: 1px; cursor: pointer; }
 .tab .x:hover { opacity: 1; color: var(--danger); background: #ef5b5b22; }
 .tab.add { padding: 0 9px; }
 .top-tools { display: flex; gap: 4px; }
@@ -818,8 +818,12 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .tag-row.on .tag-radio { border-color: #2f7bf5; background: radial-gradient(#2f7bf5 0 45%, transparent 50%); }
 .tag-clear { padding: 10px 6px; background: transparent; border: none; border-top: 1px solid var(--line); border-radius: 0; color: var(--muted); text-align: left; font-weight: 500; }
 .tag-clear:disabled { opacity: .5; }
-.fpane-filter { width: 130px; }
 .fpane-head button.on { background: var(--bg-3); }
 .input-row { display: flex; gap: 8px; align-items: center; }
 .input-row > input { flex: 1; min-width: 0; width: auto; }
 .input-row > button { flex: none; }
+.fpane-head .fpane-filter { flex: 1 1 0; min-width: 80px; width: auto; max-width: none; height: 34px; }
+.fpane-head > button { flex: none; }
+.fpane-head .fpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpane-head.filtering .spacer { display: none; } /* the filter box takes the free room instead */
+.fpane-x { margin-left: -2px; opacity: .7; } .fpane-x:hover { opacity: 1; }

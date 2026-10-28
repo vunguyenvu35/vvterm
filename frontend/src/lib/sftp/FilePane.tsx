@@ -1,7 +1,7 @@
 import {DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {errMsg} from '../util'
 import {useConfirm} from '../ui/Confirm'
-import {IconArrowUp, IconChevron, IconEdit, IconEye, IconEyeOff, IconFile, IconFolder, IconFolderPlus, IconHome, IconRefresh, IconSearch, IconTrash} from '../ui/Icons'
+import {IconArrowUp, IconChevron, IconClose, IconEye, IconEyeOff, IconFile, IconFolder, IconHome, IconRefresh, IconSearch} from '../ui/Icons'
 import {PermissionsDialog} from './Permissions'
 import {breadcrumbs, formatBytes, formatDate, joinPath, kindOf, parentOf, validName} from './format'
 import type {RemoteEntry} from '../types'
@@ -57,7 +57,7 @@ const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
  * once (Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A), new folder / rename / delete, and drag and drop of the
  * selection to the other side. It knows nothing about SSH.
  */
-export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut, onClose}: Props) {
+export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut, onClose, copyLabel = 'Copy to target directory'}: Props) {
   const confirm = useConfirm()
   const alive = useRef(true)
   const cwdRef = useRef('')
@@ -211,9 +211,10 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
 
   return (
     <section className={'fpane' + (over ? ' drop-target' : '')} aria-label={label(side)}>
-      <div className="fpane-head">
+      <div className={'fpane-head' + (filtering ? ' filtering' : '')}>
         <span className="fpane-icon">{icon}</span>
         <b className="fpane-title">{title}</b>
+        {onClose && <button className="icon ghost fpane-x" aria-label="Change host" title="Disconnect and pick another host" onClick={onClose}><IconClose size={13} /></button>}
         <span className="spacer" />
         {actions}
         {filtering && <input className="fpane-filter" aria-label={`${label(side)} filter`} autoFocus placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}
@@ -232,9 +233,6 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
         <form className="sftp-path" onSubmit={goPath}>
           <input aria-label={`${label(side)} path`} value={pathText} onChange={e => setPathText(e.target.value)} disabled={!ready} spellCheck={false} />
         </form>
-        <button disabled={!ready} onClick={() => setNaming({mode: 'mkdir', value: '', err: ''})}><IconFolderPlus size={15} /> New folder</button>
-        <button disabled={!ready || !sel} onClick={() => sel && setNaming({mode: 'rename', value: sel.name, err: ''})}><IconEdit size={15} /> Rename</button>
-        <button className="danger" disabled={!ready || chosen.length === 0} onClick={() => remove(chosen)}><IconTrash size={15} /> Delete</button>
       </div>
 
       <nav className="sftp-crumbs" aria-label={`${label(side)} folder path`}>
@@ -286,7 +284,7 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
             onMouseDown={ev => ev.stopPropagation()} onContextMenu={ev => ev.preventDefault()}>
             <button role="menuitem" disabled={!entry || (!entry.is_dir && !fs?.open)} onClick={() => act(() => openEntry(entry!))}>Open</button>
             <button role="menuitem" disabled={!entry || entry.is_dir || !fs?.openWith} onClick={() => act(() => fs!.openWith!(entry!))}>Open with…</button>
-            <button role="menuitem" disabled={none || !onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>Copy to target directory</button>
+            <button role="menuitem" disabled={none || !onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>{copyLabel}</button>
             <button role="menuitem" disabled={!entry} onClick={() => { setMenu(null); setNaming({mode: 'rename', value: entry!.name, err: ''}) }}>Rename</button>
             <button role="menuitem" className="danger-item" disabled={none} onClick={() => { setMenu(null); void remove(targets) }}>Delete</button>
             <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>

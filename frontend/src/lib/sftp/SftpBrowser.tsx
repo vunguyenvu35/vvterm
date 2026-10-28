@@ -3,7 +3,7 @@ import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {errMsg} from '../util'
-import {IconDownload, IconFolder, IconUpload} from '../ui/Icons'
+import {IconDownload, IconFolder} from '../ui/Icons'
 import {formatBytes} from './format'
 import {DragPayload, FilePane, Item, PaneFs, PaneState} from './FilePane'
 import {RemoteHost, RemotePane} from './RemotePane'
@@ -34,7 +34,7 @@ export function replaceQuestion(r: TransferResult, where: string): string {
 
 /**
  * The SFTP screen, like Termius: this computer on the left, a saved host on the right. Select one or more
- * files and folders (Cmd/Ctrl-click, Shift-click), then drag them across or use the Upload / Download
+ * files and folders (Cmd/Ctrl-click, Shift-click), then drag them across or use Upload (in the Actions menu) / Download
  * buttons. Folders go with everything inside. Nothing is replaced without asking, and the question comes
  * once for the whole batch.
  */
@@ -112,7 +112,6 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: give
   const onDropToLocal = useCallback((p: DragPayload) => { void move('download', p.items) }, [sid, local.cwd]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = transfer && transfer.total > 0 ? Math.min(100, Math.round((transfer.done / transfer.total) * 100)) : 0
-  const canUp = !!sid && local.selected.length > 0
   const canDown = !!sid && remote.selected.length > 0
   const count = (n: number) => (n > 1 ? ` ${n}` : '')
 
@@ -120,8 +119,7 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: give
     <div className="sftp" data-testid="sftp" aria-label={host ? `SFTP ${host.label}` : 'SFTP'}>
       <div className="sftp-panes">
         <FilePane side="local" title="Local" icon={<IconFolder size={16} />} fs={localHome ? fs : null} startDir={localHome} reloadKey={localKey} showHiddenDefault={false}
-          actions={<button disabled={!canUp} onClick={() => void move('upload', local.selected)} aria-label="Upload selected"><IconUpload size={15} /> Upload{count(local.selected.length)}</button>}
-          onState={setLocal} onDropEntry={onDropToLocal} onCopyOut={items => void move('upload', items)} copyLabel="Copy to target directory" />
+          onState={setLocal} onDropEntry={onDropToLocal} onCopyOut={sid ? items => void move('upload', items) : undefined} copyLabel="Upload" />
         <RemotePane host={host} hosts={hosts} onHost={h => { setHost(h); setTransfer(null); setRemote(NONE) }} reloadKey={remoteKey}
           onState={setRemote} onDropEntry={onDropToRemote} onSession={setSid} onCopyOut={items => void move('download', items)} />
       </div>

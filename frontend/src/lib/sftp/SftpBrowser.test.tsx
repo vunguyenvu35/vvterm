@@ -14,6 +14,12 @@ function setup(init: Parameters<typeof makeFake>[0] = {}, connected = true) {
 const L = () => screen.getByRole('region', {name: 'Local'})
 const R = () => screen.getByRole('region', {name: 'Remote'})
 const names = (pane: HTMLElement) => within(pane).queryAllByRole('row').slice(1).map(r => within(r).getAllByRole('cell')[0].textContent)
+/** the Actions menu of a pane, opened; the item `name` in it (the toolbar no longer has its own New folder / Rename / Delete) */
+const actionItem = async (pane: HTMLElement, name: string) => {
+  await userEvent.click(within(pane).getByRole('button', {name: 'Actions'}))
+  return within(within(pane).getByRole('menu')).getByRole('menuitem', {name})
+}
+const viaActions = async (pane: HTMLElement, name: string) => { await userEvent.click(await actionItem(pane, name)) }
 const row = (pane: HTMLElement, n: string) => within(pane).getByRole('row', {name: new RegExp('^' + n.replace('.', '\\.'))})
 const pick = (pane: HTMLElement, n: string) => userEvent.click(row(pane, n))
 const calls = (be: Fake, n: string) => be.state.calls.filter(c => c[0] === n)
@@ -86,7 +92,7 @@ describe('SftpBrowser: two panes', () => {
   it('creates, renames and deletes locally (folders recursively, after confirming)', async () => {
     const be = setup()
     await ready()
-    await userEvent.click(within(L()).getByRole('button', {name: 'New folder'}))
+    await viaActions(L(), 'New Folder')
     await userEvent.click(within(L()).getByRole('button', {name: 'Create'}))
     expect(within(L()).getByRole('alert')).toHaveTextContent('Enter a name')
     await userEvent.type(within(L()).getByLabelText('Name'), 'a/b{Enter}')
@@ -97,7 +103,7 @@ describe('SftpBrowser: two panes', () => {
     expect(calls(be, 'local.mkdir')[0][1]).toBe('/Users/me/work')
 
     await pick(L(), 'notes.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Rename'}))
+    await viaActions(L(), 'Rename')
     expect(within(L()).getByLabelText('Name')).toHaveValue('notes.txt')
     await userEvent.clear(within(L()).getByLabelText('Name'))
     await userEvent.type(within(L()).getByLabelText('Name'), 'todo.txt{Enter}')
@@ -105,12 +111,12 @@ describe('SftpBrowser: two panes', () => {
 
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
     await pick(L(), 'todo.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Delete'}))
+    await viaActions(L(), 'Delete')
     expect(calls(be, 'local.remove')).toHaveLength(0)
-    await userEvent.click(within(L()).getByRole('button', {name: 'Delete'}))
+    await viaActions(L(), 'Delete')
     await waitFor(() => expect(names(L())).not.toContain('todo.txt'))
     await pick(L(), 'Documents')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Delete'}))
+    await viaActions(L(), 'Delete')
     await waitFor(() => expect(names(L())).not.toContain('Documents'))
     expect(confirm.mock.calls[2][0]).toMatch(/folder "Documents" and everything in it/)
     expect(calls(be, 'local.remove').map(c => c[2])).toEqual([false, true])
@@ -119,18 +125,18 @@ describe('SftpBrowser: two panes', () => {
   it('does the same on the host through SFTP', async () => {
     const be = setup()
     await ready()
-    await userEvent.click(within(R()).getByRole('button', {name: 'New folder'}))
+    await viaActions(R(), 'New Folder')
     await userEvent.type(within(R()).getByLabelText('Name'), 'logs{Enter}')
     await waitFor(() => expect(names(R())).toContain('logs'))
     expect(calls(be, 'sftp.mkdir')[0].slice(2)).toEqual(['/logs'])
     await pick(R(), 'readme.txt')
-    await userEvent.click(within(R()).getByRole('button', {name: 'Rename'}))
+    await viaActions(R(), 'Rename')
     await userEvent.clear(within(R()).getByLabelText('Name'))
     await userEvent.type(within(R()).getByLabelText('Name'), 'README.md{Enter}')
     await waitFor(() => expect(names(R())).toContain('README.md'))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     await pick(R(), 'README.md')
-    await userEvent.click(within(R()).getByRole('button', {name: 'Delete'}))
+    await viaActions(R(), 'Delete')
     await waitFor(() => expect(names(R())).not.toContain('README.md'))
   })
 })
@@ -142,9 +148,9 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
   it('Upload sends the selected file to the remote folder and shows what happened', async () => {
     const be = setup()
     await ready()
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toBeDisabled()
+    expect(await actionItem(L(), 'Upload')).toBeDisabled(); fireEvent.keyDown(window, {key: 'Escape'})
     await pick(L(), 'notes.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(names(R())).toContain('notes.txt'))
     expect(calls(be, 'sftp.uploadAll')[0].slice(2)).toEqual([['/Users/me/notes.txt'], '/', false])
     expect(screen.getByRole('status', {name: 'Transfer progress'})).toHaveTextContent('Uploading notes.txt')
@@ -164,8 +170,8 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const be = setup()
     await ready()
     await pick(L(), 'Documents')
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toBeEnabled() // folders are fine now
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    expect(await actionItem(L(), 'Upload')).toBeEnabled(); fireEvent.keyDown(window, {key: 'Escape'}) // folders are fine now
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(names(R())).toContain('Documents'))
     expect(be.state.remote['/Documents/cv.pdf']).toBeDefined()
     expect(await screen.findByText(/Uploaded 1 file and 1 folder \(40\.0 KB\)/)).toBeInTheDocument()
@@ -179,13 +185,12 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await pick(L(), 'Documents')
     await ctrl(L(), 'notes.txt')
     expect(within(L()).getByRole('status')).toHaveTextContent('2 selected')
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toHaveTextContent('Upload 2')
     await ctrl(L(), 'notes.txt') // toggles it off
     expect(within(L()).queryByRole('status')).toBeNull()
     await pick(L(), 'Documents')
     await shift(L(), 'notes.txt') // the range: all three
     expect(within(L()).getByRole('status')).toHaveTextContent('3 selected')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
     expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/Documents', '/Users/me/.zshrc', '/Users/me/notes.txt'])
     // select all with the keyboard
@@ -216,12 +221,12 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     await pick(L(), '.zshrc')
     await ctrl(L(), 'notes.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
     expect(confirm.mock.calls[0][0]).toMatch(/2 files already exist in \/ \(.*notes\.txt.*\)\. Replace them\?/)
     expect(calls(be, 'sftp.uploadAll').map(c => c[4])).toEqual([false]) // declined: nothing replaced
     expect(await screen.findByText(/2 left as they were/)).toBeInTheDocument()
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(calls(be, 'sftp.uploadAll').map(c => c[4])).toEqual([false, false, true]))
     expect(confirm).toHaveBeenCalledTimes(2)
   })
@@ -232,7 +237,7 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     await waitFor(() => expect(names(L())).toHaveLength(2))
     await pick(L(), 'notes.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     await waitFor(() => expect(confirm).toHaveBeenCalled())
     expect(confirm.mock.calls[0][0]).toBe('notes.txt already exists in /. Replace it?')
   })
@@ -280,7 +285,7 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     be.sftp.uploadAll = async () => { throw 'notes.txt: permission denied' }
     await ready()
     await pick(L(), 'notes.txt')
-    await userEvent.click(within(L()).getByRole('button', {name: 'Upload selected'}))
+    await viaActions(L(), 'Upload')
     expect(await screen.findByText('notes.txt: permission denied')).toBeInTheDocument()
   })
 
@@ -288,7 +293,7 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     setup({}, false)
     await waitFor(() => expect(names(L())).toHaveLength(2))
     await pick(L(), 'notes.txt')
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toBeDisabled()
+    expect(await actionItem(L(), 'Upload')).toBeDisabled(); fireEvent.keyDown(window, {key: 'Escape'})
   })
 
   it('deletes several selected items after one confirmation', async () => {
@@ -297,21 +302,22 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     await pick(R(), 'projects')
     await ctrl(R(), 'readme.txt')
-    await userEvent.click(within(R()).getByRole('button', {name: 'Delete'}))
+    await viaActions(R(), 'Delete')
     await waitFor(() => expect(names(R())).toEqual([]))
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(confirm.mock.calls[0][0]).toMatch(/these 2 items/)
     expect(calls(be, 'sftp.remove')).toHaveLength(2)
-    expect(within(R()).getByRole('button', {name: 'Rename'})).toBeDisabled()
+    expect(await actionItem(R(), 'Rename')).toBeDisabled()
   })
 
   it('Rename needs exactly one selected item', async () => {
     setup()
     await ready()
     await pick(R(), 'projects')
-    expect(within(R()).getByRole('button', {name: 'Rename'})).toBeEnabled()
+    expect(await actionItem(R(), 'Rename')).toBeEnabled()
+    fireEvent.keyDown(window, {key: 'Escape'})
     await ctrl(R(), 'readme.txt')
-    expect(within(R()).getByRole('button', {name: 'Rename'})).toBeDisabled()
+    expect(await actionItem(R(), 'Rename')).toBeDisabled()
   })
 })
 
@@ -358,7 +364,7 @@ describe('SftpBrowser: the host', () => {
     await userEvent.click(within(R()).getByRole('button', {name: 'Change host'}))
     expect(within(R()).getByText('Connect to host')).toBeInTheDocument()
     expect(calls(be, 'sftp.close')).toHaveLength(1)
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toBeDisabled()
+    expect(await actionItem(L(), 'Upload')).toBeDisabled(); fireEvent.keyDown(window, {key: 'Escape'})
   })
 
   it('closes its connection when the tab goes away', async () => {
@@ -409,7 +415,7 @@ describe('SftpBrowser: the host', () => {
     const sid = calls(be, 'sftp.list')[0][1] as string
     act(() => be.emit('sftp:closed:' + sid))
     expect(await screen.findByText('The connection was lost.')).toBeInTheDocument()
-    expect(within(L()).getByRole('button', {name: 'Upload selected'})).toBeDisabled()
+    expect(await actionItem(L(), 'Upload')).toBeDisabled(); fireEvent.keyDown(window, {key: 'Escape'})
   })
 })
 
@@ -463,7 +469,7 @@ describe('SftpBrowser: right-click menu', () => {
   const menuOf = () => screen.getByRole('menu')
   const items = () => within(menuOf()).getAllByRole('menuitem').map(i => i.textContent)
 
-  const FULL = ['Open', 'Open with…', 'Copy to target directory', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close']
+  const FULL = ['Open', 'Open with…', 'Download', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close']
 
   it('a file has the full list: Open … Select All and Close', async () => {
     setup()
@@ -528,12 +534,12 @@ describe('SftpBrowser: right-click menu', () => {
     await waitFor(() => expect(calls(be, 'system.openPath')).toEqual([['system.openPath', '/Users/me/notes.txt']]))
   })
 
-  it('Copy to target directory sends the chosen items to the other pane, one or many', async () => {
+  it('Upload (local pane) and Download (remote pane) in the menu send the chosen items to the other pane', async () => {
     const be = setup()
     await ready()
     await pick(L(), 'notes.txt')
     fireEvent.contextMenu(row(L(), 'notes.txt'))
-    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Copy to target directory'}))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Upload'}))
     await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
     expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/notes.txt'])
   })
