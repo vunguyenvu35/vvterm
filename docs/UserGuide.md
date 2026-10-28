@@ -206,7 +206,7 @@ The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts
 
 ![Maximised settings](screenshots/47-settings-maximized.png)
 
-- **Shortcuts:** every action has a default, shown as a key chip. Click a chip, press the new combination and it is saved. A combination already in use is refused and tells you which action owns it; plain keys are refused (add Ctrl, Alt or ⌘; F-keys are allowed). *Reset* returns one action to its default, *Reset all* all of them. Esc and a few terminal keys are fixed and listed below the table.
+- **Shortcuts:** every action has a default, shown as key caps (⇧ ⌘ T). Click it, press the new combination and it is saved. To make a **two-step shortcut** such as ⌘K then M, press the first combination and, within about a second, the second key (it needs no modifier); wait instead and it stays a one-step shortcut. While a two-step shortcut is running, a small note at the bottom says it is waiting for the next key; Esc cancels it. Two-step shortcuts have no key hint in the menu bar. One shortcut cannot be both a one-step shortcut and the first step of another. A combination already in use is refused and tells you which action owns it; plain keys are refused (add Ctrl, Alt or ⌘; F-keys are allowed). *Reset* returns one action to its default, *Reset all* all of them. Esc and a few terminal keys are fixed and listed below the table.
 
 ![Shortcuts](screenshots/51-settings-shortcuts.png)
 

@@ -26,7 +26,7 @@ import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
 import {recordRecent} from './lib/hosts/recent'
 import {closePane, connectBlankTab, graftTab, moveTab, popPane, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
-import {capture, effective, matches} from './lib/shortcuts/shortcuts'
+import {capture, effective, formatCombo, isChord, keyOf, matches, sameStep, stepMatches, stepsOf} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
 import {useConfirm} from './lib/ui/Confirm'
@@ -141,6 +141,37 @@ export default function App({initial}: {/** an app window opened for this place 
   // the native menu shows the keys the page uses (macOS): tell it now and whenever they change
   const bindingsKey = JSON.stringify(bindings)
   useEffect(() => { void be.system.setMenuShortcuts(JSON.parse(bindingsKey)).catch(() => {}) }, [be, bindingsKey])
+  // Two-step shortcuts ("Mod+K M"): the first step arms them, the second one runs the action. This listens before the
+  // terminal does (capture phase), so neither step reaches the shell; a wrong key, Esc or a pause of 1.5 s cancels.
+  const [chordHint, setChordHint] = useState('')
+  useEffect(() => {
+    let armed: {first: string; timer: number} | null = null
+    const disarm = () => { if (armed) window.clearTimeout(armed.timer); armed = null; setChordHint('') }
+    const onKey = (e: KeyboardEvent) => {
+      if (capture.active) return
+      const chords = Object.entries(bindingsRef.current).filter(([, c]) => isChord(c))
+      if (armed) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); disarm(); return }
+        if (!keyOf(e)) return // only a modifier so far: keep waiting
+        e.preventDefault()
+        e.stopPropagation()
+        const first = armed.first
+        const hit = chords.find(([, c]) => sameStep(stepsOf(c)[0], first) && stepMatches(e, stepsOf(c)[1]))
+        disarm()
+        if (hit) act.current[hit[0]]?.()
+        return
+      }
+      const start = chords.find(([, c]) => stepMatches(e, stepsOf(c)[0]))
+      if (!start) return
+      e.preventDefault()
+      e.stopPropagation()
+      const first = stepsOf(start[1])[0]
+      armed = {first, timer: window.setTimeout(disarm, 1500)}
+      setChordHint(formatCombo(first))
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => { disarm(); window.removeEventListener('keydown', onKey, true) }
+  }, [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (capture.active) return // the editor is recording a new shortcut
@@ -387,6 +418,7 @@ export default function App({initial}: {/** an app window opened for this place 
         onNew={openBlankTab}
         onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onMoveTab={moveTabTo} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} hosts={hosts} onRunSnippet={runSnippet}
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
+      {chordHint && <div className="chord-hint" role="status"><kbd className="keycap">{chordHint}</kbd> was pressed. Waiting for the next key… (Esc to cancel)</div>}
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
           <Nav page={page} onPage={p => { if (p === 'hosts' && page === 'hosts') { setHostsReset(n => n + 1); setDialog(null) } else changePage(p) }} shortcuts={bindings} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />

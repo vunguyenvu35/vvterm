@@ -374,12 +374,38 @@ describe('SettingsWindow: Account', () => {
 describe('SettingsWindow: Shortcuts', () => {
   const chip = (label: string) => screen.getByRole('button', {name: new RegExp('^Change shortcut for ' + label)})
   const press = (opts: KeyboardEventInit & {key: string; code?: string}) => fireEvent.keyDown(window, opts)
+  const WAIT = {timeout: 3000} // a one-step shortcut is kept after a short wait for a second step
+
+  it('a second key right after the first makes a two-step shortcut (Ctrl+K, then M)', async () => {
+    const {be} = setup()
+    await tab('Shortcuts')
+    await userEvent.click(chip('Lock the vault'))
+    press({key: 'k', code: 'KeyK', ctrlKey: true})
+    expect(screen.getByRole('status')).toHaveTextContent('then press another key')
+    press({key: 'm', code: 'KeyM'}) // no modifier needed on the second step
+    await waitFor(() => expect(be.state.settings.shortcuts).toEqual({lock_vault: 'Mod+K M'}))
+    expect(chip('Lock the vault')).toHaveAccessibleName(/now Ctrl\+K M$/)
+    expect(within(chip('Lock the vault')).getByText('then')).toBeInTheDocument()
+  })
+
+  it('a one-step shortcut cannot take the first step of a two-step one, and the other way round', async () => {
+    setup({shortcuts: {zoom_in: 'Mod+K M'}})
+    await tab('Shortcuts')
+    await userEvent.click(chip('Lock the vault'))
+    press({key: 'k', code: 'KeyK', ctrlKey: true})
+    expect(await screen.findByRole('alert')).toHaveTextContent('Already used by “Zoom in”')
+    // and a second chord may share the first step
+    press({key: 'j', code: 'KeyJ', ctrlKey: true})
+    press({key: 'x', code: 'KeyX'})
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+  })
 
   it('lists every action with its default and the fixed shortcuts', async () => {
     setup()
     await tab('Shortcuts')
-    expect(chip('Open settings')).toHaveTextContent('Ctrl+,')
-    expect(chip('Zoom in')).toHaveTextContent('Ctrl+=')
+    expect(chip('Open settings')).toHaveAccessibleName(/now Ctrl\+,$/)
+    expect(chip('Zoom in')).toHaveAccessibleName(/now Ctrl\+=$/)
+    expect(within(chip('Zoom in')).getAllByText(/^(Ctrl|=)$/)).toHaveLength(2) // one key cap for each key
     expect(screen.getByText('Esc')).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Reset all'})).toBeDisabled()
   })
@@ -390,8 +416,8 @@ describe('SettingsWindow: Shortcuts', () => {
     await userEvent.click(chip('Lock the vault'))
     expect(screen.getByRole('status')).toHaveTextContent('Press the new shortcut')
     press({key: 'k', code: 'KeyK', ctrlKey: true, shiftKey: true})
-    await waitFor(() => expect(be.state.settings.shortcuts).toEqual({lock_vault: 'Mod+Shift+K'}))
-    expect(chip('Lock the vault')).toHaveTextContent('Ctrl+Shift+K')
+    await waitFor(() => expect(be.state.settings.shortcuts).toEqual({lock_vault: 'Mod+Shift+K'}), WAIT) // kept once no second step comes
+    expect(chip('Lock the vault')).toHaveAccessibleName(/now Ctrl\+Shift\+K$/)
     expect(screen.queryByRole('status')).toBeNull()
   })
 
@@ -412,7 +438,7 @@ describe('SettingsWindow: Shortcuts', () => {
     press({key: 'k', code: 'KeyK'})
     expect(await screen.findByRole('alert')).toHaveTextContent('Ctrl, Alt')
     press({key: 'j', code: 'KeyJ', altKey: true})
-    await waitFor(() => expect(be.state.settings.shortcuts).toEqual({lock_vault: 'Alt+J'}))
+    await waitFor(() => expect(be.state.settings.shortcuts).toEqual({lock_vault: 'Alt+J'}), WAIT)
   })
 
   it('modifier-only presses are ignored; Esc cancels without touching the window', async () => {
@@ -436,7 +462,7 @@ describe('SettingsWindow: Shortcuts', () => {
     await waitFor(() => expect(be.state.settings.shortcuts).toEqual({}))
     await userEvent.click(chip('Lock the vault'))
     press({key: 'l', code: 'KeyL', ctrlKey: true}) // the default: nothing to store
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull(), WAIT)
     expect(be.state.settings.shortcuts).toEqual({})
   })
 

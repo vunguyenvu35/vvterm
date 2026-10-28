@@ -245,3 +245,9 @@ func TestMenuShowsTheCurrentShortcutsOnMac(t *testing.T) {
 		t.Fatal("an item with no shortcut shows none")
 	}
 }
+
+func TestATwoStepShortcutHasNoMenuKey(t *testing.T) {
+	if Accelerator("Mod+K M") != nil {
+		t.Error("a two-step shortcut cannot be a menu key")
+	}
+}

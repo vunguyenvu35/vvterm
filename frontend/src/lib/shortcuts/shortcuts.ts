@@ -100,16 +100,29 @@ export function comboFromEvent(e: KeyboardEvent, mac = isMac()): string | null {
 }
 
 // Mod is Cmd on a Mac and Ctrl elsewhere, so "Ctrl+Tab" and "Mod+Tab" are the same key on Windows/Linux.
-const norm = (c: string, mac = isMac()) => c.split('+').map(p => (p === 'Mod' ? (mac ? 'meta' : 'ctrl') : p.toLowerCase())).sort().join('+')
+const normStep = (c: string, mac = isMac()) => c.split('+').map(p => (p === 'Mod' ? (mac ? 'meta' : 'ctrl') : p.toLowerCase())).sort().join('+')
+const norm = (c: string, mac = isMac()) => stepsOf(c).map(x => normStep(x, mac)).join(' ')
 
-/** Does the event produce this combo? */
+/** A shortcut is one step ("Mod+K") or two ("Mod+K M": press ⌘K, let go, press M). */
+export const stepsOf = (combo: string): string[] => combo.split(' ')
+export const isChord = (combo: string) => combo.includes(' ')
+
+/** Does the event produce this single step? A two-step shortcut never matches a single event: see stepMatches. */
 export function matches(e: KeyboardEvent, combo: string, mac = isMac()): boolean {
-  const got = comboFromEvent(e, mac)
-  return !!got && norm(got, mac) === norm(combo, mac)
+  if (isChord(combo)) return false
+  return stepMatches(e, combo, mac)
 }
 
-/** The same rules the backend enforces, so the editor can explain a rejection before saving. */
-export function validateCombo(c: string): string | null {
+/** Does the event produce this one step (the first or the second of a two-step shortcut, or a single shortcut)? */
+export function stepMatches(e: KeyboardEvent, step: string, mac = isMac()): boolean {
+  const got = comboFromEvent(e, mac)
+  return !!got && normStep(got, mac) === normStep(step, mac)
+}
+
+/** Do two steps name the same key? */
+export const sameStep = (a: string, b: string, mac = isMac()) => normStep(a, mac) === normStep(b, mac)
+
+function validateStep(c: string, needsModifier: boolean): string | null {
   const parts = c.split('+')
   const key = parts[parts.length - 1]
   const mods = new Set<string>()
@@ -120,32 +133,50 @@ export function validateCombo(c: string): string | null {
   if (key === 'Escape') return 'Escape is reserved: it always closes panels'
   if (/^F([1-9]|1[0-2])$/.test(key)) return null
   if (!(NAMED[key === 'Space' ? ' ' : key] || /^[A-Za-z0-9,./;'[\]\\\-=`]$/.test(key))) return `unsupported key "${key}"`
-  if (!(mods.has('Mod') || mods.has('Ctrl') || mods.has('Alt') || mods.has('Meta'))) return 'add Ctrl, Alt or ⌘ so normal typing never triggers it'
+  if (needsModifier && !(mods.has('Mod') || mods.has('Ctrl') || mods.has('Alt') || mods.has('Meta'))) return 'add Ctrl, Alt or ⌘ so normal typing never triggers it'
   return null
 }
 
-/** The action already using this combo, ignoring `exceptId`. */
+/** The same rules the backend enforces, so the editor can explain a rejection before saving. */
+export function validateCombo(c: string): string | null {
+  const steps = stepsOf(c)
+  if (steps.length > 2) return 'a shortcut can have at most two steps'
+  return validateStep(steps[0], true) ?? (steps[1] !== undefined ? validateStep(steps[1], false) : null)
+}
+
+/** The action already using this shortcut, ignoring `exceptId`. A single shortcut that is the first step of a two-step one counts too. */
 export function conflictFor(combo: string, exceptId: string, map: Record<string, string>): ActionDef | null {
   for (const a of ACTIONS) {
-    if (a.id !== exceptId && map[a.id] && norm(map[a.id]) === norm(combo)) return a
+    const other = map[a.id]
+    if (a.id === exceptId || !other) continue
+    if (norm(other) === norm(combo)) return a
+    const mine = stepsOf(combo), theirs = stepsOf(other)
+    if (mine.length !== theirs.length && sameStep(mine[0], theirs[0])) return a
   }
   return null
 }
 
-/** Human-readable form: ⌘⇧K on macOS, Ctrl+Shift+K elsewhere. */
-export function formatCombo(combo: string, mac = isMac()): string {
-  const parts = combo.split('+')
-  const key = parts[parts.length - 1]
-  const keyText = ({Space: 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backspace: '⌫', Delete: '⌦', Enter: '↵', Tab: 'Tab'} as Record<string, string>)[key] ?? key
+const KEY_TEXT: Record<string, string> = {Space: 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backspace: '⌫', Delete: '⌦', Enter: '↵', Tab: 'Tab'}
+
+/** The keys of one step, one by one: ["⇧", "⌘", "T"] on macOS, ["Ctrl", "Shift", "T"] elsewhere (for drawing key caps). */
+export function stepKeys(step: string, mac = isMac()): string[] {
+  const parts = step.split('+')
+  const key = KEY_TEXT[parts[parts.length - 1]] ?? parts[parts.length - 1]
   const mods = parts.slice(0, -1)
   if (mac) {
     const sym: Record<string, string> = {Mod: '⌘', Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Meta: '⌘'}
-    const order = ['Ctrl', 'Alt', 'Shift', 'Mod', 'Meta']
-    return order.filter(m => mods.includes(m)).map(m => sym[m]).join('') + keyText
+    return [...['Ctrl', 'Alt', 'Shift', 'Mod', 'Meta'].filter(m => mods.includes(m)).map(m => sym[m]), key]
   }
   const word: Record<string, string> = {Mod: 'Ctrl', Ctrl: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Meta: 'Win'}
-  const order = ['Mod', 'Ctrl', 'Alt', 'Shift', 'Meta']
-  return [...order.filter(m => mods.includes(m)).map(m => word[m]), keyText].join('+')
+  return [...['Mod', 'Ctrl', 'Alt', 'Shift', 'Meta'].filter(m => mods.includes(m)).map(m => word[m]), key]
+}
+
+/** Human-readable form: ⌘⇧K on macOS, Ctrl+Shift+K elsewhere; a two-step shortcut shows both steps ("⌘K M"). */
+export function formatCombo(combo: string, mac = isMac()): string {
+  return stepsOf(combo).map(step => {
+    const k = stepKeys(step, mac)
+    return mac ? k.join('') : k.join('+')
+  }).join(' ')
 }
 
 /** Set while the editor is recording a new shortcut, so the global handler stays quiet. */

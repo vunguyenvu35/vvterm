@@ -1,6 +1,38 @@
-import {ACTIONS, capture, comboFromEvent, conflictFor, effective, formatCombo, keyOf, matches, validateCombo} from './shortcuts'
+import {ACTIONS, capture, comboFromEvent, conflictFor, effective, formatCombo, isChord, keyOf, matches, stepKeys, stepMatches, validateCombo} from './shortcuts'
 
 const ev = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init)
+
+describe('two-step shortcuts', () => {
+  it('are one or two steps separated by a space; only the first needs a modifier', () => {
+    expect(isChord('Mod+K M')).toBe(true)
+    expect(isChord('Mod+K')).toBe(false)
+    for (const c of ['Mod+K M', 'Ctrl+K Ctrl+M', 'Mod+K Shift+M', 'Mod+K 1', 'Mod+K F5']) expect(validateCombo(c), c).toBeNull()
+    for (const c of ['K M', 'Mod+K M N', 'Mod+K ', 'Mod+K Escape', 'Mod+K Hyper+M']) expect(validateCombo(c), c).not.toBeNull()
+  })
+
+  it('one event never matches a two-step shortcut; each step matches by itself', () => {
+    const k = ev({key: 'k', code: 'KeyK', ctrlKey: true})
+    expect(matches(k, 'Mod+K M', false)).toBe(false)
+    expect(stepMatches(k, 'Mod+K', false)).toBe(true)
+    expect(stepMatches(ev({key: 'm', code: 'KeyM'}), 'M', false)).toBe(true)
+    expect(stepMatches(ev({key: 'm', code: 'KeyM', shiftKey: true}), 'M', false)).toBe(false)
+  })
+
+  it('conflict with a single shortcut on the same first step, in both directions; chords may share a first step', () => {
+    const map = {zoom_in: 'Mod+K M', lock_vault: 'Mod+L'}
+    expect(conflictFor('Mod+K', 'zoom_out', map)?.id).toBe('zoom_in')
+    expect(conflictFor('Mod+K M', 'zoom_out', map)?.id).toBe('zoom_in')
+    expect(conflictFor('Mod+K N', 'zoom_out', map)).toBeNull()
+    expect(conflictFor('Mod+L N', 'zoom_out', map)?.id).toBe('lock_vault') // Mod+L would fire first
+  })
+
+  it('are written out step by step, and as separate keys for drawing key caps', () => {
+    expect(formatCombo('Mod+K M', true)).toBe('⌘K M')
+    expect(formatCombo('Mod+K Ctrl+M', false)).toBe('Ctrl+K Ctrl+M')
+    expect(stepKeys('Mod+Shift+T', true)).toEqual(['⇧', '⌘', 'T'])
+    expect(stepKeys('Mod+Shift+T', false)).toEqual(['Ctrl', 'Shift', 'T'])
+  })
+})
 
 describe('shortcuts', () => {
   it('has unique action ids and unique valid default combos', () => {

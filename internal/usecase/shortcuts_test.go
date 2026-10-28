@@ -64,3 +64,33 @@ func TestValidateShortcuts(t *testing.T) {
 		t.Error("more than 40 overrides accepted")
 	}
 }
+
+func TestTwoStepShortcuts(t *testing.T) {
+	for _, c := range []string{"Mod+K M", "Ctrl+K Ctrl+M", "Mod+K Shift+M", "Mod+K F5", "Mod+K 1", "Mod+K Tab"} {
+		if err := ValidateCombo(c); err != nil {
+			t.Errorf("%q rejected: %v", c, err)
+		}
+	}
+	for c, why := range map[string]string{
+		"K M":           "the first step needs a modifier",
+		"Mod+K M N":     "three steps",
+		"Mod+K ":        "empty second step",
+		"Mod+K Escape":  "Escape is reserved",
+		"Mod+K Hyper+M": "unknown modifier in the second step",
+		"Mod+K  M":      "two spaces",
+	} {
+		if err := ValidateCombo(c); err == nil {
+			t.Errorf("%q accepted (%s)", c, why)
+		}
+	}
+	// two chords may share a first step; a chord and a single shortcut may not
+	if err := ValidateShortcuts(map[string]string{"zoom_in": "Mod+K M", "zoom_out": "Mod+K N"}); err != nil {
+		t.Errorf("two chords with the same first step: %v", err)
+	}
+	if err := ValidateShortcuts(map[string]string{"zoom_in": "Mod+K M", "zoom_out": "Mod+K"}); err == nil {
+		t.Error("Mod+K alone would fire before Mod+K M can start")
+	}
+	if err := ValidateShortcuts(map[string]string{"zoom_in": "Mod+K M", "zoom_out": "Mod+K M"}); err == nil {
+		t.Error("the same chord twice")
+	}
+}

@@ -597,6 +597,23 @@ describe('App: full screen', () => {
 describe('App: keyboard shortcuts', () => {
   const press = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, ...init})) })
 
+  it('a two-step shortcut runs on the second key; a wrong key or Esc cancels it', async () => {
+    const be = setup({settings: {...DEFAULT_SETTINGS, shortcuts: {open_settings: 'Mod+K S'}}})
+    await unlock(be)
+    press({key: 'k', code: 'KeyK', ctrlKey: true})
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for the next key')
+    press({key: 's', code: 'KeyS'})
+    expect(await screen.findByRole('dialog', {name: 'Settings'})).toBeInTheDocument()
+    expect(screen.queryByText(/Waiting for the next key/)).toBeNull()
+    press({key: ',', code: 'Comma', ctrlKey: true}) // the old default is gone: nothing happens
+    press({key: 'k', code: 'KeyK', ctrlKey: true})
+    press({key: 'Escape', code: 'Escape'})
+    expect(screen.queryByText(/Waiting for the next key/)).toBeNull()
+    press({key: 'k', code: 'KeyK', ctrlKey: true})
+    press({key: 'x', code: 'KeyX'}) // not the second step of any shortcut
+    expect(screen.queryByText(/Waiting for the next key/)).toBeNull()
+  })
+
   it('the default combo opens and closes Settings', async () => {
     const be = setup()
     await unlock(be)

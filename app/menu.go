@@ -73,6 +73,9 @@ var namedAccelKeys = map[string]string{"Tab": "tab", "Enter": "enter", "Space": 
 // Accelerator turns a shortcut as written in Settings ("Mod+Shift+T") into the menu's key hint; nil when it has
 // no menu form. Mod and Meta are Cmd.
 func Accelerator(combo string) *keys.Accelerator {
+	if strings.Contains(combo, " ") {
+		return nil // a two-step shortcut has no key hint in the menu
+	}
 	parts := strings.Split(combo, "+")
 	key := parts[len(parts)-1]
 	if named, ok := namedAccelKeys[key]; ok {

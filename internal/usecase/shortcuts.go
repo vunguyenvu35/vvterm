@@ -19,11 +19,25 @@ var (
 // maxShortcuts bounds the overrides stored in settings.json.
 const maxShortcuts = 40
 
-// ValidateCombo checks the textual form of a key combination: modifiers (Mod = Cmd on macOS, Ctrl
-// elsewhere; Ctrl, Alt, Shift, Meta) joined by "+" and ending with one key. Escape is reserved (it
-// always closes panels), and anything but an F-key needs at least one of Mod, Ctrl, Alt or Meta so
-// ordinary typing can never trigger a shortcut.
+// ValidateCombo checks the textual form of a shortcut. A shortcut is one step ("Mod+K") or two steps separated by a
+// space ("Mod+K M": press Cmd+K, let go, press M). A step is modifiers (Mod = Cmd on macOS, Ctrl elsewhere; Ctrl, Alt,
+// Shift, Meta) joined by "+" and ending with one key. Escape is reserved (it always closes panels). The first step,
+// like a single-step shortcut, needs at least one of Mod, Ctrl, Alt or Meta (F-keys excepted) so ordinary typing can
+// never trigger a shortcut; the second step of a chord may be a bare key.
 func ValidateCombo(c string) error {
+	steps := strings.Split(c, " ")
+	if len(steps) > 2 {
+		return fmt.Errorf("%q has more than two steps", c)
+	}
+	for i, step := range steps {
+		if err := validateStep(step, i == 0); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateStep(c string, needsModifier bool) error {
 	parts := strings.Split(c, "+")
 	key := parts[len(parts)-1]
 	mods := map[string]bool{}
@@ -42,7 +56,7 @@ func ValidateCombo(c string) error {
 	default:
 		return fmt.Errorf("invalid key %q in %q", key, c)
 	}
-	if !mods["Mod"] && !mods["Ctrl"] && !mods["Alt"] && !mods["Meta"] {
+	if needsModifier && !mods["Mod"] && !mods["Ctrl"] && !mods["Alt"] && !mods["Meta"] {
 		return fmt.Errorf("%q needs Mod, Ctrl, Alt or Meta", c)
 	}
 	return nil
@@ -59,7 +73,8 @@ func ValidateShortcuts(m map[string]string) error {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	seen := map[string]string{}
+	seen := map[string]string{}   // whole shortcut -> action
+	starts := map[string]string{} // first step of a two-step shortcut -> action
 	for _, id := range ids {
 		if !actionID.MatchString(id) {
 			return fmt.Errorf("invalid action id %q", id)
@@ -72,6 +87,18 @@ func ValidateShortcuts(m map[string]string) error {
 			return fmt.Errorf("%s and %s share the shortcut %s", other, id, m[id])
 		}
 		seen[norm] = id
+		if first, _, chord := strings.Cut(norm, " "); chord {
+			starts[first] = id
+		}
+	}
+	// a shortcut that is the first step of a two-step one: the two-step one could never be reached
+	for _, id := range ids {
+		norm := strings.ToLower(m[id])
+		if !strings.Contains(norm, " ") {
+			if other, clash := starts[norm]; clash {
+				return fmt.Errorf("%s uses %s, which %s needs as the first step of its shortcut", id, m[id], other)
+			}
+		}
 	}
 	return nil
 }
