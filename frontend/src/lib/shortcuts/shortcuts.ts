@@ -7,7 +7,7 @@
 export interface ActionDef {
   id: string
   label: string
-  group: 'General' | 'Tabs' | 'Terminal' | 'View'
+  group: 'General' | 'Pages' | 'Tabs' | 'Terminal' | 'View'
   default: string
   /** the default on a Mac, when it differs (Cmd+C copies there; Ctrl+C is the interrupt key everywhere else) */
   defaultMac?: string
@@ -18,6 +18,12 @@ export const ACTIONS: ActionDef[] = [
   {id: 'new_connection', label: 'New connection (find a host)', group: 'General', default: 'Mod+T'},
   {id: 'new_host', label: 'New host', group: 'General', default: 'Mod+N'},
   {id: 'new_local_terminal', label: 'New terminal on this computer', group: 'General', default: 'Mod+Shift+T'},
+  {id: 'go_hosts', label: 'Go to Hosts', group: 'Pages', default: 'Mod+1'},
+  {id: 'go_keychain', label: 'Go to Keychain', group: 'Pages', default: 'Mod+2'},
+  {id: 'go_forwards', label: 'Go to Port Forwarding', group: 'Pages', default: 'Mod+3'},
+  {id: 'go_snippets', label: 'Go to Snippets', group: 'Pages', default: 'Mod+4'},
+  {id: 'go_knownhosts', label: 'Go to Known Hosts', group: 'Pages', default: 'Mod+5'},
+  {id: 'go_logs', label: 'Go to Logs', group: 'Pages', default: 'Mod+6'},
   {id: 'lock_vault', label: 'Lock the vault', group: 'General', default: 'Mod+L'},
   {id: 'close_tab', label: 'Close the current tab', group: 'Tabs', default: 'Mod+W'},
   {id: 'next_tab', label: 'Next tab', group: 'Tabs', default: 'Ctrl+Tab'},

@@ -1073,3 +1073,16 @@ describe('App: ask which protocol to use', () => {
     expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'h1')
   })
 })
+
+describe('App: page shortcuts', () => {
+  it('Ctrl/Cmd+4 goes to Snippets and Ctrl/Cmd+1 back to Hosts, from a terminal too', async () => {
+    const be = setup()
+    await unlock(be)
+    const key = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, ...init})) })
+    key({key: '4', code: 'Digit4', ctrlKey: true})
+    expect(await screen.findByRole('button', {name: 'New snippet'})).toBeInTheDocument()
+    await userEvent.dblClick(screen.getByRole('button', {name: 'Hosts'}) && screen.getByRole('button', {name: 'Hosts'}))
+    key({key: '1', code: 'Digit1', ctrlKey: true})
+    expect(await screen.findByRole('list', {name: 'Hosts'})).toBeInTheDocument()
+  })
+})

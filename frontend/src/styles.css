@@ -754,3 +754,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .tab-ico > svg, .tab-ico > .tab-os { flex: none; }
 .tab-ico .tab-status { position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px; box-sizing: border-box; box-shadow: 0 0 0 2px var(--tab-bg); }
 .tab-ico .tab-status.connecting { border: 2px solid #2f7bf566; border-top-color: #2f7bf5; background: var(--tab-bg); }
+
+/* the key of an action, at the right of a nav item, only while the pointer is on it (or it has the focus) */
+.nav-item .nav-key { margin-left: auto; font: inherit; font-size: 11.5px; color: var(--muted); opacity: 0; transition: opacity .12s; white-space: nowrap; }
+.nav-item:hover .nav-key, .nav-item:focus-visible .nav-key { opacity: 1; }

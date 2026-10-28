@@ -229,6 +229,8 @@ try {
   await shot(page, 'host-key-prompt')
   await dlg.getByRole('button', {name: 'Trust and connect'}).click()
   await waitTerm('Welcome to app-server')
+  // the connecting screen's line runs to its end first, then the terminal shows
+  await page.getByRole('status', {name: 'Connecting'}).waitFor({state: 'detached'})
   await page.locator('.pane').click()
   await page.keyboard.type('hello vvterm')
   await page.keyboard.press('Enter')

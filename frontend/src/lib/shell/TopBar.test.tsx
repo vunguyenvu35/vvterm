@@ -37,7 +37,22 @@ describe('TopBar', () => {
 import {Nav} from './Nav'
 
 describe('Nav', () => {
-  it('every item has an accessible name and tooltip even when labels are hidden on narrow windows', () => {
+  afterEach(() => { delete (window as any).matchMedia })
+  const narrow = (matches: boolean) => { (window as any).matchMedia = () => ({matches, addEventListener() {}, removeEventListener() {}}) }
+
+  it('shows the key of an action at the right of its item, and no native tooltip while the label is visible', () => {
+    narrow(false)
+    render(<Nav page="hosts" onPage={vi.fn()} onData={vi.fn()} onSettings={vi.fn()} onLock={vi.fn()} shortcuts={{go_snippets: 'Mod+4', lock_vault: 'Mod+L'}} />)
+    const snippets = screen.getByRole('button', {name: 'Snippets'})
+    expect(snippets).not.toHaveAttribute('title')
+    expect(snippets.querySelector('.nav-key')).toHaveTextContent(/4/)
+    expect(snippets).toHaveAttribute('aria-keyshortcuts', 'Mod+4')
+    expect(screen.getByRole('button', {name: 'Lock vault'}).querySelector('.nav-key')).toHaveTextContent(/L/)
+    expect(screen.getByRole('button', {name: 'Hosts'}).querySelector('.nav-key')).toBeNull() // no key given: nothing shown
+  })
+
+  it('every item has an accessible name, and a tooltip when the labels are hidden on narrow windows', () => {
+    narrow(true)
     render(<Nav page="hosts" onPage={vi.fn()} onData={vi.fn()} onSettings={vi.fn()} onLock={vi.fn()} />)
     const names = screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))
     expect(names).toEqual(['Hosts', 'Keychain', 'Port Forwarding', 'Snippets', 'Known Hosts', 'Logs', 'Import / Export', 'Settings', 'Lock vault'])

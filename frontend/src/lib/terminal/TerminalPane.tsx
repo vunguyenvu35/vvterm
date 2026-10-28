@@ -346,7 +346,9 @@ export function TerminalPane(p: Props) {
         </div>
       )}
       {p.connect && !prompt && (state === 'connecting' || (state === 'ready' && !lineDone) || (state === 'closed' && closed && !everReady.current)) ? (
-        <div className="connect-over" role={state === 'closed' ? undefined : 'status'} aria-label={state === 'closed' ? 'Connection failed' : 'Connecting'} style={{background: p.termTheme.background}}>
+        <div className="connect-over" role={state === 'closed' ? undefined : 'status'} aria-label={state === 'closed' ? 'Connection failed' : 'Connecting'} style={{background: p.termTheme.background}}
+          // a click on the screen must not take the keyboard away from the terminal under it
+          onMouseDown={e => { if (!(e.target as HTMLElement).closest('button')) e.preventDefault() }}>
           <ConnectScreen label={p.connect.label} os={p.connect.os} subtitle={p.connect.subtitle} step={state === 'closed' ? 'failed' : 'connecting'}
             target={lineTarget} rate={lineRate} onFull={() => setLineDone(true)}
             headerAction={p.onShowLogs ? <button onClick={p.onShowLogs}>Show logs</button> : undefined}

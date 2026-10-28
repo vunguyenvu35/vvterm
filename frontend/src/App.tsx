@@ -292,6 +292,12 @@ export default function App() {
     new_connection: openBlankTab,
     new_host: () => { goHome('hosts'); setDialog({k: 'host'}) },
     new_local_terminal: () => openDevice('local', 'Local'),
+    go_hosts: () => goHome('hosts'),
+    go_keychain: () => goHome('keychain'),
+    go_forwards: () => goHome('forwards'),
+    go_snippets: () => goHome('snippets'),
+    go_knownhosts: () => goHome('knownhosts'),
+    go_logs: () => goHome('logs'),
     lock_vault: () => { void be.vault.lock().then(refreshVault) },
     close_tab: () => { if (termActive) closeTab(termActive) },
     next_tab: () => cycle(1),
@@ -326,7 +332,7 @@ export default function App() {
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
-          <Nav page={page} onPage={changePage} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
+          <Nav page={page} onPage={changePage} shortcuts={bindings} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
           <main className="main">
             {page === 'hosts' && (
               <HostList groups={groups} hosts={hosts} onMoveHost={moveHost} draft={dialog?.k === 'host' && !dialog.host?.id ? draft : undefined}
