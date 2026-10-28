@@ -1,4 +1,4 @@
-import {fireEvent, render, screen, within} from '@testing-library/react'
+import {createEvent, fireEvent, render, screen, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {TopBar} from './TopBar'
 import {newTab} from '../layout'
@@ -237,5 +237,47 @@ describe('TopBar: tab icons', () => {
     expect(tabs[1].querySelector('.tab-os')).toBeNull()
     expect(tabs[1].querySelector('svg')).not.toBeNull() // the terminal icon is still there
     expect(tabs[2].querySelector('.tab-os')).toHaveAttribute('data-os', 'debian') // a Telnet tab belongs to the same host
+  })
+})
+
+describe('TopBar: dragging tabs', () => {
+  const dt = () => {
+    const data: Record<string, string> = {}
+    return {data, types: [] as string[], effectAllowed: '', dropEffect: '',
+      setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+  }
+  const a = {...newTab('h1', 'A'), id: 'a'}, b = {...newTab('h2', 'B'), id: 'b'}, pinned = {...newTab('', 'SFTP'), id: 'sftp-main', pinned: true}
+  const tab = (name: string) => screen.getByRole('tab', {name})
+  /** jsdom has no DragEvent: give the event the pointer position it would carry */
+  const drag = (kind: 'dragOver' | 'drop', el: HTMLElement, dataTransfer: unknown, clientX: number) => {
+    const e = createEvent[kind](el, {dataTransfer})
+    Object.defineProperty(e, 'clientX', {value: clientX})
+    fireEvent(el, e)
+  }
+
+  it('a tab dropped on the right half of another goes after it, on the left half before it', () => {
+    const onMoveTab = vi.fn()
+    render(<TopBar {...base} tabs={[pinned, a, b]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} onMoveTab={onMoveTab} />)
+    const t = dt()
+    const rect = {left: 100, width: 100, right: 200, top: 0, bottom: 30, height: 30, x: 100, y: 0, toJSON() {}}
+    Object.defineProperty(tab('B'), 'getBoundingClientRect', {value: () => rect})
+    fireEvent.dragStart(tab('A'), {dataTransfer: t})
+    drag('dragOver', tab('B'), t, 190)
+    expect(tab('B')).toHaveClass('drop-after')
+    drag('drop', tab('B'), t, 190)
+    expect(onMoveTab).toHaveBeenLastCalledWith('a', 'b', true)
+    fireEvent.dragStart(tab('A'), {dataTransfer: t})
+    drag('drop', tab('B'), t, 110)
+    expect(onMoveTab).toHaveBeenLastCalledWith('a', 'b', false)
+  })
+
+  it('the pinned tab and a tab being renamed cannot be dragged; without a handler nothing is draggable', () => {
+    render(<TopBar {...base} tabs={[pinned, a]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} onMoveTab={vi.fn()} />)
+    expect(tab('SFTP')).not.toHaveAttribute('draggable', 'true')
+    expect(tab('A')).toHaveAttribute('draggable', 'true')
+  })
+  it('is not draggable without a handler', () => {
+    render(<TopBar {...base} tabs={[a]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} />)
+    expect(tab('A')).not.toHaveAttribute('draggable', 'true')
   })
 })

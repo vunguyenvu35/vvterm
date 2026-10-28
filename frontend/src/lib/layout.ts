@@ -151,3 +151,17 @@ export function duplicateOf(tab: Tab, title: string): Tab | null {
 export function hasPane(tab: Tab, paneId: string): boolean {
   return leaves(tab.root).some(l => l.id === paneId)
 }
+
+/**
+ * Drag a tab to a new place: `id` goes before (or after) `targetId`. The pinned tab (SFTP) stays first and
+ * nothing goes before it; an unknown id changes nothing.
+ */
+export function moveTab(tabs: Tab[], id: string, targetId: string, after = false): Tab[] {
+  const from = tabs.findIndex(t => t.id === id)
+  const to = tabs.findIndex(t => t.id === targetId)
+  if (from < 0 || to < 0 || from === to || tabs[from].pinned) return tabs
+  const rest = tabs.filter(t => t.id !== id)
+  let at = rest.findIndex(t => t.id === targetId) + (after ? 1 : 0)
+  at = Math.max(at, rest.filter(t => t.pinned).length) // never before a pinned tab
+  return [...rest.slice(0, at), tabs[from], ...rest.slice(at)]
+}

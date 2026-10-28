@@ -60,16 +60,19 @@ func TestOpenWindowFallsBackWithoutNativeWindows(t *testing.T) {
 	}
 }
 
-func TestBridgeRelaysOnlyTheSessionsAWindowOpened(t *testing.T) {
+func TestBridgeRelaysTheSessionsAWindowOpenedAndEveryOtherEvent(t *testing.T) {
 	_, b, _, _ := newBridgeApp(t)
 	b.Publish("term:data:other", []any{"x"}) // nobody opened it: not kept
 	b.watch("mine")
 	b.Publish("term:data:mine", []any{"aGk="})
-	b.Publish("hosts:changed", nil) // not a terminal event
+	b.Publish("hosts:changed", []any{"h1"}) // not about one terminal: every app window gets it
+	b.Publish("sftp:progress:theirs", []any{1}) // an SFTP session of another window: not kept
+	b.Publish("sftp:progress:mine", []any{2})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	b.watch("mine")
 	evs, last := b.eventsAfter(ctx, 0)
-	if len(evs) != 1 || evs[0].Name != "term:data:mine" || last != 1 {
+	if len(evs) != 3 || evs[0].Name != "term:data:mine" || evs[1].Name != "hosts:changed" || evs[2].Name != "sftp:progress:mine" || last != 3 {
 		t.Fatalf("%+v last=%d", evs, last)
 	}
 	var args []string
@@ -149,5 +152,47 @@ func TestMenuItemsOfOtherWindowsAreDoneByTheMainWindow(t *testing.T) {
 	}
 	if len(got) != len(MenuActions) {
 		t.Fatal("a refused action reached the handler")
+	}
+}
+
+func TestAnAppWindowMayCallAnyUseCaseButOnlyThose(t *testing.T) {
+	_, b, _, dir := newBridgeApp(t)
+	for _, call := range [][2]string{{"HostService", "ListHosts"}, {"VaultService", "Status"}, {"SnippetService", "List"}, {"LocalService", "Home"}} {
+		args := []json.RawMessage{}
+		if call[1] == "ListHosts" {
+			args = []json.RawMessage{json.RawMessage(`{"query":"","group_id":"","env":"","tag":""}`)}
+		}
+		if _, err := b.DispatchApp(call[0], call[1], args); err != nil {
+			t.Errorf("%s.%s: %v", call[0], call[1], err)
+		}
+	}
+	for _, call := range [][2]string{{"NopeService", "List"}, {"HostService", "nope"}, {"HostService", ""}, {"HostService", "ListHostsX"}, {"SystemService", "OpenURL"}} {
+		if _, err := b.DispatchApp(call[0], call[1], nil); err == nil {
+			t.Errorf("%s.%s must be refused", call[0], call[1])
+		}
+	}
+	// over HTTP it needs the token like everything else
+	c, err := ConnectBridge(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := c.CallApp("VaultService", "Status", "[]"); err != nil || !strings.Contains(out, "exists") {
+		t.Fatalf("%q %v", out, err)
+	}
+	c.token = "wrong"
+	if _, err := c.CallApp("VaultService", "Status", "[]"); err == nil {
+		t.Fatal("a wrong token must be refused")
+	}
+}
+
+func TestAskingWhereTheEventsAreNowDoesNotWait(t *testing.T) {
+	_, b, _, dir := newBridgeApp(t)
+	b.watch("s")
+	b.Publish("term:data:s", []any{"x"})
+	c, _ := ConnectBridge(dir)
+	start := time.Now()
+	evs, last, err := c.Events(context.Background(), -1)
+	if err != nil || len(evs) != 0 || last != 1 || time.Since(start) > 2*time.Second {
+		t.Fatalf("%v %v %d %v", err, evs, last, time.Since(start))
 	}
 }

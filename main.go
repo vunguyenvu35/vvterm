@@ -89,22 +89,23 @@ func runSettings(dir string) {
 	}
 }
 
-// runTerminalWindow is a terminal window (Duplicate in new window): another process with its own native
-// window and no data; its session lives in the main process.
+// runTerminalWindow is an app window (Duplicate in new window): the whole app in another process with its own
+// native window. It holds no data: every call goes to the main process, so the vault, the hosts and the
+// sessions are the same ones; it opens the given host in its first tab.
 func runTerminalWindow(dir, hostID, title string) {
 	w, err := app.NewTerminalWindow(dir, hostID, title)
 	if err != nil {
 		log.Fatal(err)
 	}
 	err = wails.Run(&options.App{
-		Title:            title,
-		Width:            1100,
-		Height:           700,
-		MinWidth:         600,
-		MinHeight:        400,
+		Title:            "VVTerm",
+		Width:            1280,
+		Height:           800,
+		MinWidth:         900,
+		MinHeight:        600,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
-		OnStartup:        func(ctx context.Context) { w.Startup(ctx); hideFromDock() },
+		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
 		OnShutdown:       w.Shutdown,
 		Menu:             w.Menu(),
 		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},

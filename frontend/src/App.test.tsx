@@ -1086,3 +1086,26 @@ describe('App: page shortcuts', () => {
     expect(await screen.findByRole('list', {name: 'Hosts'})).toBeInTheDocument()
   })
 })
+
+describe('App: an app window opened for a host', () => {
+  const initial = {host_id: 'h2', title: 'db-1'}
+  it('opens that host in its first tab once the vault is open, and does not open it twice', async () => {
+    const be = makeFake({hosts: [host({id: 'h1', label: 'web-1'}), host({id: 'h2', label: 'db-1'})]})
+    render(<Providers be={be}><App initial={initial} /></Providers>)
+    await userEvent.type(await screen.findByLabelText('Master password'), be.state.password)
+    await userEvent.click(screen.getByRole('button', {name: 'Unlock'}))
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'h2')
+    expect(screen.getByRole('tab', {name: /db-1/, selected: true})).toBeInTheDocument()
+    expect(screen.getAllByTestId('terminal')).toHaveLength(1)
+    expect(screen.getByRole('tab', {name: 'Vaults'})).toBeInTheDocument() // it is the whole app: Vaults and SFTP are there
+    expect(screen.getByRole('tab', {name: 'SFTP'})).toBeInTheDocument()
+  })
+
+  it('a terminal on this computer opens at once', async () => {
+    const be = makeFake({hosts: []})
+    render(<Providers be={be}><App initial={{host_id: 'local', title: 'Local'}} /></Providers>)
+    await userEvent.type(await screen.findByLabelText('Master password'), be.state.password)
+    await userEvent.click(screen.getByRole('button', {name: 'Unlock'}))
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'local')
+  })
+})

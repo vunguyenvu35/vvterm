@@ -1,4 +1,4 @@
-import {closePane, hasPane, leaves, newTab, splitPane} from './layout'
+import {closePane, hasPane, leaves, moveTab, newTab, pinnedSftpTab, splitPane} from './layout'
 
 describe('pane layout', () => {
   it('starts with one leaf', () => {
@@ -130,5 +130,26 @@ describe('broadcast, zoom and duplicate', () => {
     expect(m.leaves(d.root)[0].hostId).toBe('h1')
     expect(d.id).not.toBe(t.id)
     expect(m.duplicateOf(m.pinnedSftpTab(), 'x')).toBeNull()
+  })
+})
+
+describe('moveTab', () => {
+  const mk = () => [{...pinnedSftpTab()}, {...newTab('a', 'A'), id: 'a'}, {...newTab('b', 'B'), id: 'b'}, {...newTab('c', 'C'), id: 'c'}]
+  const ids = (ts: {id: string}[]) => ts.map(t => t.id)
+
+  it('puts a tab before or after another one', () => {
+    expect(ids(moveTab(mk(), 'c', 'a'))).toEqual(['sftp-main', 'c', 'a', 'b'])
+    expect(ids(moveTab(mk(), 'a', 'c', true))).toEqual(['sftp-main', 'b', 'c', 'a'])
+    expect(ids(moveTab(mk(), 'a', 'b', true))).toEqual(['sftp-main', 'b', 'a', 'c'])
+  })
+  it('never moves the pinned tab, and nothing goes before it', () => {
+    expect(ids(moveTab(mk(), 'sftp-main', 'c', true))).toEqual(ids(mk()))
+    expect(ids(moveTab(mk(), 'c', 'sftp-main'))).toEqual(['sftp-main', 'c', 'a', 'b'])
+  })
+  it('changes nothing for an unknown tab or a move onto itself', () => {
+    const t = mk()
+    expect(moveTab(t, 'x', 'a')).toBe(t)
+    expect(moveTab(t, 'a', 'x')).toBe(t)
+    expect(moveTab(t, 'a', 'a')).toBe(t)
   })
 })

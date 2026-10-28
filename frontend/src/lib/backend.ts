@@ -343,32 +343,18 @@ export async function windowTarget(): Promise<{host_id: string; title: string}> 
 }
 
 /**
- * Backend of a terminal window: sessions, settings and the host list go through the main process (the
- * session's output comes back as local events); everything else is the same as anywhere.
+ * An app window (Duplicate in new window) is the whole app in another process: it holds no use cases of its own.
+ * Every call the app makes on window.go.usecase.<Service>.<Method> is sent to the main window's process through
+ * the Go bridge, and what the main process emits (sessions' output, hosts changed...) comes back as local events.
+ * Only the native parts (dialogs, clipboard) stay with this process.
  */
-export function terminalWindowBackend(): Backend {
-  const base = wailsBackend()
-  const rpc = async <T,>(service: string, method: string, ...args: unknown[]): Promise<T> => {
+export function installWindowBridge() {
+  const call = (service: string, method: string) => async (...args: unknown[]) => {
     const text: string = await window.go!.app.TerminalWindow.Call(service, method, JSON.stringify(args))
-    return (text ? JSON.parse(text) : undefined) as T
+    return text ? JSON.parse(text) : undefined
   }
-  const unavailable = () => Promise.reject(new Error('not available in this window'))
-  return {
-    ...base,
-    session: {
-      ...base.session,
-      open: (h, c, r) => rpc('SessionService', 'Open', h, c, r),
-      attach: s => rpc('SessionService', 'Attach', s),
-      write: (s, d) => rpc('SessionService', 'Write', s, d),
-      resize: (s, c, r) => rpc('SessionService', 'Resize', s, c, r),
-      reconnect: (s, c, r) => rpc('SessionService', 'Reconnect', s, c, r),
-      close: s => rpc('SessionService', 'Close', s),
-      trustHostKey: (s, f) => rpc('SessionService', 'TrustHostKey', s, f),
-    },
-    hosts: {...base.hosts, listHosts: async f => (await rpc<Host[]>('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f})) ?? []},
-    settings: {get: () => rpc('SettingsService', 'Get'), save: unavailable},
-    system: {...base.system, openSettings: unavailable, openWindow: unavailable},
-  }
+  const usecase = new Proxy({}, {get: (_t, service: string) => new Proxy({}, {get: (_u, method: string) => call(service, method)})})
+  window.go!.usecase = usecase as never
 }
 
 /** Go marshals nil slices as null; the UI relies on arrays, so normalise at the boundary. */

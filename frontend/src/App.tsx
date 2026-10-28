@@ -24,7 +24,7 @@ import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
 import {recordRecent} from './lib/hosts/recent'
-import {closePane, connectBlankTab, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
+import {closePane, connectBlankTab, moveTab, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
@@ -47,7 +47,7 @@ type Dialog =
 /** The tab to show when the active one closes: the last terminal that is left (the pinned SFTP tab does not count), else Vaults. */
 const fallbackTab = (rest: Tab[]) => rest.filter(t => !t.pinned).at(-1)?.id ?? 'home'
 
-export default function App() {
+export default function App({initial}: {/** an app window opened for this place (a host id, "local"...): its first tab connects to it */ initial?: {host_id: string; title: string}} = {}) {
   const be = useBackend()
   const toast = useToast()
   const confirm = useConfirm()
@@ -82,6 +82,18 @@ export default function App() {
     setIdentities(i ?? [])
     setSnippets(sn ?? [])
   }, [be])
+
+  // an app window (Duplicate in new window) opens the place it was made for, once the vault is open
+  const openedInitial = useRef(false)
+  useEffect(() => {
+    if (!initial || openedInitial.current || !vault?.unlocked) return
+    const device = initial.host_id === 'local' || /^(serial|telnet):/.test(initial.host_id)
+    if (!device && !hosts.some(h => h.id === initial.host_id)) return // the hosts are not loaded yet
+    openedInitial.current = true
+    const t = newTab(initial.host_id, initial.title)
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, initial.title)}])
+    setActive(t.id)
+  }, [initial, vault?.unlocked, hosts])
 
   const refreshDataRef = useRef<() => Promise<void> | void>(() => {})
   refreshDataRef.current = () => { if (vault?.unlocked) return refreshData() }
@@ -175,6 +187,7 @@ export default function App() {
     setTabs(ts => ts.map(t => (t.id === tabId ? {...connectBlankTab(t, h.id, uniqueTitle(ts.filter(x => x.id !== tabId), h.label), !!h.telnet_enabled || settings.ask_protocol)} : t)))
   }
   const localFromBlank = (tabId: string) => setTabs(ts => ts.map(t => (t.id === tabId ? connectBlankTab(t, 'local', uniqueTitle(ts.filter(x => x.id !== tabId), 'Local'), false) : t)))
+  const moveTabTo = (id: string, targetId: string, after: boolean) => setTabs(ts => moveTab(ts, id, targetId, after))
   const renameTab = (id: string, name: string) => {
     const title = name.trim().slice(0, MAX_TAB_TITLE)
     if (title) setTabs(ts => ts.map(t => (t.id === id && !t.pinned ? {...t, title} : t)))
@@ -328,7 +341,7 @@ export default function App() {
     <div className="shell">
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
         onNew={openBlankTab}
-        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} hosts={hosts} onRunSnippet={runSnippet}
+        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onMoveTab={moveTabTo} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} hosts={hosts} onRunSnippet={runSnippet}
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>

@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"vvterm/internal/usecase"
 )
 
 // The Settings window is a second native window. Wails v2 can only create one window per process, so it
@@ -35,6 +37,10 @@ type bridgeInfo struct {
 	Token string `json:"token"`
 }
 
+// appTargets are every use case service of the app: an app window (Duplicate in new window) is the whole
+// app in another process and needs all of them, as the main window does.
+type appTarget struct{ obj any }
+
 type bridgeTarget struct {
 	obj     any
 	allowed map[string]bool
@@ -44,6 +50,7 @@ type bridgeTarget struct {
 type Bridge struct {
 	token    string
 	targets  map[string]bridgeTarget
+	app      map[string]any
 	onChange func(service string)
 	focus    chan struct{}
 	srv      *http.Server
@@ -83,7 +90,12 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 		onChange: onChange,
 		focus:    make(chan struct{}, 1),
 		watched:  map[string]bool{},
-		wake:     make(chan struct{}),
+		app: map[string]any{
+			"HostService": a.Host, "VaultService": a.Vault, "SessionService": a.Session, "ForwardService": a.Forward,
+			"SyncService": a.Sync, "ImportExportService": a.ImportExp, "SettingsService": a.Settings, "SnippetService": a.Snippet,
+			"SftpService": a.Sftp, "LocalService": a.Local, "SerialService": a.Serial, "LogService": a.Log, "KnownHostsService": a.KnownHost,
+		},
+		wake: make(chan struct{}),
 		targets: map[string]bridgeTarget{
 			"SettingsService": {a.Settings, allow("Get", "Save")},
 			"VaultService":    {a.Vault, allow("Status", "ChangePassword", "SetAutoLock", "EnableBiometric", "DisableBiometric", "ResetVault")},
@@ -103,7 +115,20 @@ func (b *Bridge) Dispatch(service, method string, args []json.RawMessage) (json.
 	if !ok || !t.allowed[method] {
 		return nil, fmt.Errorf("%s.%s is not available from the settings window", service, method)
 	}
-	m := reflect.ValueOf(t.obj).MethodByName(method)
+	return b.invoke(t.obj, service, method, args)
+}
+
+// DispatchApp is Dispatch for an app window: every method of every use case service.
+func (b *Bridge) DispatchApp(service, method string, args []json.RawMessage) (json.RawMessage, error) {
+	obj, ok := b.app[service]
+	if !ok || method == "" || method[0] < 'A' || method[0] > 'Z' {
+		return nil, fmt.Errorf("%s.%s is not available from an app window", service, method)
+	}
+	return b.invoke(obj, service, method, args)
+}
+
+func (b *Bridge) invoke(obj any, service, method string, args []json.RawMessage) (json.RawMessage, error) {
+	m := reflect.ValueOf(obj).MethodByName(method)
 	if !m.IsValid() {
 		return nil, fmt.Errorf("%s.%s does not exist", service, method)
 	}
@@ -135,7 +160,12 @@ func (b *Bridge) Dispatch(service, method string, args []json.RawMessage) (json.
 			b.watch(sid)
 		}
 	}
-	if b.onChange != nil && service != "SessionService" && service != "HostService" && !(service == "SettingsService" && method == "Get") && method != "Status" {
+	if service == "SftpService" && method == "Open" {
+		if info, ok := result.(usecase.SftpInfo); ok {
+			b.watch(info.SID)
+		}
+	}
+	if b.onChange != nil && !readOnlyCall(service, method) {
 		b.onChange(service)
 	}
 	if result == nil {
@@ -151,16 +181,15 @@ func (b *Bridge) watch(sid string) {
 	b.evMu.Unlock()
 }
 
-// Publish offers an event of the main process: it is kept only for sessions that a window process
-// opened ("term:data:<sid>", "term:ready:<sid>", ...), and handed to that window by the /events poll.
+// Publish offers an event of the main process to the app windows (the /events poll hands it over). The events
+// of a terminal or an SFTP session are kept only for those that a window process opened.
 func (b *Bridge) Publish(name string, data []any) {
 	parts := strings.SplitN(name, ":", 3)
-	if len(parts) != 3 || parts[0] != "term" {
-		return
-	}
 	b.evMu.Lock()
 	defer b.evMu.Unlock()
-	if !b.watched[parts[2]] {
+	// a terminal's events go only to the window that opened it; everything else (hosts changed, the vault locked,
+	// transfer progress, log lines...) goes to every app window
+	if len(parts) == 3 && (parts[0] == "term" || parts[0] == "sftp") && !b.watched[parts[2]] {
 		return
 	}
 	args, err := json.Marshal(data)
@@ -205,6 +234,19 @@ func (b *Bridge) eventsAfter(ctx context.Context, seq int) ([]BridgedEvent, int)
 // SetMenuHandler says what to do when another window of the app (Settings, a terminal window) uses a menu
 // item: the main window does it, as if the item were in its own menu bar.
 func (b *Bridge) SetMenuHandler(f func(action string)) { b.onMenu = f }
+
+// readOnlyCall is true for calls that only read or only drive a session: the other windows need not refresh.
+func readOnlyCall(service, method string) bool {
+	if service == "SessionService" || service == "SftpService" || service == "LocalService" || service == "SerialService" || service == "LogService" {
+		return true
+	}
+	for _, p := range []string{"List", "Get", "Status", "Info", "Home", "Search", "Dump", "Export"} {
+		if strings.HasPrefix(method, p) {
+			return true
+		}
+	}
+	return false
+}
 
 // RequestFocus asks the open Settings window to come to the front.
 func (b *Bridge) RequestFocus() {
@@ -261,6 +303,24 @@ func (b *Bridge) handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
+	mux.HandleFunc("/appcall", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var req callRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<20)).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		res, err := b.DispatchApp(req.Service, req.Method, req.Args)
+		resp := callResponse{Result: res}
+		if err != nil {
+			resp = callResponse{Error: err.Error()}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
 	mux.HandleFunc("/menu", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Action string `json:"action"`
@@ -277,6 +337,13 @@ func (b *Bridge) handler() http.Handler {
 	// long poll: the terminal events of the sessions a window process opened, after the given sequence number
 	mux.HandleFunc("/events", guard(func(w http.ResponseWriter, r *http.Request) {
 		after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+		if after < 0 { // "where are you now": answer at once, nothing to wait for
+			b.evMu.Lock()
+			last := b.seq
+			b.evMu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"events": []BridgedEvent{}, "last": last})
+			return
+		}
 		evs, last := b.eventsAfter(r.Context(), after)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"events": evs, "last": last})
@@ -470,4 +537,31 @@ func knownMenuAction(a string) bool {
 		}
 	}
 	return false
+}
+
+// CallApp is Call for an app window: any method of any use case service.
+func (c *BridgeClient) CallApp(service, method, argsJSON string) (string, error) {
+	var args []json.RawMessage
+	if argsJSON != "" {
+		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			return "", fmt.Errorf("bad arguments: %w", err)
+		}
+	}
+	body, _ := json.Marshal(callRequest{Service: service, Method: method, Args: args})
+	resp, err := c.do(context.Background(), http.MethodPost, "/appcall", body)
+	if err != nil {
+		return "", errors.New("VVTerm is not running")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("the main window refused the request (%s)", resp.Status)
+	}
+	var out callResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	if out.Error != "" {
+		return "", errors.New(out.Error)
+	}
+	return string(out.Result), nil
 }

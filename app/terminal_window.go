@@ -72,8 +72,9 @@ type WindowTarget struct {
 	Title  string `json:"title"`
 }
 
-// TerminalWindow is the application object of a terminal window process. It owns no data: calls go to
-// the main process, and the output of its sessions is brought back as local events.
+// TerminalWindow is the application object of an app window process (Duplicate in new window): the whole
+// app in a window of its own. It owns no data: every use case call goes to the main process, and what the main
+// process emits (its sessions' output, hosts changed, the vault locked...) is brought back as local events.
 type TerminalWindow struct {
 	System *SystemService
 	target WindowTarget
@@ -81,7 +82,8 @@ type TerminalWindow struct {
 
 	ctx  context.Context
 	mu   sync.Mutex
-	sids map[string]bool
+	sids map[string]bool // terminal sessions this window opened
+	sftp map[string]bool // SFTP sessions this window opened
 }
 
 // NewTerminalWindow connects to the main process through the file in dir.
@@ -93,7 +95,7 @@ func NewTerminalWindow(dir, hostID, title string) (*TerminalWindow, error) {
 	if err := c.Ping(); err != nil {
 		return nil, err
 	}
-	return &TerminalWindow{System: NewSystemService(), target: WindowTarget{HostID: hostID, Title: title}, client: c, sids: map[string]bool{}}, nil
+	return &TerminalWindow{System: NewSystemService(), target: WindowTarget{HostID: hostID, Title: title}, client: c, sids: map[string]bool{}, sftp: map[string]bool{}}, nil
 }
 
 // Target says what this window shows.
@@ -102,7 +104,27 @@ func (w *TerminalWindow) Target() WindowTarget { return w.target }
 // Call forwards one use case call to the main process (args and result are JSON text). The sessions
 // this window opens are remembered so they end with the window.
 func (w *TerminalWindow) Call(service, method, argsJSON string) (string, error) {
-	out, err := w.client.Call(service, method, argsJSON)
+	out, err := w.client.CallApp(service, method, argsJSON)
+	if err == nil && service == "SftpService" {
+		switch method {
+		case "Open":
+			var info struct {
+				SID string `json:"sid"`
+			}
+			if json.Unmarshal([]byte(out), &info) == nil && info.SID != "" {
+				w.mu.Lock()
+				w.sftp[info.SID] = true
+				w.mu.Unlock()
+			}
+		case "Close":
+			var args []string
+			if json.Unmarshal([]byte(argsJSON), &args) == nil && len(args) > 0 {
+				w.mu.Lock()
+				delete(w.sftp, args[0])
+				w.mu.Unlock()
+			}
+		}
+	}
 	if err == nil && service == "SessionService" {
 		switch method {
 		case "Open":
@@ -133,7 +155,7 @@ func (w *TerminalWindow) Startup(ctx context.Context) {
 	go func() {
 		seq := 0
 		// start after what is already queued: this window has not opened a session yet
-		if _, last, err := w.client.Events(ctx, 1<<30); err == nil {
+		if _, last, err := w.client.Events(ctx, -1); err == nil {
 			seq = last
 		}
 		for ctx.Err() == nil {
@@ -163,11 +185,42 @@ func (w *TerminalWindow) Shutdown(context.Context) {
 	w.mu.Unlock()
 	for _, s := range sids {
 		b, _ := json.Marshal([]string{s})
-		_, _ = w.client.Call("SessionService", "Close", string(b))
+		_, _ = w.client.CallApp("SessionService", "Close", string(b))
+	}
+	w.mu.Lock()
+	files := make([]string, 0, len(w.sftp))
+	for s := range w.sftp {
+		files = append(files, s)
+	}
+	w.mu.Unlock()
+	for _, s := range files {
+		b, _ := json.Marshal([]string{s})
+		_, _ = w.client.CallApp("SftpService", "Close", string(b))
 	}
 }
 
-// Menu is the main window's menu bar, so it does not change when this window has the focus.
+// Menu is the app's menu bar, doing its items in this window.
 func (w *TerminalWindow) Menu() *menu.Menu {
-	return menuViaMain(w.client, func() context.Context { return w.ctx })
+	return BuildMenu(MenuHooks{
+		Emit: func(action string) {
+			if w.ctx != nil {
+				runtime.EventsEmit(w.ctx, MenuEvent, action)
+			}
+		},
+		OpenURL: func(url string) {
+			if w.ctx != nil && urlAllowed(url) {
+				runtime.BrowserOpenURL(w.ctx, url)
+			}
+		},
+		ToggleFullScreen: func() {
+			if w.ctx == nil {
+				return
+			}
+			if runtime.WindowIsFullscreen(w.ctx) {
+				runtime.WindowUnfullscreen(w.ctx)
+			} else {
+				runtime.WindowFullscreen(w.ctx)
+			}
+		},
+	})
 }

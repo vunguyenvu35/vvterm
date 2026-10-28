@@ -1,25 +1,33 @@
 import {createRoot} from 'react-dom/client'
 import App from './App'
 import SettingsApp from './lib/settings/SettingsApp'
-import TerminalWindowApp from './lib/terminal/TerminalWindowApp'
-import {BackendContext, bridgeBackend, inSettingsWindow, inTerminalWindow, terminalWindowBackend, wailsBackend} from './lib/backend'
+import {BackendContext, bridgeBackend, inSettingsWindow, inTerminalWindow, installWindowBridge, wailsBackend, windowTarget} from './lib/backend'
 import {ToastProvider} from './lib/ui/Toast'
 import {ConfirmProvider} from './lib/ui/Confirm'
 import {CapsLockWarning} from './lib/ui/CapsLockWarning'
 import './styles.css'
 
-// The Settings window is a second process of the same binary; it is the only one that has the bridge bound.
-const settingsWindow = inSettingsWindow()
-const terminalWindow = inTerminalWindow() // Duplicate in new window
+async function boot() {
+  // The Settings window is a second process of the same binary; it is the only one that has the bridge bound.
+  const settingsWindow = inSettingsWindow()
+  // An app window (Duplicate in new window) is the whole app in another process: it asks for the host to open.
+  const appWindow = inTerminalWindow()
+  let initial: {host_id: string; title: string} | undefined
+  if (appWindow) {
+    installWindowBridge()
+    initial = await windowTarget().catch(() => undefined)
+  }
+  // No StrictMode: it double-mounts effects in dev, which would open two SSH sessions per pane.
+  createRoot(document.getElementById('root')!).render(
+    <BackendContext.Provider value={settingsWindow ? bridgeBackend() : wailsBackend()}>
+      <ToastProvider>
+        <ConfirmProvider>
+          {settingsWindow ? <SettingsApp /> : <App initial={initial} />}
+          <CapsLockWarning />
+        </ConfirmProvider>
+      </ToastProvider>
+    </BackendContext.Provider>,
+  )
+}
 
-// No StrictMode: it double-mounts effects in dev, which would open two SSH sessions per pane.
-createRoot(document.getElementById('root')!).render(
-  <BackendContext.Provider value={settingsWindow ? bridgeBackend() : terminalWindow ? terminalWindowBackend() : wailsBackend()}>
-    <ToastProvider>
-      <ConfirmProvider>
-        {settingsWindow ? <SettingsApp /> : terminalWindow ? <TerminalWindowApp /> : <App />}
-        <CapsLockWarning />
-      </ConfirmProvider>
-    </ToastProvider>
-  </BackendContext.Provider>,
-)
+void boot()

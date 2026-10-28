@@ -7,6 +7,8 @@ import {leaves} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
 import type {Host, Snippet} from '../types'
 
+export const TAB_DRAG = 'application/x-vvterm-tab'
+
 interface Props {
   tabs: Tab[]
   active: string // 'home' or a tab id
@@ -28,6 +30,8 @@ interface Props {
   onSplitTab?(id: string, dir: 'row' | 'col'): void
   /** the saved hosts: a tab shows the icon of the server type (Ubuntu, Debian…) it is connected to */
   hosts?: Host[]
+  /** a tab was dragged to another place: before `targetId`, or after it */
+  onMoveTab?(id: string, targetId: string, after: boolean): void
   snippets: Snippet[]
   onRunSnippet(s: Snippet, execute: boolean): void
   /** the panel on the right of a terminal (hosts, snippets, history, themes) */
@@ -37,6 +41,9 @@ interface Props {
 
 /** Title bar with the Vaults (home) tab, one tab per terminal, and split controls. */
 export function TopBar(p: Props) {
+  // a tab being dragged, and the tab it is over (with the side the drop would land on)
+  const [dragId, setDragId] = useState('')
+  const [over, setOver] = useState<{id: string; after: boolean} | null>(null)
   const [editing, setEditing] = useState<{id: string; value: string} | null>(null)
   const [menu, setMenu] = useState<{id: string; x: number; y: number} | null>(null)
   // the menu goes away on any click, Esc, or when the window loses focus
@@ -75,7 +82,26 @@ export function TopBar(p: Props) {
         <IconKey size={15} /> <span>Vaults</span>
       </button>
       {p.tabs.map(t => (
-        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '')} onClick={() => p.onSelect(t.id)}
+        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '') + (dragId === t.id ? ' dragging' : '') + (over?.id === t.id && dragId !== t.id ? (over.after ? ' drop-after' : ' drop-before') : '')} onClick={() => p.onSelect(t.id)}
+          draggable={!t.pinned && !!p.onMoveTab && editing?.id !== t.id}
+          onDragStart={e => { setDragId(t.id); e.dataTransfer.setData(TAB_DRAG, t.id); e.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={() => { setDragId(''); setOver(null) }}
+          onDragOver={e => {
+            if (!dragId || dragId === t.id || !Array.from(e.dataTransfer.types).includes(TAB_DRAG)) return
+            e.preventDefault()
+            const r = e.currentTarget.getBoundingClientRect()
+            setOver({id: t.id, after: e.clientX > r.left + r.width / 2})
+          }}
+          onDragLeave={() => setOver(o => (o?.id === t.id ? null : o))}
+          onDrop={e => {
+            const id = e.dataTransfer.getData(TAB_DRAG)
+            if (!id || id === t.id) return
+            e.preventDefault()
+            const after = e.clientX > e.currentTarget.getBoundingClientRect().left + e.currentTarget.getBoundingClientRect().width / 2
+            setDragId('')
+            setOver(null)
+            p.onMoveTab?.(id, t.id, after)
+          }}
           onContextMenu={e => { e.preventDefault(); if (!t.pinned) setMenu({id: t.id, x: e.clientX, y: e.clientY}) }}>
           <span className="tab-ico">{tabIcon(t)}<TabStatus tab={t} /></span>
           {editing?.id === t.id ? (

@@ -108,7 +108,10 @@ func (a *App) Startup(ctx context.Context) {
 
 	// The Settings window is a second process that talks to this one. Without the bridge the frontend
 	// falls back to its in-app Settings window.
-	a.bridge = NewBridge(a, func(service string) { runtime.EventsEmit(ctx, "bridge:changed", service) })
+	a.bridge = NewBridge(a, func(service string) {
+		runtime.EventsEmit(ctx, "bridge:changed", service)
+		a.bridge.Publish("bridge:changed", []any{service}) // the other app windows too
+	})
 	a.bridge.SetMenuHandler(func(action string) {
 		runtime.WindowUnminimise(ctx)
 		runtime.WindowShow(ctx)

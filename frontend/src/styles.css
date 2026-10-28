@@ -758,3 +758,9 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 /* the key of an action, at the right of a nav item, only while the pointer is on it (or it has the focus) */
 .nav-item .nav-key { margin-left: auto; font: inherit; font-size: 11.5px; color: var(--muted); opacity: 0; transition: opacity .12s; white-space: nowrap; }
 .nav-item:hover .nav-key, .nav-item:focus-visible .nav-key { opacity: 1; }
+
+/* dragging tabs to put them in order: the dragged one fades, a bar shows where it would land */
+.topbar > .tab.dragging { opacity: .45; }
+.topbar > .tab.drop-before { box-shadow: -2px 0 0 0 #2f7bf5; }
+.topbar > .tab.drop-after { box-shadow: 2px 0 0 0 #2f7bf5; }
+.topbar > .tab[draggable=true] { cursor: grab; }
