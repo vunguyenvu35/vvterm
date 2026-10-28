@@ -57,11 +57,11 @@ describe('DataPanel', () => {
 
   it('surfaces backend errors', async () => {
     const be = makeFake()
-    be.data.importBackup = async () => { throw 'wrong master password' }
+    be.data.importBackup = async () => { throw 'Incorrect master password. Please check it and try again.' }
     render(<Providers be={be}><DataPanel onClose={vi.fn()} onChanged={vi.fn()} /></Providers>)
     await userEvent.type(screen.getByLabelText('Backup password'), 'whatever1')
     await userEvent.click(screen.getByRole('button', {name: 'Restore backup…'}))
-    expect(await screen.findByRole('alert')).toHaveTextContent('wrong master password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect master password. Please check it and try again.')
   })
 })
 

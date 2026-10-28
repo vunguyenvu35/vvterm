@@ -105,7 +105,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       setHint: async h => { rec('vault.setHint', h); state.vault = {...state.vault, hint: h.trim() || undefined} },
       unlock: async pw => {
         rec('vault.unlock', pw)
-        if (pw !== state.password) throw 'wrong master password'
+        if (pw !== state.password) throw 'Incorrect master password. Please check it and try again.'
         state.vault = {...state.vault, unlocked: true}
       },
       unlockBiometric: async () => { rec('vault.unlockBiometric'); state.vault = {...state.vault, unlocked: true} },
@@ -116,7 +116,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         state.vault = {...state.vault, exists: false, unlocked: false, keychain_enabled: false}
         state.identities = state.identities.filter(i => i.auth_type === 'agent')
       },
-      changePassword: async (o, nw) => { rec('vault.changePassword', o, nw); if (o !== state.password) throw 'wrong master password'; state.password = nw },
+      changePassword: async (o, nw) => { rec('vault.changePassword', o, nw); if (o !== state.password) throw 'Incorrect master password. Please check it and try again.'; state.password = nw },
       setAutoLock: async m => { rec('vault.setAutoLock', m); state.vault = {...state.vault, auto_lock_minutes: m} },
       enableBiometric: async () => { state.vault = {...state.vault, keychain_enabled: true} },
       disableBiometric: async () => { state.vault = {...state.vault, keychain_enabled: false} },

@@ -214,7 +214,7 @@ describe('SettingsWindow', () => {
     await userEvent.clear(screen.getByLabelText('New password'))
     await userEvent.type(screen.getByLabelText('New password'), 'a brand new password')
     await userEvent.click(btn)
-    expect(await screen.findByRole('alert')).toHaveTextContent('wrong master password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect master password. Please check it and try again.')
     await userEvent.clear(screen.getByLabelText('Current password'))
     await userEvent.type(screen.getByLabelText('Current password'), be.state.password)
     await userEvent.click(btn)

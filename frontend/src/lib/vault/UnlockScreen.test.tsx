@@ -77,7 +77,7 @@ describe('UnlockScreen', () => {
     const {done} = setup()
     await userEvent.type(screen.getByLabelText('Master password'), 'nope nope nope')
     await userEvent.click(screen.getByRole('button', {name: 'Unlock'}))
-    expect(await screen.findByRole('alert')).toHaveTextContent('wrong master password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect master password. Please check it and try again.')
     expect(done).not.toHaveBeenCalled()
   })
 

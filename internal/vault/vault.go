@@ -30,13 +30,14 @@ const (
 )
 
 var (
-	ErrNoVault       = errors.New("vault does not exist")
-	ErrExists        = errors.New("vault already exists")
-	ErrLocked        = errors.New("vault is locked")
-	ErrBadPassword   = errors.New("wrong master password")
-	ErrWeakPassword  = fmt.Errorf("master password must be at least %d characters", MinPasswordLen)
-	ErrSecretMissing = errors.New("secret not found")
-	ErrNoKeychain    = errors.New("no DEK stored in keychain")
+	// These texts are shown to the user as they are: plain sentences, no internal terms.
+	ErrNoVault       = errors.New("There is no vault yet. Create one first.")
+	ErrExists        = errors.New("A vault already exists.")
+	ErrLocked        = errors.New("The vault is locked. Unlock it first.")
+	ErrBadPassword   = errors.New("Incorrect master password. Please check it and try again.")
+	ErrWeakPassword  = fmt.Errorf("The master password must be at least %d characters long.", MinPasswordLen)
+	ErrSecretMissing = errors.New("That saved key or password could not be found.")
+	ErrNoKeychain    = errors.New("Quick unlock is not available. Enter your master password instead.")
 )
 
 // DefaultKDF is the parameter set recommended by the architecture doc.

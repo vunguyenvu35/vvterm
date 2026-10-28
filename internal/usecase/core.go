@@ -136,7 +136,7 @@ func (c *Core) saveSettings() error {
 	return fsutil.WriteFileAtomic(filepath.Join(c.DataDir, "settings.json"), b, 0o600)
 }
 
-var errNotUnlocked = errors.New("vault is locked: unlock it first")
+var errNotUnlocked = errors.New("The vault is locked. Unlock it first.")
 
 // prompter pairs a pending host-key question with its answer.
 type prompter struct {
