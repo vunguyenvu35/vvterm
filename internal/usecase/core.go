@@ -35,6 +35,7 @@ type Settings struct {
 
 	// General
 	Zoom            int  `json:"zoom"`              // interface scale in percent (80..160)
+	AskProtocol     bool `json:"ask_protocol"`      // a host opens on a "Choose protocol" screen first (off by default)
 	ConfirmTabClose bool `json:"confirm_tab_close"` // ask before closing a terminal tab or pane (off by default)
 	Highlight       bool `json:"highlight"`         // colour URLs, IPs, paths and error/warning/success words in terminal output
 	ReduceMotion    bool `json:"reduce_motion"`     // turn animations off

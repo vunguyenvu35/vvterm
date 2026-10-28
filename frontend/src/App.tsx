@@ -148,7 +148,7 @@ export default function App() {
     recordRecent(h.id)
     const t = newTab(h.id, '')
     // a host that also has Telnet first asks which protocol to use
-    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, h.label), choose: !!h.telnet_enabled}])
+    setTabs(ts => [...ts, {...t, title: uniqueTitle(ts, h.label), choose: !!h.telnet_enabled || settings.ask_protocol}])
     setActive(t.id)
   }
   // a host card dropped on a group card
@@ -172,7 +172,7 @@ export default function App() {
   }
   const openFromBlank = (tabId: string, h: Host) => {
     recordRecent(h.id)
-    setTabs(ts => ts.map(t => (t.id === tabId ? {...connectBlankTab(t, h.id, uniqueTitle(ts.filter(x => x.id !== tabId), h.label), !!h.telnet_enabled)} : t)))
+    setTabs(ts => ts.map(t => (t.id === tabId ? {...connectBlankTab(t, h.id, uniqueTitle(ts.filter(x => x.id !== tabId), h.label), !!h.telnet_enabled || settings.ask_protocol)} : t)))
   }
   const localFromBlank = (tabId: string) => setTabs(ts => ts.map(t => (t.id === tabId ? connectBlankTab(t, 'local', uniqueTitle(ts.filter(x => x.id !== tabId), 'Local'), false) : t)))
   const renameTab = (id: string, name: string) => {

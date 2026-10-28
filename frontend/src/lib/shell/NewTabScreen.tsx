@@ -71,6 +71,14 @@ export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab, onLocal}
     else if (e.key === 'Enter') rows[Math.min(at, rows.length - 1)]?.pick()
   }
 
+  const renderRow = (r: Row, i: number) => (
+    <button key={r.key} role="option" aria-selected={i === at} className={'newtab-row' + (i === at ? ' on' : '')} onClick={r.pick} onMouseEnter={() => setAt(i)}>
+      {r.tab || r.local ? <span className="newtab-os"><IconTerminal size={13} /></span> : r.os ? <OsIcon os={r.os} size={20} /> : <span className="newtab-os"><IconServer size={13} /></span>}
+      <span className="newtab-name">{r.label}</span>
+      <span className="newtab-where">{r.where}</span>
+    </button>
+  )
+
   return (
     <div className="newtab" data-testid="new-tab">
       <label className="newtab-search">
@@ -79,17 +87,16 @@ export function NewTabScreen({hosts, groups, tabs, onOpen, onSelectTab, onLocal}
           onChange={e => { setQ(e.target.value); setAt(0) }} onKeyDown={key} />
         <kbd>{formatCombo('Mod+K')}</kbd>
       </label>
+      {rows.some(r => r.local) && (
+        <div className="newtab-card quick" role="listbox" aria-label="Start">
+          {rows.map((r, i) => r.local && renderRow(r, i))}
+        </div>
+      )}
       <div className="newtab-card">
         <div className="newtab-head"><b>{q.trim() ? 'Results' : 'Recent connections'}</b></div>
         <div className="newtab-list" role="listbox" aria-label={q.trim() ? 'Results' : 'Recent connections'}>
-          {rows.map((r, i) => (
-            <button key={r.key} role="option" aria-selected={i === at} className={'newtab-row' + (i === at ? ' on' : '')} onClick={r.pick} onMouseEnter={() => setAt(i)}>
-              {r.tab || r.local ? <span className="newtab-os"><IconTerminal size={13} /></span> : r.os ? <OsIcon os={r.os} size={20} /> : <span className="newtab-os"><IconServer size={13} /></span>}
-              <span className="newtab-name">{r.label}</span>
-              <span className="newtab-where">{r.where}</span>
-            </button>
-          ))}
-          {rows.length === 0 && <div className="newtab-empty">{hosts.length ? 'Nothing matches.' : 'No hosts yet. Add one on the Vaults page.'}</div>}
+          {rows.map((r, i) => !r.local && renderRow(r, i))}
+          {rows.every(r => r.local) && <div className="newtab-empty">{hosts.length ? 'Nothing matches.' : 'No hosts yet. Add one on the Vaults page.'}</div>}
         </div>
       </div>
     </div>

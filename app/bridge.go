@@ -50,6 +50,8 @@ type Bridge struct {
 	ln       net.Listener
 	file     string
 
+	onMenu func(action string)
+
 	evMu    sync.Mutex
 	events  []BridgedEvent
 	seq     int
@@ -200,6 +202,10 @@ func (b *Bridge) eventsAfter(ctx context.Context, seq int) ([]BridgedEvent, int)
 	}
 }
 
+// SetMenuHandler says what to do when another window of the app (Settings, a terminal window) uses a menu
+// item: the main window does it, as if the item were in its own menu bar.
+func (b *Bridge) SetMenuHandler(f func(action string)) { b.onMenu = f }
+
 // RequestFocus asks the open Settings window to come to the front.
 func (b *Bridge) RequestFocus() {
 	select {
@@ -254,6 +260,19 @@ func (b *Bridge) handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	mux.HandleFunc("/menu", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Action string `json:"action"`
+		}
+		if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req) != nil || !knownMenuAction(req.Action) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if b.onMenu != nil {
+			b.onMenu(req.Action)
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	// long poll: the terminal events of the sessions a window process opened, after the given sequence number
 	mux.HandleFunc("/events", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -427,4 +446,28 @@ func (c *BridgeClient) Events(ctx context.Context, seq int) ([]BridgedEvent, int
 		return nil, seq, err
 	}
 	return out.Events, out.Last, nil
+}
+
+// MenuAction asks the main window to do a menu action.
+func (c *BridgeClient) MenuAction(action string) error {
+	body, _ := json.Marshal(map[string]string{"action": action})
+	resp, err := c.do(context.Background(), http.MethodPost, "/menu", body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return errors.New(resp.Status)
+	}
+	return nil
+}
+
+// knownMenuAction is true for the actions of the menu bar (see MenuActions): nothing else is passed on.
+func knownMenuAction(a string) bool {
+	for _, k := range MenuActions {
+		if a == k {
+			return true
+		}
+	}
+	return false
 }

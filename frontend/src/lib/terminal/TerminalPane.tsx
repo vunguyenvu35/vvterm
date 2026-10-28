@@ -8,7 +8,7 @@ import {WebLinksAddon} from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import {useBackend} from '../backend'
 import {b64ToBytes, errMsg} from '../util'
-import {registerPane} from './panes'
+import {registerPane, setPaneStatus} from './panes'
 import {createHighlighter, HighlightTerm} from './highlight'
 import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
@@ -83,6 +83,12 @@ export function TerminalPane(p: Props) {
   onExit.current = p.onExit
 
   const setSt = (s: State) => { stateRef.current = s; setState(s) }
+  // the tab that holds this pane shows whether it is connecting or closed
+  useEffect(() => {
+    if (!p.paneId) return
+    setPaneStatus(p.paneId, state)
+    return () => setPaneStatus(p.paneId!, null)
+  }, [state, p.paneId])
 
   // The clipboard goes through the native runtime where there is one (a webview often refuses page scripts).
   const copyText = (text: string) => { if (text) void be.system.writeClipboard(text).catch(() => {}) }

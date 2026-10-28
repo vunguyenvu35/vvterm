@@ -201,6 +201,7 @@ describe('App navigation and quick connect', () => {
     const recent = screen.getByRole('listbox', {name: 'Recent connections'})
     expect(within(recent).getAllByRole('option').map(o => o.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('web-1')]))
     expect(within(recent).getAllByRole('option')[0]).toHaveTextContent('web-1') // the one used just now comes first
+    expect(within(recent).queryByText('Local Terminal')).toBeNull() // Local Terminal is not a recent connection
     await userEvent.type(screen.getByLabelText('Search hosts or tabs'), 'db')
     await userEvent.keyboard('{Enter}')
     expect(await screen.findAllByTestId('terminal')).toHaveLength(2)
@@ -1054,5 +1055,21 @@ describe('App: moving a host into a group by dragging', () => {
     fireEvent.drop(group, {dataTransfer: dt})
     await waitFor(() => expect(be.state.hosts.find(h => h.id === 'h1')?.group_id).toBe('g1'))
     expect(await screen.findByText(/Moved web-1 to Gitechvn/)).toBeInTheDocument()
+  })
+})
+
+describe('App: ask which protocol to use', () => {
+  it('with the setting on, a plain host asks too; Telnet and Mosh are shown but cannot be picked when unavailable', async () => {
+    const be = setup({settings: {...DEFAULT_SETTINGS, ask_protocol: true}} as never)
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    expect(screen.getByRole('radiogroup', {name: 'Protocol'})).toBeInTheDocument()
+    expect(screen.getByRole('radio', {name: /SSH/})).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', {name: /Mosh/})).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('radio', {name: /Telnet/})).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(screen.getByRole('radio', {name: /Telnet/}))
+    expect(screen.getByRole('radio', {name: /SSH/})).toHaveAttribute('aria-checked', 'true') // the click did nothing
+    await userEvent.click(screen.getByRole('button', {name: 'Continue'}))
+    expect(await screen.findByTestId('terminal')).toHaveAttribute('data-host', 'h1')
   })
 })

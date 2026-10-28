@@ -178,6 +178,10 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                       <div><b>Confirm before closing a tab</b><div className="muted">Ask first, because closing a terminal or SFTP tab ends its connection.</div></div>
                       <Switch label="Confirm before closing a tab" checked={s.confirm_tab_close} onChange={v => update({confirm_tab_close: v})} />
                     </div>
+                    <div className="setting-row">
+                      <div><b>Ask which protocol to use</b><div className="muted">Opening a host first shows SSH and Telnet to pick from. Hosts that have Telnet always ask.</div></div>
+                      <Switch label="Ask which protocol to use" checked={s.ask_protocol} onChange={v => update({ask_protocol: v})} />
+                    </div>
                   </section>
                 </>
               )}

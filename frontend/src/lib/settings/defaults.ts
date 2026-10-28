@@ -4,5 +4,5 @@ import type {Settings} from '../types'
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark', terminal_theme: 'auto', font_size: 13, font_family: "Menlo, Monaco, 'Courier New', monospace",
   cursor_style: 'block', cursor_blink: true, scrollback: 10000, auto_lock_minutes: 15, sync_url: '',
-  zoom: 100, confirm_tab_close: false, highlight: true, copy_on_select: true, right_click: 'paste', reduce_motion: false, account_name: '', account_email: '', shortcuts: {},
+  zoom: 100, confirm_tab_close: false, ask_protocol: false, highlight: true, copy_on_select: true, right_click: 'paste', reduce_motion: false, account_name: '', account_email: '', shortcuts: {},
 }

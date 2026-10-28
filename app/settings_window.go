@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -81,6 +82,7 @@ type SettingsWindow struct {
 	Bridge *SettingsBridge
 	System *SystemService
 	client *BridgeClient
+	ctx    context.Context
 }
 
 // NewSettingsWindow connects to the main process through the file in dir.
@@ -98,6 +100,7 @@ func NewSettingsWindow(dir string) (*SettingsWindow, error) {
 // Startup is the Wails OnStartup hook of the Settings process: it quits when the main app is gone and
 // raises the window when the main app asks for it.
 func (w *SettingsWindow) Startup(ctx context.Context) {
+	w.ctx = ctx
 	w.System.SetContext(ctx)
 	quitWithMain(ctx, w.client)
 	go func() {
@@ -131,4 +134,33 @@ func quitWithMain(ctx context.Context, c *BridgeClient) {
 			misses = 0
 		}
 	}()
+}
+
+// Menu is the same menu bar as the main window's, so it does not change when Settings has the focus.
+func (w *SettingsWindow) Menu() *menu.Menu {
+	return menuViaMain(w.client, func() context.Context { return w.ctx })
+}
+
+// menuViaMain is the main window's menu bar for a window of another process: its items are done by the main
+// window (through the bridge); only Full Screen and the Help links are done here.
+func menuViaMain(c *BridgeClient, ctx func() context.Context) *menu.Menu {
+	return BuildMenu(MenuHooks{
+		Emit: func(action string) { go func() { _ = c.MenuAction(action) }() },
+		OpenURL: func(url string) {
+			if x := ctx(); x != nil && urlAllowed(url) {
+				runtime.BrowserOpenURL(x, url)
+			}
+		},
+		ToggleFullScreen: func() {
+			x := ctx()
+			if x == nil {
+				return
+			}
+			if runtime.WindowIsFullscreen(x) {
+				runtime.WindowUnfullscreen(x)
+			} else {
+				runtime.WindowFullscreen(x)
+			}
+		},
+	})
 }

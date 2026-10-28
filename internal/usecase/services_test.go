@@ -921,7 +921,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 		}
 	}
 	in := goodSettings()
-	in.Zoom, in.ConfirmTabClose, in.ReduceMotion = 120, false, true
+	in.Zoom, in.ConfirmTabClose, in.ReduceMotion, in.AskProtocol = 120, false, true, true
 	in.AccountName, in.AccountEmail = "  Vu Nguyen  ", " me@example.com "
 	in.Shortcuts = map[string]string{"open_settings": "Mod+Shift+,", "new_connection": "Mod+T"}
 	got, err := s.Save(in)

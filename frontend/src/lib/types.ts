@@ -90,6 +90,8 @@ export interface Settings {
   sync_url: string
   zoom: number // interface scale in percent
   confirm_tab_close: boolean
+  /** a host opens on a Choose protocol screen first */
+  ask_protocol: boolean
   /** colour URLs, IP addresses, paths and error / warning / success words in terminal output */
   highlight: boolean
   reduce_motion: boolean

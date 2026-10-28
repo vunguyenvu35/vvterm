@@ -125,3 +125,29 @@ func TestBridgeAllowsSessionCallsButNotSessionTestsOrOtherServices(t *testing.T)
 		t.Fatal("a window only reads hosts")
 	}
 }
+
+func TestMenuItemsOfOtherWindowsAreDoneByTheMainWindow(t *testing.T) {
+	_, b, _, dir := newBridgeApp(t)
+	var got []string
+	b.SetMenuHandler(func(a string) { got = append(got, a) })
+	c, err := ConnectBridge(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range MenuActions {
+		if err := c.MenuAction(a); err != nil {
+			t.Fatalf("%s: %v", a, err)
+		}
+	}
+	if len(got) != len(MenuActions) {
+		t.Fatalf("%d of %d actions arrived", len(got), len(MenuActions))
+	}
+	for _, bad := range []string{"", "rm -rf", "page:../x", "new_host\n"} {
+		if err := c.MenuAction(bad); err == nil {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+	if len(got) != len(MenuActions) {
+		t.Fatal("a refused action reached the handler")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -78,6 +79,7 @@ type TerminalWindow struct {
 	target WindowTarget
 	client *BridgeClient
 
+	ctx  context.Context
 	mu   sync.Mutex
 	sids map[string]bool
 }
@@ -125,6 +127,7 @@ func (w *TerminalWindow) Call(service, method, argsJSON string) (string, error) 
 // Startup is the Wails OnStartup hook: it quits when the main app is gone and turns the events that the
 // main process relays into events of this window, where the terminal listens for them.
 func (w *TerminalWindow) Startup(ctx context.Context) {
+	w.ctx = ctx
 	w.System.SetContext(ctx)
 	quitWithMain(ctx, w.client)
 	go func() {
@@ -162,4 +165,9 @@ func (w *TerminalWindow) Shutdown(context.Context) {
 		b, _ := json.Marshal([]string{s})
 		_, _ = w.client.Call("SessionService", "Close", string(b))
 	}
+}
+
+// Menu is the main window's menu bar, so it does not change when this window has the focus.
+func (w *TerminalWindow) Menu() *menu.Menu {
+	return menuViaMain(w.client, func() context.Context { return w.ctx })
 }

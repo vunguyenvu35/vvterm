@@ -80,6 +80,7 @@ func runSettings(dir string) {
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
 		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
+		Menu:             w.Menu(),
 		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{w.Bridge, w.System},
 	})
@@ -105,6 +106,7 @@ func runTerminalWindow(dir, hostID, title string) {
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
 		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
 		OnShutdown:       w.Shutdown,
+		Menu:             w.Menu(),
 		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{w, w.System},
 	})

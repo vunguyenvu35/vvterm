@@ -81,6 +81,7 @@ func (s *SettingsService) Save(in Settings) (Settings, error) {
 	s.c.settings.Scrollback = in.Scrollback
 	s.c.settings.Zoom = in.Zoom
 	s.c.settings.ConfirmTabClose = in.ConfirmTabClose
+	s.c.settings.AskProtocol = in.AskProtocol
 	s.c.settings.Highlight = in.Highlight
 	s.c.settings.ReduceMotion = in.ReduceMotion
 	s.c.settings.AccountName = strings.TrimSpace(in.AccountName)
