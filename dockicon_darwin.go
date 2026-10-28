@@ -16,6 +16,15 @@ static void setDockIcon(const void *bytes, int length) {
     if (image == nil) return;
     dispatch_async(dispatch_get_main_queue(), ^{ [NSApp setApplicationIconImage:image]; });
 }
+
+// hideFromDock keeps a helper process (the Settings window, a terminal window) out of the Dock and the app
+// switcher: it is a window of VVTerm, not a second app. The window stays and is brought to the front.
+static void hideFromDock(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        [NSApp activateIgnoringOtherApps:YES];
+    });
+}
 */
 import "C"
 
@@ -27,3 +36,6 @@ func setDockIcon(png []byte) {
 	}
 	C.setDockIcon(unsafe.Pointer(&png[0]), C.int(len(png)))
 }
+
+// hideFromDock is for the processes that only show one more window of the app.
+func hideFromDock() { C.hideFromDock() }

@@ -4,3 +4,6 @@ package main
 
 // setDockIcon is only needed on macOS.
 func setDockIcon([]byte) {}
+
+// hideFromDock is only needed on macOS.
+func hideFromDock() {}
