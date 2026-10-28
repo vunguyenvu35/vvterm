@@ -6,12 +6,14 @@
 
 ## Go (unit + integration)
 
-### `app` (14)
+### `app` (30)
 
 - TestDataDirEnvOverride
 - TestBuildWiresRealAdapters
 - TestOpenURLOnlyAllowsProjectLinks
 - TestNativeDialogsCanBeDisabledByEnvironment
+- TestClipboardNeedsANativeWindow
+- TestOpenPathRefusesFilesThatRunPrograms
 - TestBridgeConnectionFileIsPrivateAndRemovedOnClose
 - TestBridgeCallsSettingsAndNotifiesTheMainWindow
 - TestBridgePassesUseCaseErrorsThrough
@@ -22,6 +24,20 @@
 - TestConnectBridgeExplainsWhenTheMainAppIsNotRunning
 - TestSettingsLauncherOpensOnceAndRaisesAfterwards
 - TestOpenSettingsFallsBackWithoutNativeWindows
+- TestMenuBarHasTheUsualMenus
+- TestFileMenuAsksTheWindowForTheRightActions
+- TestViewMenuZoomsSplitsAndShowsPages
+- TestHelpMenuOpensOnlyTheProjectPages
+- TestEveryMenuActionIsKnownAndUnique
+- TestAppMenuIsSafeBeforeTheWindowExists
+- TestWindowLauncherStartsEveryTimeAndClosesAll
+- TestOpenWindowFallsBackWithoutNativeWindows
+- TestBridgeRelaysTheSessionsAWindowOpenedAndEveryOtherEvent
+- TestBridgeWakesAWaitingWindowAndBoundsWhatItKeeps
+- TestBridgeAllowsSessionCallsButNotSessionTestsOrOtherServices
+- TestMenuItemsOfOtherWindowsAreDoneByTheMainWindow
+- TestAnAppWindowMayCallAnyUseCaseButOnlyThose
+- TestAskingWhereTheEventsAreNowDoesNotWait
 
 ### `internal/archtest` (5)
 
@@ -31,8 +47,12 @@
 - TestInfrastructureNeverImportsUseCasesOrDelivery
 - TestOnlyDeliveryLayerTouchesWails
 
-### `internal/domain` (5)
+### `internal/domain` (9)
 
+- TestParseOS
+- TestNormalizeHostRejectsUnknownOS
+- TestNormalizeForwardLabel
+- TestNormalizeHostTelnetAndTheme
 - TestNormalizeHostDefaultsAndRejects
 - TestNormalizeForwardSafeBindDefaults
 - TestIsLoopback
@@ -74,6 +94,20 @@
 - TestConflictPolicies
 - TestJumpToExistingHostReusesIt
 
+### `internal/localtty` (5)
+
+- TestShellOutputAndNormalExit
+- TestInteractiveShellEchoesResizesAndCloses
+- TestTerminalEnvironmentIsSet
+- TestUserShellFallsBack
+- TestOpenFailsForAMissingProgram
+
+### `internal/serialx` (3)
+
+- TestOpenRefusesNonDevicesAndBadSpeeds
+- TestPortsReturnsASortedList
+- TestReadsAndWritesThroughADevice
+
 ### `internal/sftpx` (8)
 
 - TestHomeAndListSortsDirectoriesFirst
@@ -85,8 +119,12 @@
 - TestDownloadOfDirectoryIsRefused
 - TestUploadedFileContentOnServer
 
-### `internal/sqlitedb` (8)
+### `internal/sqlitedb` (18)
 
+- TestActivityListsNewestFirstAndRoundTrips
+- TestActivityFilters
+- TestActivityKeepsOnlyTheNewestRows
+- TestActivityClearAndValidation
 - TestStoreDataRoundTripPreservesEverything
 - TestSaveIsAtomicOnFailure
 - TestStoreRunsOnSQLite
@@ -95,9 +133,20 @@
 - TestMigrationVersionAndNewerSchemaRejected
 - TestReopenIsIdempotent
 - TestUpgradeFromSchemaV1KeepsData
+- TestUpgradeFromSchemaV2AddsServerTypeAndForwardLabel
+- TestHostTelnetAndThemeRoundTrip
+- TestIdentityCertificateRoundTrips
+- TestADatabaseThatStoppedHalfWayIsCompletedOnOpen
+- TestEveryAdditionIsPresentOnAFreshDatabaseAndTheStepCanRunTwice
+- TestADatabaseAtTheNewestVersionStillGetsColumnsAddedLater
 
-### `internal/sshx` (14)
+### `internal/sshx` (19)
 
+- TestKnownHostsListEachNameOfALineAsItsOwnRow
+- TestKnownHostsListOfAMissingFileIsEmpty
+- TestForgetOneNameKeepsTheOtherAndEverythingElse
+- TestForgetRefusesWhatItCannotMatch
+- TestAForgottenHostIsAskedAboutAgain
 - TestPasswordLoginAndShellEcho
 - TestWrongPasswordFails
 - TestKeyAuth
@@ -113,7 +162,7 @@
 - TestBatcherCoalescesAndPreservesOrder
 - TestBatcherFlushesAtMaxBytes
 
-### `internal/store` (17)
+### `internal/store` (18)
 
 - TestSaveHostDefaultsAndPersistence
 - TestSaveHostValidation
@@ -132,6 +181,7 @@
 - TestPublicBindRequiresExplicitOptIn
 - TestHostnameWithControlCharsRejected
 - TestSnippetsCRUDSortingAndTombstones
+- TestSetHostOSKeepsTheRestAndSurvivesAnEditWithoutIt
 
 ### `internal/syncgit` (16)
 
@@ -152,8 +202,57 @@
 - TestUnreachableRemoteReportsError
 - TestSnippetsMergeLikeOtherRecords
 
-### `internal/usecase` (57)
+### `internal/telnetx` (13)
 
+- TestNegotiationAcceptsEchoAndSGAAndRefusesTheRest
+- TestAnOptionIsAnsweredOnceSoNegotiationCannotLoop
+- TestWindowSizeAndTerminalTypeAreReported
+- TestWindowSizeWithA255IsEscaped
+- TestDataPassesThroughWithoutNegotiationBytes
+- TestKeystrokesAreEscapedAndEnterBecomesCRLF
+- TestAutoLoginTypesUserAndPasswordAtTheirPromptsOnce
+- TestPasswordIsNotSentBeforeTheUserNameWasAccepted
+- TestAutoLoginOnlyInTheFirstSeconds
+- TestNoCredentialsMeansTheUserTypesThem
+- TestPasswordOnlyDevices
+- TestServerLogoutIsACleanEndAndCloseIsToo
+- TestConnectionRefusedIsReported
+
+### `internal/usecase` (105)
+
+- TestLogRecordsConnectingAndClosingATab
+- TestLogRecordsAFailedConnectionAndALostOne
+- TestLogRecordsHostKeyDecisions
+- TestLogRecordsForwardsStartingStoppingAndFailing
+- TestLogRecordsSFTPAndTransfers
+- TestLogRecordsVaultAndSyncWithoutSecrets
+- TestLogServiceFiltersAndClears
+- TestNoActivityStoreMeansNoHistoryAndNoCrash
+- TestKnownHostsListAndForgetThroughTheService
+- TestSummarizeTransferAndByteFormatting
+- TestLocalTerminalSessionEndToEnd
+- TestDeviceSessionFailuresAreReportedInTheTab
+- TestDeviceLostIsAnErrorNotACleanEnd
+- TestSerialSessionUsesThePortAndSpeedFromTheId
+- TestOpenRefusesBadSerialIdsAndUnknownHosts
+- TestSerialIDRoundTrip
+- TestSerialPortsNeverNull
+- TestTelnetSessionUsesTheHostAndTheIdentityPassword
+- TestTelnetNeedsTheHostToOptIn
+- TestTelnetWithoutPasswordIdentityTypesNoPassword
+- TestTelnetFailuresAreShownInTheTab
+- TestTelnetHasItsOwnLoginAndSavedPassword
+- TestTelnetLatin1ServersAreConvertedBothWays
+- TestAddKeyPairAcceptsAMatchingPublicKeyAndCertificate
+- TestAddKeyPairWithoutThePublicPartsIsAnOrdinaryImport
+- TestAddKeyPairRefusesWhatDoesNotBelong
+- TestACertificateIdentityLogsInWithTheCertificate
+- TestAddKeyPairNeedsTheVaultUnlocked
+- TestLocalListSortsFoldersFirstAndIncludesHiddenAndLinks
+- TestLocalRejectsRelativeEmptyAndNulPaths
+- TestLocalMkdirRenameDeleteNeverOverwrite
+- TestLocalProtectsRootAndHome
+- TestLocalChmodChangesTheBitsAndRefusesNonsense
 - TestForwardOnDedicatedConnection
 - TestForwardAutoStartRidesSessionAndDiesWithIt
 - TestAutoStartForwardIsRebuiltAfterReconnect
@@ -181,7 +280,15 @@
 - TestResetOnFreshInstallIsHarmless
 - TestSettingsGeneralAccountAndShortcuts
 - TestOldSettingsWithoutShortcutsGetsNonNilMap
+- TestFirstConnectionLearnsTheServerType
+- TestServerTypeFallsBackToTheSSHVersionString
+- TestUnknownServerTypeStaysEmpty
+- TestSFTPConnectionAlsoLearnsTheServerType
+- TestHighlightOutputIsOnForNewAndOldSettingsFilesAndCanBeSwitchedOff
+- TestTerminalMouseSettingsDefaultsAndValidation
 - TestSessionFullLifecycle
+- TestAConnectionReportsHowFarItGotBeforeItIsReady
+- TestAConnectionThatFailsReportsNoSuchProgressAsDone
 - TestHostKeyConfirmationRules
 - TestKnownHostSkipsPromptOnSecondSession
 - TestSessionViaJumpHost
@@ -200,6 +307,7 @@
 - TestSftpConnectionLossIsReportedAndSessionDropped
 - TestSftpRefusedWithoutAnSFTPServerOrVaultOrAdapter
 - TestSftpRejectsDangerousPathsAndShutdownClosesSessions
+- TestSftpChmodReachesTheServerAndChecksTheBits
 - TestValidateCombo
 - TestValidateShortcuts
 - TestTestConnectionSucceedsWithTypedPasswordAndStoresNothing
@@ -211,6 +319,12 @@
 - TestTestConnectionThroughJumpHost
 - TestTestConnectionValidation
 - TestTestConnectionWithLockedVaultReportsIt
+- TestUploadAllSendsFoldersWithEverythingInside
+- TestUploadAllSkipsExistingFilesUntilToldToReplace
+- TestDownloadAllSavesFoldersAndSkipsExisting
+- TestTransferRefusesBadInput
+- TestUploadRefusesFoldersNestedTooDeeply
+- TestDownloadIgnoresNamesThatWouldEscapeTheFolder
 
 ### `internal/vault` (19)
 
@@ -234,7 +348,7 @@
 - TestGenerateAndParseKey
 - TestDestroyWorksWhileLockedAndClearsKeychain
 
-**Go test functions: 189** (table-driven cases and sub-tests are extra).
+**Go test functions: 294** (table-driven cases and sub-tests are extra).
 
 ## Frontend (Vitest)
 
@@ -251,14 +365,18 @@
 - src/App.test.tsx › App › opens each panel from the sidebar and closes with Escape
 - src/App.test.tsx › App › applies the theme from settings
 - src/App.test.tsx › App navigation and quick connect › switches between Hosts, Keychain and Port Forwarding pages
-- src/App.test.tsx › App navigation and quick connect › Manage on a forward opens the host forwards panel
+- src/App.test.tsx › App navigation and quick connect › a forward card has Edit, which opens the docked panel on the Port Forwarding page
+- src/App.test.tsx › App navigation and quick connect › the Forwards button of a host card opens New Port Forwarding with that host already chosen
 - src/App.test.tsx › App navigation and quick connect › quick connect to an unknown host opens the New host panel prefilled
-- src/App.test.tsx › App navigation and quick connect › the + tab returns home and focuses the search box
+- src/App.test.tsx › App navigation and quick connect › the + opens a New Tab with a search box and the recent connections; picking a host turns it into that connection
+- src/App.test.tsx › App navigation and quick connect › the New Tab also finds open tabs and switches to them
+- src/App.test.tsx › App navigation and quick connect › a host that also has Telnet first asks which protocol to use
+- src/App.test.tsx › App navigation and quick connect › Close on the protocol screen closes the tab
 - src/App.test.tsx › App snippets › creates a snippet from the Snippets page
 - src/App.test.tsx › App snippets › Run types the script and Enter into the focused pane of the last terminal and switches to it
 - src/App.test.tsx › App snippets › Paste does not press Enter
 - src/App.test.tsx › App snippets › refuses to run without an open terminal
-- src/App.test.tsx › App snippets › reports a terminal that is not connected yet
+- src/App.test.tsx › App snippets › says nothing about a terminal that is not connected yet
 - src/App.test.tsx › App snippets › the title-bar picker runs a snippet inside the terminal view
 - src/App.test.tsx › App snippets › deletes after confirmation
 - src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › New host opens next to the list (same screen) and shows a draft card that follows typing
@@ -272,23 +390,65 @@
 - src/App.test.tsx › App: panels belong to the page they were opened on › New host closes when you move to another screen
 - src/App.test.tsx › App: panels belong to the page they were opened on › New group and New snippet close on page change too
 - src/App.test.tsx › App: panels belong to the page they were opened on › opening a terminal closes the panel instead of leaving it behind
-- src/App.test.tsx › App: panels belong to the page they were opened on › staying on the same page keeps the panel (the + tab does not discard typed work)
-- src/App.test.tsx › App: SFTP tabs › SFTP on a host opens a file-browser tab next to the terminals, and closing it asks first
-- src/App.test.tsx › App: SFTP tabs › snippets still go to the last terminal, never to an SFTP tab
+- src/App.test.tsx › App: panels belong to the page they were opened on › the + tab leaves the Vaults page, so an open panel closes like on any other move
+- src/App.test.tsx › App: the SFTP tab next to Vaults › is there from the start, right after Vaults, with no close button, and starts on "Connect to host"
+- src/App.test.tsx › App: the SFTP tab next to Vaults › connects to a host chosen inside the tab: Select host, then the host (a card has no SFTP button)
+- src/App.test.tsx › App: the SFTP tab next to Vaults › closing the last terminal goes back to Vaults, not to the SFTP tab; Ctrl+W on the SFTP tab does nothing
+- src/App.test.tsx › App: the SFTP tab next to Vaults › snippets still go to the last terminal, never to the SFTP tab
 - src/App.test.tsx › App: keyboard shortcuts › the default combo opens and closes Settings
 - src/App.test.tsx › App: keyboard shortcuts › a customised combo works and the old one no longer does
 - src/App.test.tsx › App: keyboard shortcuts › lock vault returns to the unlock screen
 - src/App.test.tsx › App: keyboard shortcuts › zoom shortcuts change and reset the interface zoom
-- src/App.test.tsx › App: keyboard shortcuts › next/previous tab cycle through Vaults and the open tabs; close tab asks first
+- src/App.test.tsx › App: keyboard shortcuts › next/previous tab cycle through Vaults and the open tabs; close tab does not ask
 - src/App.test.tsx › App: keyboard shortcuts › does nothing while a new shortcut is being recorded
 - src/App.test.tsx › App: Settings as a native window › opens the native window (no in-app window) from the navigation, the gear and the shortcut
 - src/App.test.tsx › App: Settings as a native window › falls back to the in-app window when there is no native window
 - src/App.test.tsx › App: Settings as a native window › picks up settings saved in the Settings window (zoom, theme)
 - src/App.test.tsx › App: Settings as a native window › reloads the data after the Settings window changed the vault or sync
+- src/App.test.tsx › App: confirmations are in-app dialogs (a desktop webview has no confirm()) › with "Confirm before closing a tab" on, closing a tab asks in the app, and Cancel keeps it
+- src/App.test.tsx › App: confirmations are in-app dialogs (a desktop webview has no confirm()) › closing a tab (when asked for) and deleting a host use the same in-app dialog
+- src/App.test.tsx › App: server type › the icon changes as soon as the first connection reveals the server type
+- src/App.test.tsx › App: Terminal and Serial on the Hosts page › Terminal opens a tab on this computer
+- src/App.test.tsx › App: Terminal and Serial on the Hosts page › Serial opens a docked panel, then a tab for the port at that speed
+- src/App.test.tsx › App: Hosts toolbar order › New host with its caret, then Terminal and Serial
+- src/App.test.tsx › App: tab names › a second tab on the same host is numbered, and a closed tab frees its number
+- src/App.test.tsx › App: tab names › a double click renames a tab, and the new name is used when closing it
+- src/App.test.tsx › App: tab names › an empty name is ignored, and a long one is cut to 60 characters
+- src/App.test.tsx › App: tab names › local terminals and serial ports are numbered too
+- src/App.test.tsx › App: Known Hosts and Logs pages › the navigation opens them
+- src/App.test.tsx › App: Telnet › the Telnet button of a host opens a tab on telnet:<host>, numbered like any other
+- src/App.test.tsx › App: closing a tab does not ask by default › the × and the shortcut close at once, with no dialog of any kind
+- src/App.test.tsx › App: the New host caret menu › offers New group and Import; Import opens the Import / Export panel
+- src/App.test.tsx › App: the New host caret menu › closes on Escape and on a click elsewhere, and moves with the arrow keys
+- src/App.test.tsx › App: the New host caret menu › the host card subtitle mentions telnet when the host has it
+- src/App.test.tsx › App: tab menu, broadcast and maximise › Duplicate opens another tab on the same host right next to it, numbered, and selects it
+- src/App.test.tsx › App: tab menu, broadcast and maximise › Split right from the menu splits that tab and shows it
+- src/App.test.tsx › App: tab menu, broadcast and maximise › Rename from the menu, then the shortcut turns Broadcast on and off
+- src/App.test.tsx › App: tab menu, broadcast and maximise › Maximize pane shows one pane, and closing the split pane afterwards leaves no stale zoom
+- src/App.test.tsx › App: the application menu bar › opens the panels the File menu names
+- src/App.test.tsx › App: the application menu bar › New Terminal opens a local terminal; Duplicate, Close Tab and Close Pane act on the open tab
+- src/App.test.tsx › App: the application menu bar › View shows the pages and the SFTP tab, and zooms
+- src/App.test.tsx › App: the application menu bar › Settings… opens (never toggles shut) and Lock Vault locks
+- src/App.test.tsx › App: the application menu bar › does nothing while the vault is locked, and ignores an unknown action
+- src/App.test.tsx › App: the application menu bar › knows every action the Go menu can send
+- src/App.test.tsx › App: terminal sidebar and new windows › the sidebar sits beside a terminal only, can be hidden, and is remembered
+- src/App.test.tsx › App: terminal sidebar and new windows › a theme picked in the sidebar is saved as the terminal theme
+- src/App.test.tsx › App: terminal sidebar and new windows › Duplicate in new window opens a window for the host of the tab
+- src/App.test.tsx › App: New host and local terminal shortcuts › Ctrl/Cmd+N opens the New host panel, Ctrl/Cmd+Shift+T a terminal on this computer
+- src/App.test.tsx › App: moving a host into a group by dragging › saves the host with the group and says so
+- src/App.test.tsx › App: ask which protocol to use › with the setting on, a plain host asks too; Telnet and Mosh are shown but cannot be picked when unavailable
+- src/App.test.tsx › App: page shortcuts › Ctrl/Cmd+4 goes to Snippets and Ctrl/Cmd+1 back to Hosts, from a terminal too
+- src/App.test.tsx › App: an app window opened for a host › opens that host in its first tab once the vault is open, and does not open it twice
+- src/App.test.tsx › App: an app window opened for a host › a terminal on this computer opens at once
+- src/App.test.tsx › App: dragging a tab onto a pane › turns the two tabs into one tab with a split, the dragged tab joining as new sessions
+- src/App.test.tsx › App: dragging a tab onto a pane › a pane can be taken back out of the split into a tab of its own, again without a reconnect
 - src/lib/backend.test.ts › Settings window backend (bridge) › is recognised only where the bridge is bound
 - src/lib/backend.test.ts › Settings window backend (bridge) › forwards settings, vault security and sync calls as JSON through the bridge
 - src/lib/backend.test.ts › Settings window backend (bridge) › an empty result is undefined, and errors from the main process reject
 - src/lib/backend.test.ts › Settings window backend (bridge) › keeps the version and help links local, and cannot open another Settings window
+- src/lib/backend.test.ts › toggleMaximise › zooms the native window through the Wails runtime
+- src/lib/backend.test.ts › toggleMaximise › does nothing in a browser, where there is no runtime
+- src/lib/backend.test.ts › app window (Duplicate in new window) › is recognised by its own bound object, and every use case call goes to the main process
 - src/lib/layout.test.ts › pane layout › starts with one leaf
 - src/lib/layout.test.ts › pane layout › splits a pane, focuses the new one, and keeps the host
 - src/lib/layout.test.ts › pane layout › supports nested splits in both directions
@@ -298,6 +458,14 @@
 - src/lib/layout.test.ts › pane layout › keeps focus when an unfocused pane closes
 - src/lib/layout.test.ts › sftp tabs › are tabs of kind sftp with a single leaf for the host
 - src/lib/layout.test.ts › sftp tabs › cannot be split
+- src/lib/layout.test.ts › uniqueTitle › keeps a free name, and numbers a taken one with the lowest free number
+- src/lib/layout.test.ts › broadcast, zoom and duplicate › broadcast needs two panes, toggles, and goes away when one pane is left
+- src/lib/layout.test.ts › broadcast, zoom and duplicate › zoom shows one pane, toggles back, ignores a pane that is not there, and a new split leaves the zoom
+- src/lib/layout.test.ts › broadcast, zoom and duplicate › closing the zoomed pane leaves the zoom; closing another keeps it
+- src/lib/layout.test.ts › broadcast, zoom and duplicate › duplicate makes a new tab on the focused pane's host, but not for a file browser
+- src/lib/layout.test.ts › moveTab › puts a tab before or after another one
+- src/lib/layout.test.ts › moveTab › never moves the pinned tab, and nothing goes before it
+- src/lib/layout.test.ts › moveTab › changes nothing for an unknown tab or a move onto itself
 - src/lib/util.test.ts › util › decodes base64 including non-UTF8 bytes
 - src/lib/util.test.ts › util › normalises errors from Wails (string) and exceptions
 - src/lib/util.test.ts › util › parses and de-duplicates tags
@@ -326,7 +494,13 @@
 - src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › asks to trust an unknown host key and answers with the displayed fingerprint
 - src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › cancelling the host key prompt rejects it with an empty fingerprint
 - src/lib/hosts/HostForm.test.tsx › GroupForm › requires a name then saves
-- src/lib/hosts/HostList.test.tsx › HostList › shows ungrouped hosts and group cards with host counts (including sub-groups)
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › Telnet is off until "Add Telnet" is pressed, and then comes right after the SSH port
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › Add Telnet shows the port (23), a warning, its own username, password and encoding
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › refuses a Telnet port that is not a port
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › editing a host shows its Telnet settings, and Remove turns Telnet off
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › the theme is a picture card: pick one from the pictures, or go back to the app setting
+- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › an existing host keeps its theme when edited, and can go back to the app setting
+- src/lib/hosts/HostList.test.tsx › HostList › shows every host and the group cards with host counts (including sub-groups)
 - src/lib/hosts/HostList.test.tsx › HostList › drills into a group, shows sub-groups and a breadcrumb, and goes back
 - src/lib/hosts/HostList.test.tsx › HostList › searches across all groups by label, hostname, user and tag
 - src/lib/hosts/HostList.test.tsx › HostList › filters by environment and toggles off
@@ -348,34 +522,37 @@
 - src/lib/hosts/HostList.test.tsx › quick connect › rejects "user@"
 - src/lib/hosts/HostList.test.tsx › draft card › shows a placeholder card while a new host is being entered, and the typed text
 - src/lib/hosts/HostList.test.tsx › draft card › is not counted as a host
-- src/lib/hosts/HostList.test.tsx › HostList: SFTP action › shows an SFTP button per host that opens the file browser for that host
-- src/lib/hosts/HostList.test.tsx › HostList: SFTP action › hides the button when the action is not provided
+- src/lib/hosts/HostList.test.tsx › HostList: no SFTP button on a card › SFTP lives in its own tab next to Vaults, so a card has no SFTP button, not even on hover
+- src/lib/hosts/HostList.test.tsx › HostList: server type icon › shows the distribution icon once the server type is known, with the environment as a pip
+- src/lib/hosts/HostList.test.tsx › HostList: Telnet action › is offered only for hosts that have Telnet on, and opens that host with Telnet
+- src/lib/hosts/HostList.test.tsx › HostList: Telnet action › is not shown without a handler
+- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › starts as a grid; the View menu has a check on the current view
+- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › List shows the same hosts as rows, closes the menu, and is remembered
+- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › opens in the remembered view
+- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › Esc and a click elsewhere close the menu
+- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › works when the browser storage is unavailable
+- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › dropping a host card on a group card moves the host there
+- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › inside a group, a host can go into a sub-group or out through "All hosts"
+- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › cards are not draggable without a handler, and other drags are ignored
+- src/lib/hosts/HostList.test.tsx › HostList: tag filter › lists every tag once, sorted, and keeps the hosts that have any ticked tag
+- src/lib/hosts/HostList.test.tsx › HostList: tag filter › searches the tags, and Clear selection brings every host back
+- src/lib/hosts/HostList.test.tsx › HostList: tag filter › combines with the search box, and reaches hosts inside groups too
+- src/lib/hosts/HostList.test.tsx › HostList: tag filter › says so when there are no tags yet, and closes on Escape
+- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › lists the ports found, picks the first and defaults to 115200
+- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › connects to the chosen port at the chosen speed
+- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › says so when there are no ports, disables Connect, and finds a device after Refresh
+- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › shows a backend error and stays usable
+- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › names ports and offers the usual speeds
 - src/lib/hosts/tree.test.ts › buildTree › nests groups and places hosts
 - src/lib/hosts/tree.test.ts › buildTree › puts hosts of unknown groups into ungrouped
 - src/lib/hosts/tree.test.ts › buildTree › treats a group with a missing parent as a root
-- src/lib/panels/PortForwardsPage.test.tsx › PortForwardsPage › lists forwards with host and state, and stops a running one
-- src/lib/panels/PortForwardsPage.test.tsx › PortForwardsPage › offers hosts for a new forward and delegates to Manage
-- src/lib/panels/PortForwardsPage.test.tsx › PortForwardsPage › reacts to forward:state events
-- src/lib/panels/panels.test.tsx › ForwardsPanel › adds, starts, stops and deletes a local forward
-- src/lib/panels/panels.test.tsx › ForwardsPanel › hides destination fields for SOCKS5 and describes it
-- src/lib/panels/panels.test.tsx › ForwardsPanel › shows a host key prompt while starting and answers with the displayed fingerprint
-- src/lib/panels/panels.test.tsx › ForwardsPanel › shows backend validation errors
-- src/lib/panels/panels.test.tsx › DataPanel › imports an ssh config and shows the report with warnings
-- src/lib/panels/panels.test.tsx › DataPanel › warns before exporting private keys
-- src/lib/panels/panels.test.tsx › DataPanel › requires an 8+ character backup password
-- src/lib/panels/panels.test.tsx › DataPanel › exports metadata-only JSON
-- src/lib/panels/panels.test.tsx › DataPanel › surfaces backend errors
-- src/lib/panels/panels.test.tsx › SyncPanel › saves the repo and syncs
-- src/lib/panels/panels.test.tsx › SyncPanel › disables sync while the vault is locked and join once a vault exists
-- src/lib/panels/panels.test.tsx › SyncPanel › restores on a new machine
-- src/lib/panels/panels.test.tsx › SyncPanel › shows sync errors
-- src/lib/panels/panels.test.tsx › null slices from Go (regression) › DataPanel renders an import report whose arrays are null
-- src/lib/panels/panels.test.tsx › null slices from Go (regression) › the Wails adapter normalises null report arrays
 - src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › fills its own native window: no floating chrome, no dots, no drag
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › Esc does not close it (a real window is closed with its own button)
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › Esc closes the window
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › the title is centred between the macOS buttons and the right edge
 - src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › applies the saved theme, zoom and motion to its own page, and saves changes
 - src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › reads the settings again whenever the window is focused (the main window may have changed them)
 - src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › shows a loading state, then nothing breaks when the main window is gone
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp title bar › a double click on the title bar zooms the window, but not on its buttons
 - src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › is a window with a title bar, not a page
 - src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › has categories on the left and theme, help links and version below them (Termius layout)
 - src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › closes with the red dot and with Escape
@@ -412,31 +589,123 @@
 - src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › choosing the default again removes the override; reset and reset-all work
 - src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › tells the global handler to stay quiet while recording
 - src/lib/settings/SettingsWindow.test.tsx › Switch › toggles and exposes its state
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Highlight output › is on by default in the Terminal tab and can be switched off
 - src/lib/settings/appearance.test.tsx › useAppearance › an explicit mode ignores the OS
 - src/lib/settings/appearance.test.tsx › useAppearance › auto follows the OS and reacts when it changes
 - src/lib/settings/appearance.test.tsx › useAppearance › switching from auto to explicit stops following the OS
-- src/lib/shell/TopBar.test.tsx › TopBar › the Vaults tab does not reuse the .home page-container class (regression: it stretched to 220px)
-- src/lib/shell/TopBar.test.tsx › TopBar › selects and closes terminal tabs without selecting them on close
-- src/lib/shell/TopBar.test.tsx › TopBar › split buttons are only enabled inside a terminal tab
-- src/lib/shell/TopBar.test.tsx › Nav › every item has an accessible name and tooltip even when labels are hidden on narrow windows
-- src/lib/shell/TopBar.test.tsx › Brand wordmark › keeps the two V letters apart (regression: tight letter-spacing made "VV" read as "W")
-- src/lib/shell/TopBar.test.tsx › Brand wordmark › renders logo and wordmark in one flex row with the accessible name VVTerm
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › connects, lists the home folder with folders first, and closes its connection on unmount
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › opens a folder by double click, goes up, and uses the breadcrumbs and the path box
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › shows the error and restores the path when a folder does not exist
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › creates a folder, validating the name first
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › renames the selected entry
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › deletes only after confirmation; folders are removed recursively
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › uploads a picked file into the current folder and shows the progress
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › asks before replacing an existing remote file, and leaves it alone when declined
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › downloads a file (button and double click) and asks before overwriting a local file
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › falls back to a prompt for the local path when there is no native dialog
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › asks to trust an unknown host key before connecting
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › shows a banner when the connection fails and reconnects on request
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser › shows the banner when the connection drops later
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › lists the trusted hosts with key type and fingerprint
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › says what this page is when nothing is trusted yet
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › searches by host, key type and fingerprint
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › forgets a host after confirming, and explains what that means
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › copies a fingerprint
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › hashed entries are shown but cannot be forgotten, with the reason
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › refreshes when something new was trusted (log:added), and shows a backend error
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › shows the newest lines first with host, message and whether it worked
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › filters by group and by text, asking the backend
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › says what to expect when empty, and when nothing matches
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › updates live when a line is added
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › clears after confirming
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › shows a backend error
+- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › formats the time without the year this year, and with it otherwise
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › lists rules as cards: letter, name, host, mapping and state; Stop works
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › uses the label as the name, and L / R / D for the three types
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › says what to do when there are none
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › reacts to forward:state events
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › Start shows a host key prompt when the host is unknown and answers with the displayed fingerprint
+- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › deletes after confirming
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › starts with the wizard: pick Local / Remote / Dynamic, see a picture and a description
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Continue walks through port → host → destination → name, with Back at every step
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Remote says so at each step; Dynamic skips the destination
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Skip wizard shows everything on one page
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › adds a local rule and shows it as a card; the draft card follows the label
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Dynamic hides the destination fields and sends none
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › the host card button opens the wizard with that host chosen: the host step is skipped
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › edits an existing rule (no wizard) and keeps its id
+- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › shows the validation error from the backend and keeps the panel open
+- src/lib/panels/PortForwardsPage.test.tsx › Select Host step: groups › lists hosts under their group, and hosts of an unknown group with the ungrouped ones
+- src/lib/panels/panels.test.tsx › DataPanel › imports an ssh config and shows the report with warnings
+- src/lib/panels/panels.test.tsx › DataPanel › warns before exporting private keys
+- src/lib/panels/panels.test.tsx › DataPanel › requires an 8+ character backup password
+- src/lib/panels/panels.test.tsx › DataPanel › exports metadata-only JSON
+- src/lib/panels/panels.test.tsx › DataPanel › surfaces backend errors
+- src/lib/panels/panels.test.tsx › SyncPanel › saves the repo and syncs
+- src/lib/panels/panels.test.tsx › SyncPanel › disables sync while the vault is locked and join once a vault exists
+- src/lib/panels/panels.test.tsx › SyncPanel › restores on a new machine
+- src/lib/panels/panels.test.tsx › SyncPanel › shows sync errors
+- src/lib/panels/panels.test.tsx › null slices from Go (regression) › DataPanel renders an import report whose arrays are null
+- src/lib/panels/panels.test.tsx › null slices from Go (regression) › the Wails adapter normalises null report arrays
+- src/lib/sftp/Permissions.test.tsx › permission modes › reads and writes rwx strings
+- src/lib/sftp/Permissions.test.tsx › PermissionsDialog › shows the current bits, changes them with the grid or the octal box, and saves
+- src/lib/sftp/Permissions.test.tsx › PermissionsDialog › keeps the dialog open and says why when saving fails
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows this computer on the left and the host on the right, folders first, hidden files off locally
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows hidden files on request
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › navigates each pane on its own: double click, up, path box, breadcrumbs
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows an error and restores the path when a folder does not exist
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › creates, renames and deletes locally (folders recursively, after confirming)
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › does the same on the host through SFTP
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Upload sends the selected file to the remote folder and shows what happened
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Download saves the selected remote file into the local folder and lists it
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › a whole folder goes with everything inside, and the summary says how much
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Cmd/Ctrl-click, Shift-click and Cmd/Ctrl+A select several, and the buttons say how many
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › dragging a selected row drags the whole selection; dragging an unselected row drags just that row
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › asks once for the whole batch before replacing, and leaves files alone when declined
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › a single existing file gets the single-file question
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › drag and drop: local items dropped on the remote pane upload, remote items dropped on the local pane download
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › dropping on the pane it came from does nothing, and the target pane lights up while dragging over
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › ignores drops that are not from the panes (files from Finder, text)
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › shows the error from a failed transfer, and still refreshes the receiving side
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › cannot transfer before a host is connected
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › deletes several selected items after one confirmation
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Rename needs exactly one selected item
+- src/lib/sftp/SftpBrowser.test.tsx › transfer summaries › says what was done and what was left
+- src/lib/sftp/SftpBrowser.test.tsx › transfer summaries › asks about one or many existing files
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › starts with "Connect to host"; Select host lists the saved hosts, searchable, and connecting works
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › Select host can be cancelled and explains an empty host list
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › Change host closes the connection and goes back to the choice
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › closes its connection when the tab goes away
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › asks to trust an unknown host key before connecting
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › shows a banner when the connection fails and reconnects on request
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › shows the banner when the connection drops later and disables transfers
 - src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › formats sizes
 - src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › builds breadcrumbs, parents and joined paths
 - src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › validates names
+- src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › names the kind of an entry
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host list stays current › uses the hosts the app gives it, so a host added later is offered
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a file has Open, Open with, Copy to target directory, Rename, Delete, Refresh, New Folder and Edit Permissions
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › empty space only offers Refresh and New Folder
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Open on a folder goes into it, and on a remote file downloads it to a temporary folder and opens that
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a local file is opened in place, and Open with asks which app
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Copy to target directory sends the chosen items to the other pane, one or many
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Rename and New Folder open the name box, Delete asks first
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Edit Permissions changes the mode on the server
+- src/lib/shell/TabStatus.test.tsx › pane status › summarises panes: connecting wins, closed only when all are, nothing when unknown
+- src/lib/shell/TabStatus.test.tsx › TabStatus › shows a spinner while connecting, a green dot when connected and a red dot when disconnected
+- src/lib/shell/TabStatus.test.tsx › TabStatus › a split tab is connecting while one of its panes is
+- src/lib/shell/TabStatus.test.tsx › TabStatus › a file browser tab and a tab still choosing a protocol have none
+- src/lib/shell/TopBar.test.tsx › TopBar › the Vaults tab does not reuse the .home page-container class (regression: it stretched to 220px)
+- src/lib/shell/TopBar.test.tsx › TopBar › selects and closes terminal tabs without selecting them on close
+- src/lib/shell/TopBar.test.tsx › TopBar › split buttons are only enabled inside a terminal tab
+- src/lib/shell/TopBar.test.tsx › Nav › shows the key of an action at the right of its item, and no native tooltip while the label is visible
+- src/lib/shell/TopBar.test.tsx › Nav › every item has an accessible name, and a tooltip when the labels are hidden on narrow windows
+- src/lib/shell/TopBar.test.tsx › Brand wordmark › keeps the two V letters apart (regression: tight letter-spacing made "VV" read as "W")
+- src/lib/shell/TopBar.test.tsx › Brand wordmark › renders logo and wordmark in one flex row with the accessible name VVTerm
+- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › toggles on the empty part of the bar
+- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › does not toggle when the double click lands on a tab or a button
+- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › works without a handler (browser mode)
+- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › a double click turns the name into an input with the name selected; Enter saves it
+- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › Esc cancels, and leaving the field saves what was typed
+- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › the pinned SFTP tab cannot be renamed, and renaming does not select or close the tab
+- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › does nothing without a handler (the tooltip is not offered either)
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › opens at the pointer with Duplicate, Rename, Split right, Split down and Close
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › each item acts on that tab and closes the menu
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › Rename turns the tab name into the input
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › closes on Escape and on a click elsewhere, and never shows the browser menu
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › the pinned SFTP tab has no menu
+- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › items that do not apply are disabled
+- src/lib/shell/TopBar.test.tsx › TopBar: tab icons › a tab shows the server type of its host, and a plain terminal icon for this computer
+- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › a tab dropped on the right half of another goes after it, on the left half before it
+- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › the pinned tab and a tab being renamed cannot be dragged; without a handler nothing is draggable
+- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › is not draggable without a handler
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › has unique action ids and unique valid default combos
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › effective() merges overrides over defaults and ignores empty ones
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › keyOf maps physical keys (so Option/Shift layouts do not matter) and ignores bare modifiers
@@ -457,6 +726,23 @@
 - src/lib/snippets/snippets.test.tsx › SnippetPicker › is disabled outside a terminal
 - src/lib/snippets/snippets.test.tsx › SnippetPicker › runs or pastes the chosen snippet and closes
 - src/lib/snippets/snippets.test.tsx › SnippetPicker › closes on Escape and on outside click, and tells when there are none
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › names the host with its pane number and small print
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › a single pane has no header at all: it would only cover the first line of the terminal
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › describes this computer, serial ports and Telnet panes
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › the buttons call back with the tab and the pane
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › while broadcasting the panes are marked and the buttons say so
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › what is typed in one pane is typed in the others, only while broadcasting
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › zoom shows one pane and hides the others without unmounting any (no session ends)
+- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › works through a nested split too
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › has the four sections and tells which one is open
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Hosts: searches and opens a host
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: one line each; a click shows the whole script with Run and Paste
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: no tooltip that explains clicking; New Snippet and search work
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › History: lists typed commands, filters, types and clears them
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Themes: lists the themes as pictures, marks the current one and picks another
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font: family and size, with limits
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font size stops at the limits
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font size stops at the lower limit too
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane › opens a session, attaches after subscribing, and renders output bytes
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane › sends keystrokes only once the session is ready
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane › asks for host key confirmation and answers with the displayed fingerprint
@@ -467,6 +753,56 @@
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane › shows an error banner if opening fails
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane › opens the search bar with Ctrl+F
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane snippet writer › registers by pane id, types only when ready, and unregisters on unmount
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › sends one call at a time, in order, and what was typed meanwhile goes out together
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › a failed call does not block the ones after it
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › snippets are typed through the same ordered queue, after what is already on its way
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › copies the selection once it stops changing (copy on select)
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › does nothing when copy on select is off, or the selection was cleared
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy key copies the selection and is not sent to the shell; with nothing selected it passes through
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy and paste combinations can be changed
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the paste key pastes the clipboard into the terminal, only when connected
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › a right click pastes by default, and never shows the browser menu
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › right click = none does nothing at all
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › right click = menu shows Copy, Paste, Select all and Clear where you clicked
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the menu closes on Escape and on a click elsewhere
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › shows who it connects to, and a line that creeps along without ever jumping
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › the target moves on when the backend says the login is done, and the line follows smoothly
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › when the session is ready the line runs the rest of the way, and the terminal shows when it has arrived
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › a failure stops the line where it was and shows the error with Retry, Show logs and Close
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › a connection lost after it was up keeps the old banner, not the connecting screen
+- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › a host with its own theme uses it; the others follow Settings
+- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › a Telnet pane of the host uses the same theme, and a local terminal follows Settings
+- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › an unknown theme id falls back to the app appearance rather than breaking
+- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › works without a host list
+- src/lib/terminal/Workspace.test.tsx › Workspace: a tab dragged onto a pane › lights up the side it is nearest to and tells the app where the split goes when dropped
+- src/lib/terminal/Workspace.test.tsx › Workspace: a tab dragged onto a pane › shows nothing for a tab dropped on itself, or when nothing is being dragged
+- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › joins the dropped tab as a split on the chosen side, with new panes and the focus on them
+- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › a tab with several panes brings them all, the very same panes (no new sessions); wrong cases change nothing
+- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › sideOf picks the nearest edge
+- src/lib/terminal/Workspace.test.tsx › popPane › takes a pane out of a split into a tab of its own, keeping its id
+- src/lib/terminal/Workspace.test.tsx › popPane › paneRects halves the area at every split
+- src/lib/terminal/highlight.test.ts › findHighlights › finds URLs, and does not also colour the IP or the path inside them
+- src/lib/terminal/highlight.test.ts › findHighlights › finds IPv4 addresses with an optional port, and refuses impossible ones
+- src/lib/terminal/highlight.test.ts › findHighlights › finds IPv6 and MAC-style addresses, but not a clock time
+- src/lib/terminal/highlight.test.ts › findHighlights › finds dates and times
+- src/lib/terminal/highlight.test.ts › findHighlights › finds the words that say how it went, ignoring case and word boundaries
+- src/lib/terminal/highlight.test.ts › findHighlights › finds paths, but not URL slashes or dates like 12/31
+- src/lib/terminal/highlight.test.ts › findHighlights › never overlaps, keeps the order of the line, and the first rule wins
+- src/lib/terminal/highlight.test.ts › findHighlights › handles empty and very long lines
+- src/lib/terminal/highlight.test.ts › readLine › maps characters to columns, with wide characters taking two
+- src/lib/terminal/highlight.test.ts › readLine › turns empty cells into spaces
+- src/lib/terminal/highlight.test.ts › createHighlighter › colours finished lines only: the line the cursor is on is left alone
+- src/lib/terminal/highlight.test.ts › createHighlighter › looks at each line once, picking up new lines as the cursor moves down
+- src/lib/terminal/highlight.test.ts › createHighlighter › leaves words a program coloured itself, and everything in the alternate screen
+- src/lib/terminal/highlight.test.ts › createHighlighter › places colours by column even after wide characters
+- src/lib/terminal/highlight.test.ts › createHighlighter › dispose removes every colour and stops; reset starts again from the top
+- src/lib/terminal/highlight.test.ts › createHighlighter › does nothing when the cursor is still on the first line, or the buffer is empty
+- src/lib/terminal/highlight.test.ts › createHighlighter › works through a long scroll in bounded steps
+- src/lib/terminal/history.test.ts › createLineTracker › reports each line finished with Enter, applying Backspace
+- src/lib/terminal/history.test.ts › createLineTracker › drops a line on Ctrl-C and Ctrl-U, ignores arrows, empty lines and control keys
+- src/lib/terminal/history.test.ts › command history › keeps newest first, moves a repeated command up and trims it
+- src/lib/terminal/history.test.ts › command history › keeps at most MAX_HISTORY commands, refuses empty and huge lines, and tells subscribers
+- src/lib/terminal/history.test.ts › command history › is stored in localStorage
 - src/lib/terminal/panes.test.ts › pane registry › writes to a registered pane and stops after unregister
 - src/lib/terminal/panes.test.ts › pane registry › reports false for unknown panes and for panes that refuse input
 - src/lib/terminal/panes.test.ts › pane registry › a stale unregister does not remove a newer registration
@@ -527,6 +863,22 @@
 - src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-red is readable: text contrasts with the background and "dark" is truthful
 - src/lib/terminal/themes.test.ts › terminal theme catalogue › blends colours
 - src/lib/terminal/themes.test.ts › terminal theme catalogue › finds and resolves themes; auto and unknown ids follow the appearance
+- src/lib/terminal/themes.test.ts › "Match app theme" looks like the app › the default dark and light themes use the app background from styles.css and green text
+- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › says so in a password field while Caps Lock is on, and goes away when it is off
+- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › only in password fields, and not after the field lost the focus
+- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › sits inside the field, at its right edge and centred vertically
+- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › is quiet when the platform cannot tell
+- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › the webview's own indicator and autofill button are hidden by the stylesheet
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › shows the question and resolves true on the confirm button, with a custom label
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › resolves false on Cancel, on Esc and on a click outside
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › Enter confirms, and the confirm button has the focus
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › keeps Esc and Enter away from whatever is underneath
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › a newer question replaces an unanswered one, which counts as "no"
+- src/lib/ui/Confirm.test.tsx › in-app confirmation › without a provider it falls back to window.confirm
+- src/lib/ui/OsIcon.test.tsx › OsIcon › has a name, colour and mark for every server type the backend can store
+- src/lib/ui/OsIcon.test.tsx › OsIcon › names the server type, and is empty while it is unknown
+- src/lib/ui/OsIcon.test.tsx › OsIcon › draws the distribution mark, or the generic server icon when unknown
+- src/lib/ui/OsIcon.test.tsx › OsIcon glyphs › draws a logo for every server type (never the generic icon for a known one)
 - src/lib/ui/Select.test.tsx › Select › shows the current label and exposes combobox semantics
 - src/lib/ui/Select.test.tsx › Select › opens a custom listbox (not the native popup) with hints and a check on the selected option
 - src/lib/ui/Select.test.tsx › Select › click selects, closes and calls onChange once
@@ -540,14 +892,26 @@
 - src/lib/ui/Select.test.tsx › Select › keeps a hidden native <select> in sync, so label lookups and form tooling still work
 - src/lib/ui/Select.test.tsx › Select › shows a placeholder when the value matches no option
 - src/lib/ui/Select.test.tsx › Select › a disabled select cannot be opened
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › lists identities without any secret material
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › generates a key and shows only the public key
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › imports a pasted key with passphrase
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › imports a key from a picked file
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › saves a password identity and clears the field
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › reports backend errors
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel › deletes an identity after confirmation and surfaces in-use errors
-- src/lib/vault/IdentitiesPanel.test.tsx › IdentitiesPanel races (regression) › does not switch tabs when a slow save finishes after the user moved on
+- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › blocks the browser menu on text and anywhere else in the page
+- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › leaves it to text fields, where it holds Cut, Copy and Paste
+- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › stops when removed
+- src/lib/vault/Keychain.test.tsx › Keychain page › shows a toolbar and one card per identity with its type, and no secret material
+- src/lib/vault/Keychain.test.tsx › Keychain page › names key types
+- src/lib/vault/Keychain.test.tsx › Keychain page › says what to do when there are no keys
+- src/lib/vault/Keychain.test.tsx › Keychain page › copies a public key and deletes after confirming
+- src/lib/vault/Keychain.test.tsx › New key panel › opens docked next to the list with a draft card that follows the label
+- src/lib/vault/Keychain.test.tsx › New key panel › saves a pasted key with its passphrase
+- src/lib/vault/Keychain.test.tsx › New key panel › drag and drop: dropping a key file fills the private key and the label
+- src/lib/vault/Keychain.test.tsx › New key panel › keeps a label that was already typed when a file is dropped
+- src/lib/vault/Keychain.test.tsx › New key panel › refuses a dropped file that is not a private key, and one that is too large
+- src/lib/vault/Keychain.test.tsx › New key panel › "Import from key file" reads the chosen file
+- src/lib/vault/Keychain.test.tsx › New key panel › shows the error from the vault and keeps the panel open
+- src/lib/vault/Keychain.test.tsx › New key panel › generates a key and shows only the public key
+- src/lib/vault/Keychain.test.tsx › New key panel › saves a password identity and an ssh-agent identity
+- src/lib/vault/Keychain.test.tsx › New Key panel: the design › has Label, Private key, Public key and Certificate in that order, then the drop area and the import button
+- src/lib/vault/Keychain.test.tsx › New Key panel: the design › a field name floats onto its border once the field has something in it
+- src/lib/vault/Keychain.test.tsx › New Key panel: the design › sends the public key and the certificate with the private key
+- src/lib/vault/Keychain.test.tsx › New Key panel: the design › asks for a passphrase when the key is encrypted in the OpenSSH way too
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › unlocks with the right password
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › shows the backend error for a wrong password and stays locked
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › creation requires 12+ characters and a matching confirmation
@@ -561,23 +925,28 @@
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › pressing Enter in the confirmation field resets only when RESET is typed, and never tries to unlock
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › Back returns to the unlock form and clears the confirmation
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › shows backend errors
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: dragging the window › has a drag strip, and a double click on it zooms the window
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: dragging the window › the strip is part of the create-vault screen too
 
 ## End-to-end (Playwright, real backend)
 
 - Create the vault
-- Keychain: add a password identity and generate a key
+- Keychain: add a password, generate a key, and import one by dragging its file
 - Create a group, then a host with Test connection (wrong password first)
 - Second host behind the jump host: Connect saves and opens the terminal
 - A side panel closes when you move to another screen
 - Snippets: create, run, paste and pick from the terminal
 - Split pane (second session; keys are already trusted)
-- Port forwarding: local forward through the bastion, verified with a real TCP connection
+- Port forwarding: the wizard, then a local forward through the bastion, verified with a real TCP connection
 - Import an ~/.ssh/config tree (Include, groups from file names, ProxyJump)
-- SFTP: browse, create, upload, rename, download, replace and delete on the real SFTP subsystem
+- SFTP: two panes, several files and folders, drag and drop, replace, rename and delete on the real SFTP subsystem
+- Terminal on this computer: a real shell, highlighting, numbered and renamed tabs
 - Find, filter and quick connect
+- Known Hosts: every key you trusted is listed
 - Settings opens as its own window: theme, terminal theme, security, sync
 - Connection loss: banner, no automatic reconnect
 - Host key changed: the connection is blocked with no override
 - Lock and unlock
+- Logs: what happened, newest first, filterable
 - Forgot the master password: reset the vault, keep the hosts
 - Narrow window: nothing overflows and the search box stays usable

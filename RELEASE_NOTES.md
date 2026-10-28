@@ -15,8 +15,38 @@ Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: be
 - **New interface**, inspired by Termius: a *Vaults* tab with the terminals as tabs, left navigation, one search box that also connects (`ssh user@host`), group and host cards, custom dropdowns.
 - **New brand**: logo and wordmark on one row, macOS and Windows icons, favicon, social preview ([brand kit](docs/brand/README.md)).
 - **Docker** for CI and development fixtures, and a **dev / prod deploy script**.
+- **Terminal sidebar** (hosts, snippets with Run / Paste, command history, themes and font), **drag a tab onto a pane to split** without reconnecting, drag tabs to order them, take a pane back out into a tab, and **Duplicate in new window** (the whole app in a second window).
+- **Termius-style connecting**: *Choose protocol*, a connecting screen whose line moves with the real connection (error, Retry, Show logs), connected / lost badges on tabs, a **New Tab** page with recent connections.
+- **This computer, Serial and Telnet** (own login, encoding), Known Hosts and Logs pages, output highlighting, copy on select and right-click paste, tag filter, drag hosts into groups, SFTP right-click menu with permissions.
 
 ## What's new in 1.1.0
+
+### Windows, tabs and panes
+- **Tabs**: the + opens a New Tab (search hosts or tabs, Local Terminal, recent connections). Tabs shrink like a browser's, show the server-type icon and a spinner / green / red badge, can be dragged to reorder, renamed, duplicated and split from a right-click menu.
+- **Drag a tab onto a pane** to split it left / right / top / bottom; **Move pane to its own tab** undoes it. All panes of all tabs are drawn in one flat list, so moving a pane never rebuilds it and its session is not interrupted.
+- **Duplicate in new window** opens the whole app in a second window (another process) that shares the vault, the hosts and the sessions' owner through a local bridge (loopback, random token in a 0600 file, see [ADR-0006](docs/CleanArchitecture.md)). Sessions it opened end with it.
+- A native menu bar (File, Edit, View, Window, Help) that stays the same in the Settings window; the browser's own right-click menu (Look Up, Translate, Inspect Element) is turned off.
+
+### Connecting
+- *Choose protocol* (SSH, Mosh shown but unsupported, Telnet when enabled) on by default (**Settings → Terminal → Ask which protocol to use**); a connecting screen with a line that eases toward the real stage (connecting, authenticated, ready); on failure the line stops, turns red and shows the reason with Retry, Show logs and Close.
+- The backend reports the stages (**term:progress**) and says *ready* as soon as the shell is open: the activity log, server-type detection and automatic forwards no longer delay it.
+
+### Terminal
+- Sidebar: Hosts, Snippets (one line; click for the whole script with Run and Paste), History (only echoed lines: nothing typed at a password prompt), Themes and font. Terminal on this computer, Serial ports, Telnet (own user name, password in the vault, UTF-8 / ISO-8859-1), per-host theme with picture cards, output highlighting, copy on select, configurable right-click and copy / paste keys, broadcast input and maximise for panes. Default terminal text is now green.
+- Page shortcuts ⌘ 1 … 6 and ⌘ N / ⌘ Shift T; the key of an action shows at the right of its navigation item when you point at it.
+
+### Hosts, files and pages
+- Tag filter, **drag a host onto a group** (or onto *All hosts* to take it out), Grid / List view, *All hosts* lists every host including those in groups, a New host menu (New group, Import).
+- SFTP: two panes, several files and folders at once, drag and drop, one *Replace?* question per batch, a right-click menu (Open, Open with…, Copy to target directory, Rename, Delete, Refresh, New Folder, **Edit Permissions**); remote files open from a private temporary folder, and files that run programs (.command, .app, .sh, .exe…) are never opened from here.
+- **Known Hosts** (forget a trusted key) and **Logs** (connections, transfers, forwards, host keys, unlocks; never a secret), Keychain with *New Key* (private, public, certificate, drag a key file in), the Port Forwarding wizard.
+- The database gets columns added later on every start (schema v4 + idempotent additions), so a database that already had the newest version is never left behind (the cause of a *no such column* start-up error).
+
+### Known limits of this part
+- Mosh and the cloud integrations of Termius (AWS, DigitalOcean, Azure) and multiplayer are not built.
+- Telnet is not encrypted. Keys stored *hashed* in `known_hosts` are listed but cannot be forgotten from the app.
+- The new window and the Settings window are separate processes: the new window has its own Dock icon, the Settings window is hidden from the Dock (macOS then shows no menu bar of its own for it). A change made in one window is picked up by the other when it next refreshes.
+- Typing Vietnamese with a system-wide input method (GoTiengViet, OpenKey…) can fail to compose in the terminal: those tools treat unknown apps differently; add VVTerm to their app list.
+- Native windows, the menu bar and the Dock icon cannot be screenshotted by the end-to-end run and were checked by hand only where noted.
 
 ### Add a host
 - The New host / New group / New snippet forms are **docked beside the list** and show a draft card in the grid while you type. They close when you move to another screen instead of staying open.
@@ -80,10 +110,10 @@ Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: be
 | Gate | Result |
 | --- | --- |
 | `go vet ./...` | clean |
-| `go test -race ./...` | **191 passing** (test functions and sub-tests), 0 failing, 13 packages; also green in a Linux container |
-| Go statement coverage | **81.1 %** (`internal/…` and `app`) |
-| Frontend `tsc --noEmit` + Vitest | clean, **323 passing** in 22 files |
-| End-to-end walkthrough (real backend, SQLite, vault, two SSH servers) | **passed**: 17 steps, 40 screenshots in `docs/screenshots` |
+| `go test -race ./...` | **296 passing** (test functions and sub-tests), 0 failing, 20 packages; also green in a Linux container |
+| Go statement coverage | **80.6 %** (`internal/…` and `app`) |
+| Frontend `tsc --noEmit` + Vitest | clean, **575 passing** in 35 files |
+| End-to-end walkthrough (real backend, SQLite, vault, two SSH servers) | **passed**: 20 steps, 60 screenshots in `docs/screenshots` |
 | Architecture rule (`internal/archtest`) | 5 tests, verified to fail on a deliberate violation |
 | `scripts/deploy.sh` | dev install, every prod gate and a dry run exercised |
 | Docker dev fixtures | SSH host keys survive a restart; Git remote accepts a push |

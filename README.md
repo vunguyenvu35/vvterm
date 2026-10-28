@@ -16,8 +16,10 @@
 - **Add hosts the easy way.** A docked form (no popups) with **Test connection**, so you know the address, credentials and jump host work before you save, and **Connect** that saves and opens the terminal in one step.
 - **Organise hosts** in groups, with tags and a colour per environment (prod / staging / dev). Find anything from one search box, or type `ssh user@host` to connect right away.
 - **Keep secrets safe.** Private keys and passwords are encrypted with your master password. The interface never sees them.
-- **Work in tabs and split panes**, through one or more jump hosts, with keep-alive and one-key reconnect.
-- **Browse and transfer files with SFTP** in a tab of its own: upload, download, create, rename and delete, with confirmation before anything is replaced.
+- **Work in tabs and split panes**, through one or more jump hosts, with keep-alive and one-key reconnect. Drag tabs to order them, drag a tab onto a pane to split it (sessions keep running), open a host in a **new window**, and see at a glance which tabs are connected.
+- **A sidebar beside every terminal**: hosts, snippets (run or paste), command history, and terminal themes and font.
+- **More than SSH**: a shell on this computer, serial ports and Telnet (with its own login), a Termius-style *Choose protocol* and connecting screen, Known Hosts and Logs pages.
+- **Browse and transfer files with SFTP** in a tab of its own: two panes, several files and folders at once, drag and drop, right-click menu with permissions, with confirmation before anything is replaced.
 - **Save snippets** of commands you run often and type them into any terminal with a click.
 - **Make it yours**: 26 terminal colour themes, light / dark / auto appearance, font, cursor and scrollback, interface zoom, your own keyboard shortcuts, all in a Settings window of its own.
 - **Forward ports**: local, remote and SOCKS5 proxy.
