@@ -5,7 +5,10 @@ import {BackendContext, bridgeBackend, inSettingsWindow, inTerminalWindow, insta
 import {ToastProvider} from './lib/ui/Toast'
 import {ConfirmProvider} from './lib/ui/Confirm'
 import {CapsLockWarning} from './lib/ui/CapsLockWarning'
+import {installNoNativeMenu} from './lib/ui/noNativeMenu'
 import './styles.css'
+
+installNoNativeMenu() // an app, not a web page: no Look Up / Translate / Inspect Element menu
 
 async function boot() {
   // The Settings window is a second process of the same binary; it is the only one that has the bridge bound.
