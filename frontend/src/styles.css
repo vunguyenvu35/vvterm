@@ -818,3 +818,8 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .tag-row.on .tag-radio { border-color: #2f7bf5; background: radial-gradient(#2f7bf5 0 45%, transparent 50%); }
 .tag-clear { padding: 10px 6px; background: transparent; border: none; border-top: 1px solid var(--line); border-radius: 0; color: var(--muted); text-align: left; font-weight: 500; }
 .tag-clear:disabled { opacity: .5; }
+.fpane-filter { width: 130px; }
+.fpane-head button.on { background: var(--bg-3); }
+.input-row { display: flex; gap: 8px; align-items: center; }
+.input-row > input { flex: 1; min-width: 0; width: auto; }
+.input-row > button { flex: none; }

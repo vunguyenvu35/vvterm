@@ -221,7 +221,7 @@ The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts
 
 ![Light theme](screenshots/53-light-theme.png)
 
-- **Security:** auto-lock after N idle minutes (default 15; the key is wiped from memory), unlock with the macOS Keychain (anyone who can unlock your Keychain can then open the vault), change the master password.
+- **Security:** auto-lock after N idle minutes (default 15; the key is wiped from memory), a password hint (a reminder shown on the lock screen, never the password itself), unlock with **Touch ID** on a Mac that has it (the vault key stays in your Keychain and each unlock asks for your fingerprint, Apple Watch or Mac password) or with **Windows Hello** on Windows (fingerprint, face or PIN; the key stays in Windows Credential Manager), or with the plain system keychain where neither exists, change the master password.
 
 ![Security](screenshots/49-settings-security.png)
 

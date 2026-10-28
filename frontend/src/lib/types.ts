@@ -69,6 +69,10 @@ export interface VaultStatus {
   unlocked: boolean
   keychain_enabled: boolean
   auto_lock_minutes: number
+  /** the reminder of the master password the user wrote, shown on the unlock screen */
+  hint?: string
+  /** this Mac can ask for Touch ID */
+  biometric_available?: boolean
 }
 
 export type ThemeMode = 'auto' | 'light' | 'dark'
@@ -92,6 +96,8 @@ export interface Settings {
   confirm_tab_close: boolean
   /** a host opens on a Choose protocol screen first */
   ask_protocol: boolean
+  /** the lock screen asks for Touch ID / Windows Hello by itself, without a click */
+  biometric_on_open: boolean
   /** colour URLs, IP addresses, paths and error / warning / success words in terminal output */
   highlight: boolean
   reduce_motion: boolean

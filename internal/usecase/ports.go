@@ -57,6 +57,7 @@ type SecretVault interface {
 	Destroy() error
 	ChangePassword(oldPW, newPW string) error
 	SetAutoLock(d time.Duration)
+	SetHint(hint string) error
 	OnLock(func())
 
 	AddSecret(kind domain.SecretKind, plain []byte) (string, error)

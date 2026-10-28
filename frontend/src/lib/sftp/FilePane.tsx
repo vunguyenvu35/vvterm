@@ -1,7 +1,7 @@
 import {DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {errMsg} from '../util'
 import {useConfirm} from '../ui/Confirm'
-import {IconArrowUp, IconChevron, IconEdit, IconEye, IconEyeOff, IconFile, IconFolder, IconFolderPlus, IconHome, IconRefresh, IconTrash} from '../ui/Icons'
+import {IconArrowUp, IconChevron, IconEdit, IconEye, IconEyeOff, IconFile, IconFolder, IconFolderPlus, IconHome, IconRefresh, IconSearch, IconTrash} from '../ui/Icons'
 import {PermissionsDialog} from './Permissions'
 import {breadcrumbs, formatBytes, formatDate, joinPath, kindOf, parentOf, validName} from './format'
 import type {RemoteEntry} from '../types'
@@ -46,6 +46,8 @@ interface Props {
   /** right-click: copy what is chosen to the folder open in the other pane */
   onCopyOut?(items: Item[]): void
   copyLabel?: string
+  /** the menu's Close: leave this pane's host; absent, Close is greyed out */
+  onClose?(): void
 }
 
 const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
@@ -55,7 +57,7 @@ const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
  * once (Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A), new folder / rename / delete, and drag and drop of the
  * selection to the other side. It knows nothing about SSH.
  */
-export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut}: Props) {
+export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut, onClose}: Props) {
   const confirm = useConfirm()
   const alive = useRef(true)
   const cwdRef = useRef('')
@@ -68,7 +70,9 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   const [error, setError] = useState('')
   const [hidden, setHidden] = useState(showHiddenDefault)
   const [over, setOver] = useState(false)
-  const [menu, setMenu] = useState<{x: number; y: number; entry: RemoteEntry | null} | null>(null)
+  const [menu, setMenu] = useState<{x: number; y: number; right?: boolean} | null>(null)
+  const [filtering, setFiltering] = useState(false)
+  const [filter, setFilter] = useState('')
   const [perms, setPerms] = useState<RemoteEntry | null>(null)
   const [naming, setNaming] = useState<{mode: 'mkdir' | 'rename'; value: string; err: string} | null>(null)
 
@@ -97,7 +101,8 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   useEffect(() => { if (fs && startDir) void load(startDir) }, [fs, startDir, load])
   useEffect(() => { if (reloadKey > 0 && cwdRef.current) void load(cwdRef.current) }, [reloadKey, load])
 
-  const shown = hidden ? entries : entries.filter(e => !e.name.startsWith('.'))
+  const needle = filter.trim().toLowerCase()
+  const shown = (hidden ? entries : entries.filter(e => !e.name.startsWith('.'))).filter(e => !needle || e.name.toLowerCase().includes(needle))
   const chosen = useMemo(() => entries.filter(e => selected.includes(e.path)), [entries, selected])
   const sel = chosen.length === 1 ? chosen[0] : null // rename needs exactly one
   useEffect(() => { onState({cwd, selected: chosen}) }, [cwd, chosen, onState])
@@ -147,9 +152,14 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
     ev.stopPropagation()
     if (!ready) return
     if (entry && !selected.includes(entry.path)) { setSelected([entry.path]); setAnchor(entry.path) }
-    setMenu({x: Math.min(ev.clientX, window.innerWidth - 230), y: Math.min(ev.clientY, window.innerHeight - 330), entry})
+    setMenu({x: Math.min(ev.clientX, window.innerWidth - 230), y: Math.min(ev.clientY, window.innerHeight - 420)})
   }
-  const menuTargets = (entry: RemoteEntry) => (selected.includes(entry.path) ? chosen : [entry])
+  /** the Actions button: the same menu as a right-click, hanging under the button */
+  const toggleActions = (ev: ReactMouseEvent<HTMLButtonElement>) => {
+    if (menu) return setMenu(null)
+    const r = ev.currentTarget.getBoundingClientRect()
+    setMenu({x: Math.max(8, window.innerWidth - r.right), y: r.bottom + 4, right: true})
+  }
   const act = (fn: () => void | Promise<void>) => { setMenu(null); void guard(async () => { await fn() }) }
   const openEntry = (e: RemoteEntry) => (e.is_dir ? load(e.path) : fs?.open ? fs.open(e) : Promise.resolve())
   const selectAll = () => setSelected(shown.map(e => e.path))
@@ -206,6 +216,10 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
         <b className="fpane-title">{title}</b>
         <span className="spacer" />
         {actions}
+        {filtering && <input className="fpane-filter" aria-label={`${label(side)} filter`} autoFocus placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}
+          onKeyDown={ev => { if (ev.key === 'Escape') { setFilter(''); setFiltering(false) } }} />}
+        <button aria-label="Filter" aria-pressed={filtering} className={filtering ? 'on' : ''} onClick={() => { setFiltering(f => !f); setFilter('') }}><IconSearch size={15} /> Filter</button>
+        <button aria-label="Actions" aria-haspopup="menu" aria-expanded={!!menu?.right} disabled={!ready} onMouseDown={ev => ev.stopPropagation()} onClick={toggleActions}>Actions <IconChevron size={12} /></button>
         <button className="icon" aria-label={hidden ? 'Hide hidden files' : 'Show hidden files'} aria-pressed={hidden} title={hidden ? 'Hide hidden files' : 'Show hidden files'} onClick={() => setHidden(h => !h)}>
           {hidden ? <IconEye size={16} /> : <IconEyeOff size={16} />}
         </button>
@@ -262,33 +276,28 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
         {ready && !loading && shown.length === 0 && !error && <div className="empty-hint">This folder is empty.</div>}
       </div>
       {error && <div className="sftp-error error" role="alert">{error}</div>}
-      {menu && (
-        <div className="ctx-menu" role="menu" aria-label={menu.entry ? 'File menu' : 'Folder menu'} style={{left: menu.x, top: menu.y}} onMouseDown={ev => ev.stopPropagation()} onContextMenu={ev => ev.preventDefault()}>
-          {menu.entry && (() => {
-            const entry = menu.entry
-            const targets = menuTargets(entry)
-            const one = targets.length === 1
-            return (
-              <>
-                <button role="menuitem" disabled={!one || (!entry.is_dir && !fs?.open)} onClick={() => act(() => openEntry(entry))}>Open</button>
-                <button role="menuitem" disabled={!one || entry.is_dir || !fs?.openWith} onClick={() => act(() => fs!.openWith!(entry))}>Open with…</button>
-                <button role="menuitem" disabled={!onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>Copy to target directory</button>
-                <button role="menuitem" disabled={!one} onClick={() => { setMenu(null); setNaming({mode: 'rename', value: entry.name, err: ''}) }}>Rename</button>
-                <button role="menuitem" className="danger-item" onClick={() => { setMenu(null); void remove(targets) }}>Delete</button>
-                <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>
-                <button role="menuitem" onClick={() => { setMenu(null); setNaming({mode: 'mkdir', value: '', err: ''}) }}>New Folder</button>
-                <button role="menuitem" disabled={!one || !fs?.chmod} onClick={() => { setMenu(null); setPerms(entry) }}>Edit Permissions</button>
-              </>
-            )
-          })()}
-          {!menu.entry && (
-            <>
-              <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>
-              <button role="menuitem" onClick={() => { setMenu(null); setNaming({mode: 'mkdir', value: '', err: ''}) }}>New Folder</button>
-            </>
-          )}
-        </div>
-      )}
+      {menu && (() => {
+        const targets = chosen
+        const one = targets.length === 1
+        const entry = one ? targets[0] : null
+        const none = targets.length === 0
+        return (
+          <div className="ctx-menu" role="menu" aria-label={menu.right ? 'Actions' : none ? 'Folder menu' : 'File menu'} style={menu.right ? {right: menu.x, top: menu.y} : {left: menu.x, top: menu.y}}
+            onMouseDown={ev => ev.stopPropagation()} onContextMenu={ev => ev.preventDefault()}>
+            <button role="menuitem" disabled={!entry || (!entry.is_dir && !fs?.open)} onClick={() => act(() => openEntry(entry!))}>Open</button>
+            <button role="menuitem" disabled={!entry || entry.is_dir || !fs?.openWith} onClick={() => act(() => fs!.openWith!(entry!))}>Open with…</button>
+            <button role="menuitem" disabled={none || !onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>Copy to target directory</button>
+            <button role="menuitem" disabled={!entry} onClick={() => { setMenu(null); setNaming({mode: 'rename', value: entry!.name, err: ''}) }}>Rename</button>
+            <button role="menuitem" className="danger-item" disabled={none} onClick={() => { setMenu(null); void remove(targets) }}>Delete</button>
+            <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>
+            <button role="menuitem" onClick={() => { setMenu(null); setNaming({mode: 'mkdir', value: '', err: ''}) }}>New Folder</button>
+            <button role="menuitem" onClick={() => { setMenu(null); setHidden(h => !h) }}>{hidden ? 'Hide Hidden Files' : 'Show Hidden Files'}</button>
+            <button role="menuitem" disabled={!entry || !fs?.chmod} onClick={() => { setMenu(null); setPerms(entry) }}>Edit Permissions</button>
+            <button role="menuitem" disabled={shown.length === 0} onClick={() => { setMenu(null); selectAll() }}>Select All</button>
+            <button role="menuitem" className="danger-item" disabled={!onClose} onClick={() => { setMenu(null); onClose?.() }}>Close</button>
+          </div>
+        )
+      })()}
       {perms && fs?.chmod && (
         <PermissionsDialog name={perms.name} mode={perms.mode} onClose={() => setPerms(null)}
           onSave={async m => { await fs.chmod!(perms.path, m); await load(cwd) }} />

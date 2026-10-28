@@ -156,6 +156,30 @@ describe('SettingsWindow', () => {
     expect(be.state.settings.scrollback).toBe(10000)
   })
 
+  it('security: "ask on open" shows only with Touch ID turned on, and can be switched off', async () => {
+    setup()
+    await tab('Security')
+    expect(screen.queryByRole('switch', {name: 'Ask on open'})).toBeNull()
+  })
+
+  it('security: with Touch ID on, "ask on open" is a switch that is saved', async () => {
+    const {be} = setup({biometric_on_open: true}, {...vaultSt, biometric_available: true, keychain_enabled: true})
+    await tab('Security')
+    await userEvent.click(screen.getByRole('switch', {name: 'Ask on open'}))
+    await waitFor(() => expect(be.state.settings.biometric_on_open).toBe(false))
+  })
+
+  it('security: a password hint can be saved', async () => {
+    const {be, onVault} = setup()
+    await tab('Security')
+    const save = screen.getAllByRole('button', {name: 'Save'}).at(-1)!
+    expect(save).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Password hint'), 'three random words')
+    await userEvent.click(save)
+    await waitFor(() => expect(be.state.vault.hint).toBe('three random words'))
+    expect(onVault).toHaveBeenCalled()
+  })
+
   it('security: auto-lock, keychain switch and password change', async () => {
     const {be, onVault} = setup()
     await tab('Security')

@@ -463,21 +463,47 @@ describe('SftpBrowser: right-click menu', () => {
   const menuOf = () => screen.getByRole('menu')
   const items = () => within(menuOf()).getAllByRole('menuitem').map(i => i.textContent)
 
-  it('a file has Open, Open with, Copy to target directory, Rename, Delete, Refresh, New Folder and Edit Permissions', async () => {
+  const FULL = ['Open', 'Open with…', 'Copy to target directory', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close']
+
+  it('a file has the full list: Open … Select All and Close', async () => {
     setup()
     await ready()
     fireEvent.contextMenu(row(R(), 'readme.txt'))
-    expect(items()).toEqual(['Open', 'Open with…', 'Copy to target directory', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Edit Permissions'])
+    expect(items()).toEqual(FULL)
     expect(row(R(), 'readme.txt')).toHaveAttribute('aria-selected', 'true')
     fireEvent.keyDown(window, {key: 'Escape'})
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('empty space only offers Refresh and New Folder', async () => {
+  it('empty space has the same list, with what needs a file greyed out', async () => {
     setup()
     await ready()
     fireEvent.contextMenu(within(R()).getByRole('table'))
-    expect(items()).toEqual(['Refresh', 'New Folder'])
+    expect(items()).toEqual(FULL)
+    const on = within(menuOf()).getAllByRole('menuitem').filter(i => !(i as HTMLButtonElement).disabled).map(i => i.textContent)
+    expect(on).toEqual(['Refresh', 'New Folder', 'Hide Hidden Files', 'Select All', 'Close'])
+  })
+
+  it('the Actions button opens the same menu for what is selected; Select All and Close work', async () => {
+    setup()
+    await ready()
+    await userEvent.click(row(R(), 'readme.txt'))
+    await userEvent.click(within(R()).getByRole('button', {name: 'Actions'}))
+    expect(items()).toEqual(FULL)
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Select All'}))
+    expect(within(R()).getByRole('status')).toHaveTextContent(/selected/)
+    await userEvent.click(within(R()).getByRole('button', {name: 'Actions'}))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Close'}))
+    expect(screen.getByText('Connect to host')).toBeInTheDocument()
+  })
+
+  it('Filter narrows the rows by name', async () => {
+    setup()
+    await ready()
+    await userEvent.click(within(R()).getByRole('button', {name: 'Filter'}))
+    await userEvent.type(within(R()).getByLabelText('Remote filter'), 'readme')
+    expect(row(R(), 'readme.txt')).toBeInTheDocument()
+    expect(within(R()).queryByText('projects')).toBeNull()
   })
 
   it('Open on a folder goes into it, and on a remote file downloads it to a temporary folder and opens that', async () => {

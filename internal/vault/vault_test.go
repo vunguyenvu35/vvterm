@@ -377,3 +377,73 @@ func TestDestroyWorksWhileLockedAndClearsKeychain(t *testing.T) {
 		t.Fatalf("destroy must be idempotent: %v", err)
 	}
 }
+
+func TestHintSurvivesLockReopenAndPasswordChange(t *testing.T) {
+	v, dir, _ := newVault(t)
+	if err := v.Create(pw); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetHint("first pet + street"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.ChangePassword(pw, "another long password!"); err != nil {
+		t.Fatal(err)
+	}
+	v.Lock()
+	if got := v.Status().Hint; got != "first pet + street" {
+		t.Fatalf("hint while locked = %q", got)
+	}
+	v2, err := New(dir, NewMemKeychain())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v2.Status().Hint; got != "first pet + street" {
+		t.Fatalf("hint after reopen = %q", got)
+	}
+	if err := v2.SetHint("x"); err != ErrLocked {
+		t.Fatalf("a locked vault must not change the hint, got %v", err)
+	}
+}
+
+func TestHintTooLongIsRejected(t *testing.T) {
+	v, _, _ := newVault(t)
+	if err := v.Create(pw); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetHint(strings.Repeat("a", MaxHintLen+1)); err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestKeychainNeedsTheAuthenticator(t *testing.T) {
+	v, _, _ := newVault(t)
+	if err := v.Create(pw); err != nil {
+		t.Fatal(err)
+	}
+	asked := 0
+	deny := false
+	v.SetAuthenticator(func(string) error {
+		asked++
+		if deny {
+			return errCancelled
+		}
+		return nil
+	})
+	if err := v.EnableKeychain(); err != nil {
+		t.Fatal(err)
+	}
+	v.Lock()
+	deny = true
+	if err := v.UnlockKeychain(); err != errCancelled || v.Status().Unlocked {
+		t.Fatalf("a refused Touch ID must keep the vault locked, got %v", err)
+	}
+	deny = false
+	if err := v.UnlockKeychain(); err != nil || !v.Status().Unlocked {
+		t.Fatal(err)
+	}
+	if asked != 3 {
+		t.Fatalf("asked %d times, want 3", asked)
+	}
+}
+
+var errCancelled = os.ErrPermission

@@ -71,6 +71,7 @@ func runSettings(dir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	hideFromDockOnLaunch() // no Dock icon flashing up while the window opens
 	err = wails.Run(&options.App{
 		Title:            "Settings",
 		Width:            1040,

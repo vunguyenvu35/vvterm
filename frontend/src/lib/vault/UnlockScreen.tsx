@@ -1,14 +1,14 @@
-import {FormEvent, useState} from 'react'
+import {FormEvent, useEffect, useRef, useState} from 'react'
 import {DragBar} from '../ui/DragBar'
 import {useBackend} from '../backend'
-import {errMsg} from '../util'
+import {biometricName, errMsg} from '../util'
 import {Brand} from '../ui/Brand'
 import type {VaultStatus} from '../types'
 
 const MIN = 12
 
 /** First-run vault creation or unlock screen. The password never leaves this component except via the backend call. */
-export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () => void}) {
+export function UnlockScreen({status, onDone, autoBiometric = true}: {status: VaultStatus; onDone: () => void; /** ask for Touch ID / Windows Hello as soon as the screen shows */ autoBiometric?: boolean}) {
   const be = useBackend()
   const creating = !status.exists
   const [pw, setPw] = useState('')
@@ -18,6 +18,8 @@ export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () 
   const [forgot, setForgot] = useState(false)
   const [confirm, setConfirm] = useState('')
   const [resetDone, setResetDone] = useState(false)
+  const [hint, setHint] = useState('')
+  const [showHint, setShowHint] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -25,12 +27,14 @@ export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () 
     if (creating) {
       if (pw.length < MIN) return setErr(`Master password must be at least ${MIN} characters`)
       if (pw !== pw2) return setErr('Passwords do not match')
+      if (hint.trim() && hint.toLowerCase().includes(pw.toLowerCase())) return setErr('The hint must not contain the password itself')
     }
     setBusy(true)
     try {
-      await (creating ? be.vault.create(pw) : be.vault.unlock(pw))
+      await (creating ? be.vault.create(pw, hint.trim() || undefined) : be.vault.unlock(pw))
       setPw('')
       setPw2('')
+      setHint('')
       onDone()
     } catch (x) {
       setErr(errMsg(x))
@@ -64,6 +68,16 @@ export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () 
       setErr(errMsg(x))
     }
   }
+
+  // on a computer with Touch ID or Windows Hello the sheet comes up by itself, like unlocking any other Mac app
+  const asked = useRef(false)
+  useEffect(() => {
+    if (asked.current || !autoBiometric || creating || !status.keychain_enabled || !status.biometric_available) return
+    asked.current = true
+    void biometric()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const touch = !!status.biometric_available
 
   return (
     <div className="gate">
@@ -100,6 +114,11 @@ export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () 
               <span>Confirm password</span>
               <input type="password" value={pw2} onChange={e => setPw2(e.target.value)} autoComplete="off" />
             </label>
+            <label className="field">
+              <span>Password hint (optional)</span>
+              <input aria-label="Password hint" value={hint} maxLength={120} onChange={e => setHint(e.target.value)} autoComplete="off" placeholder="A reminder only you understand" />
+            </label>
+            <div className="muted">The hint is shown on the lock screen to anyone who opens VVTerm. Never write the password in it.</div>
             <div className="notice">
               If you forget this password the vault cannot be recovered. Export a backup regularly.
             </div>
@@ -109,9 +128,12 @@ export function UnlockScreen({status, onDone}: {status: VaultStatus; onDone: () 
         <div className="row" style={{marginTop: 12}}>
           <button className="primary" type="submit" disabled={busy || !pw}>{creating ? 'Create vault' : 'Unlock'}</button>
           {!creating && status.keychain_enabled && (
-            <button type="button" onClick={biometric}>Use keychain</button>
+            <button type="button" onClick={biometric}>{touch ? `Use ${biometricName()}` : 'Use keychain'}</button>
           )}
         </div>
+        {!creating && status.hint && (showHint
+          ? <div className="notice" role="note" aria-label="Password hint"><b>Hint:</b> {status.hint}</div>
+          : <button type="button" className="link forgot-link" onClick={() => setShowHint(true)}>Show password hint</button>)}
         {!creating && <button type="button" className="link forgot-link" onClick={() => { setForgot(true); setErr('') }}>Forgot password?</button>}
         </>)}
       </form>

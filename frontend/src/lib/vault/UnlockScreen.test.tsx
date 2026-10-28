@@ -12,6 +12,58 @@ function setup(s = status()) {
   return {be, done}
 }
 
+describe('UnlockScreen hint and Touch ID', () => {
+  it('the hint stays hidden until asked for', async () => {
+    setup(status({hint: 'first pet + street'}))
+    expect(screen.queryByText(/first pet/)).toBeNull()
+    await userEvent.click(screen.getByRole('button', {name: 'Show password hint'}))
+    expect(screen.getByRole('note', {name: 'Password hint'})).toHaveTextContent('first pet + street')
+  })
+
+  it('no hint saved: no hint button', () => {
+    setup()
+    expect(screen.queryByRole('button', {name: 'Show password hint'})).toBeNull()
+  })
+
+  it('creating a vault can save a hint, but not one that contains the password', async () => {
+    const {be, done} = setup(status({exists: false}))
+    await userEvent.type(screen.getByLabelText('Master password'), 'correct horse battery')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'correct horse battery')
+    await userEvent.type(screen.getByLabelText('Password hint'), 'it is correct horse battery')
+    await userEvent.click(screen.getByRole('button', {name: 'Create vault'}))
+    expect(await screen.findByRole('alert')).toHaveTextContent('must not contain the password')
+    expect(done).not.toHaveBeenCalled()
+    await userEvent.clear(screen.getByLabelText('Password hint'))
+    await userEvent.type(screen.getByLabelText('Password hint'), 'three random words')
+    await userEvent.click(screen.getByRole('button', {name: 'Create vault'}))
+    await waitFor(() => expect(done).toHaveBeenCalled())
+    expect(be.state.vault.hint).toBe('three random words')
+  })
+
+  it('on a Mac with Touch ID the sheet comes up by itself, and the button says Touch ID', async () => {
+    const {be, done} = setup(status({keychain_enabled: true, biometric_available: true}))
+    await waitFor(() => expect(done).toHaveBeenCalled())
+    expect(be.state.vault.unlocked).toBe(true)
+    expect(screen.getByRole('button', {name: 'Use Touch ID'})).toBeInTheDocument()
+  })
+
+  it('with "ask on open" off the sheet waits for the button', async () => {
+    const s = status({keychain_enabled: true, biometric_available: true})
+    const be = makeFake({vault: s})
+    const done = vi.fn()
+    render(<Providers be={be}><UnlockScreen status={s} autoBiometric={false} onDone={done} /></Providers>)
+    expect(done).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', {name: 'Use Touch ID'}))
+    await waitFor(() => expect(done).toHaveBeenCalled())
+  })
+
+  it('without Touch ID the keychain button does not pop up by itself', () => {
+    const {done} = setup(status({keychain_enabled: true}))
+    expect(screen.getByRole('button', {name: 'Use keychain'})).toBeInTheDocument()
+    expect(done).not.toHaveBeenCalled()
+  })
+})
+
 describe('UnlockScreen', () => {
   it('unlocks with the right password', async () => {
     const {be, done} = setup()

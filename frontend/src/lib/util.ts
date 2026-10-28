@@ -38,3 +38,6 @@ export function formatAddr(h: {hostname: string; port: number; username?: string
   const base = h.port === 22 ? h.hostname : `${h.hostname}:${h.port}`
   return h.username ? `${h.username}@${base}` : base
 }
+
+/** what this computer calls its fingerprint / face unlock */
+export const biometricName = () => (typeof navigator !== 'undefined' && /windows|win32|win64/i.test(navigator.platform || navigator.userAgent || '') ? 'Windows Hello' : 'Touch ID')

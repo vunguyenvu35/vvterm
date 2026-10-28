@@ -900,7 +900,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 	h := newHarness(t)
 	s := h.app.Settings
 	d := s.Get()
-	if d.Zoom != 100 || d.ConfirmTabClose || d.ReduceMotion || !d.AskProtocol || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
+	if d.Zoom != 100 || d.ConfirmTabClose || d.ReduceMotion || !d.AskProtocol || !d.BiometricOnOpen || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
 		t.Fatalf("defaults: %+v", d)
 	}
 	bad := map[string]func(*Settings){
@@ -921,7 +921,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 		}
 	}
 	in := goodSettings()
-	in.Zoom, in.ConfirmTabClose, in.ReduceMotion, in.AskProtocol = 120, false, true, true
+	in.Zoom, in.ConfirmTabClose, in.ReduceMotion, in.AskProtocol, in.BiometricOnOpen = 120, false, true, true, false
 	in.AccountName, in.AccountEmail = "  Vu Nguyen  ", " me@example.com "
 	in.Shortcuts = map[string]string{"open_settings": "Mod+Shift+,", "new_connection": "Mod+T"}
 	got, err := s.Save(in)
@@ -940,7 +940,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := c2.settings
-	if g.Zoom != 120 || g.ConfirmTabClose || !g.ReduceMotion || g.AccountEmail != "me@example.com" || g.Shortcuts["open_settings"] != "Mod+Shift+," {
+	if g.Zoom != 120 || g.BiometricOnOpen || g.ConfirmTabClose || !g.ReduceMotion || g.AccountEmail != "me@example.com" || g.Shortcuts["open_settings"] != "Mod+Shift+," {
 		t.Fatalf("not persisted: %+v", g)
 	}
 }

@@ -157,7 +157,7 @@ export default function App({initial}: {/** an app window opened for this place 
   menuHandler.current = () => {} // locked or loading: the menu does nothing
   if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div></div>
   if (!vault.unlocked) {
-    return <UnlockScreen status={vault} onDone={() => { void refreshVault() }} />
+    return <UnlockScreen status={vault} autoBiometric={settings.biometric_on_open} onDone={() => { void refreshVault() }} />
   }
 
   // a second tab on the same host is numbered ("web", "web (2)"…); double-click a tab to give it any name

@@ -138,7 +138,7 @@ export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry
   return (
     <div className="rpane">
       <FilePane side="remote" title={host.label} icon={<OsIcon os={hosts.find(x => x.id === host.id)?.os} size={16} />} fs={fs} startDir={home} reloadKey={reloadKey} showHiddenDefault
-        actions={<button onClick={() => onHost(null)} aria-label="Change host">Change host</button>} onState={onState} onDropEntry={onDropEntry} onCopyOut={onCopyOut} />
+        actions={<button onClick={() => onHost(null)} aria-label="Change host">Change host</button>} onState={onState} onDropEntry={onDropEntry} onCopyOut={onCopyOut} onClose={() => onHost(null)} />
       {state === 'connecting' && !prompt && <div className="banner info">Connecting to {host.label}…</div>}
       {state === 'closed' && (
         <div className="banner" role="alert">

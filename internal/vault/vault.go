@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -65,7 +66,9 @@ type Vault struct {
 	autoLock time.Duration
 	timer    *time.Timer
 	onLock   func()
-	now      func() time.Time
+	// auth, when set, must succeed (Touch ID) before the keychain key is stored or used
+	auth func(reason string) error
+	now  func() time.Time
 }
 
 // New opens the vault stored as vault.json in dir (it may not exist yet). kc may be nil.
@@ -91,11 +94,46 @@ func (v *Vault) SetKDF(p KDFParams) { v.kdf = p }
 // OnLock registers a callback fired whenever the vault locks (manual or automatic).
 func (v *Vault) OnLock(f func()) { v.onLock = f }
 
+// SetAuthenticator makes Enable/UnlockKeychain ask the user first (Touch ID on a Mac). Without it the
+// keychain key is used silently.
+func (v *Vault) SetAuthenticator(f func(reason string) error) { v.auth = f }
+
 func (v *Vault) Status() Status {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return Status{Exists: v.f != nil, Unlocked: v.dek != nil, KeychainEnabled: v.keychainHas(),
-		AutoLockMinutes: int(v.autoLock / time.Minute)}
+	st := Status{Exists: v.f != nil, Unlocked: v.dek != nil, KeychainEnabled: v.keychainHas(),
+		AutoLockMinutes: int(v.autoLock / time.Minute), BiometricAvailable: v.auth != nil && BiometricAvailable()}
+	if v.f != nil {
+		st.Hint = v.f.Header.Hint
+	}
+	return st
+}
+
+// MaxHintLen is the longest password hint.
+const MaxHintLen = 120
+
+// SetHint stores (or, empty, clears) the master password reminder. It is plain text on purpose: it must be
+// readable while the vault is locked. The vault has to be unlocked, so only its owner can change it.
+func (v *Vault) SetHint(hint string) error {
+	hint = strings.TrimSpace(hint)
+	if utf8.RuneCountInString(hint) > MaxHintLen {
+		return fmt.Errorf("the hint can have at most %d characters", MaxHintLen)
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.f == nil {
+		return ErrNoVault
+	}
+	if v.dek == nil {
+		return ErrLocked
+	}
+	old := v.f.Header.Hint
+	v.f.Header.Hint = hint
+	if err := v.flush(); err != nil {
+		v.f.Header.Hint = old
+		return err
+	}
+	return nil
 }
 
 func (v *Vault) keychainHas() bool {
@@ -244,6 +282,11 @@ func (v *Vault) EnableKeychain() error {
 	if v.kc == nil {
 		return errors.New("keychain not available")
 	}
+	if v.auth != nil {
+		if err := v.auth("turn on quick unlock for VVTerm"); err != nil {
+			return err
+		}
+	}
 	return v.kc.Set("vvterm", v.account, v.dek)
 }
 
@@ -268,6 +311,11 @@ func (v *Vault) UnlockKeychain() error {
 	}
 	if v.kc == nil {
 		return ErrNoKeychain
+	}
+	if v.auth != nil {
+		if err := v.auth("unlock your saved keys and passwords"); err != nil {
+			return err
+		}
 	}
 	dek, err := v.kc.Get("vvterm", v.account)
 	if err != nil || len(dek) != dekLen {
@@ -367,6 +415,7 @@ func (v *Vault) ChangePassword(oldPW, newPW string) error {
 		return err
 	}
 	old := v.f.Header
+	h.Hint = old.Hint
 	v.f.Header = h
 	if err := v.flush(); err != nil {
 		v.f.Header = old

@@ -11,13 +11,14 @@ import type {
 export interface Backend {
   vault: {
     status(): Promise<VaultStatus>
-    create(pw: string): Promise<void>
+    create(pw: string, hint?: string): Promise<void>
     unlock(pw: string): Promise<void>
     unlockBiometric(): Promise<void>
     lock(): Promise<void>
     resetVault(confirm: string): Promise<void>
     changePassword(oldPW: string, newPW: string): Promise<void>
     setAutoLock(minutes: number): Promise<void>
+    setHint(hint: string): Promise<void>
     enableBiometric(): Promise<void>
     disableBiometric(): Promise<void>
     listIdentities(): Promise<Identity[]>
@@ -164,13 +165,14 @@ export function wailsBackend(): Backend {
   return {
     vault: {
       status: () => u('VaultService', 'Status'),
-      create: pw => u('VaultService', 'Create', pw),
+      create: (pw, hint) => hint?.trim() ? u('VaultService', 'CreateWithHint', pw, hint) : u('VaultService', 'Create', pw),
       unlock: pw => u('VaultService', 'Unlock', pw),
       unlockBiometric: () => u('VaultService', 'UnlockBiometric'),
       lock: () => u('VaultService', 'Lock'),
       resetVault: c => u('VaultService', 'ResetVault', c),
       changePassword: (o, n) => u('VaultService', 'ChangePassword', o, n),
       setAutoLock: m => u('VaultService', 'SetAutoLock', m),
+      setHint: h => u('VaultService', 'SetHint', h),
       enableBiometric: () => u('VaultService', 'EnableBiometric'),
       disableBiometric: () => u('VaultService', 'DisableBiometric'),
       listIdentities: () => u('VaultService', 'ListIdentities'),
@@ -316,6 +318,7 @@ export function bridgeBackend(): Backend {
       status: () => rpc('VaultService', 'Status'),
       changePassword: (o, n) => rpc('VaultService', 'ChangePassword', o, n),
       setAutoLock: m => rpc('VaultService', 'SetAutoLock', m),
+      setHint: h => rpc('VaultService', 'SetHint', h),
       enableBiometric: () => rpc('VaultService', 'EnableBiometric'),
       disableBiometric: () => rpc('VaultService', 'DisableBiometric'),
       resetVault: c => rpc('VaultService', 'ResetVault', c),

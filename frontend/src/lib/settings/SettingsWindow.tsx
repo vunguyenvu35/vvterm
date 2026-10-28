@@ -3,7 +3,7 @@ import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {Switch} from '../ui/Switch'
 import {Select} from '../ui/Select'
-import {errMsg} from '../util'
+import {biometricName, errMsg} from '../util'
 import {ThemePicker} from './ThemePicker'
 import {resolveTerminalTheme} from '../terminal/themes'
 import {SyncPanel} from '../panels/SyncPanel'
@@ -11,6 +11,12 @@ import {IconArrowUpRight, IconUser} from '../ui/Icons'
 import {ShortcutsEditor} from './ShortcutsEditor'
 import type {Appearance} from './appearance'
 import type {CursorStyle, Settings, ThemeMode, VaultStatus} from '../types'
+
+/** what this computer calls the place that keeps the vault key for quick unlock */
+const keychainName = () => {
+  const p = typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent || ''
+  return /mac/i.test(p) ? 'the macOS Keychain' : /windows|win32|win64/i.test(p) ? 'Windows Credential Manager' : 'the system keychain'
+}
 
 type Cat = 'general' | 'account' | 'terminal' | 'security' | 'sync' | 'shortcuts'
 const CATS: {id: Cat; label: string}[] = [
@@ -61,6 +67,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   const [version, setVersion] = useState('')
   const [scroll, setScroll] = useState(String(s.scrollback))
   const [auto, setAuto] = useState(String(vault.auto_lock_minutes))
+  const [hint, setHint] = useState(vault.hint ?? '')
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [name, setName] = useState(s.account_name)
@@ -298,9 +305,29 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                       </div>
                     </div>
                     <div className="setting-row">
-                      <div><b>Unlock with the macOS Keychain</b><div className="muted">Stores the vault key in your Keychain. It does not require Touch ID yet.</div></div>
+                      <div>
+                        <b>{vault.biometric_available ? `Unlock with ${biometricName()}` : `Unlock with ${keychainName()}`}</b>
+                        <div className="muted">{vault.biometric_available
+                          ? `Use ${biometricName()} instead of typing the master password. The vault key stays in ${keychainName()}, and each unlock asks you to confirm.`
+                          : `Stores the vault key in ${keychainName()}, so you do not type the master password. Anyone signed in to this computer account can then open the vault.`}</div>
+                      </div>
                       <Switch label="Keychain unlock" checked={vault.keychain_enabled}
                         onChange={v => guard(async () => { await (v ? be.vault.enableBiometric() : be.vault.disableBiometric()); onVault() }, v ? 'Keychain unlock enabled' : 'Keychain unlock disabled')} />
+                    </div>
+                    {vault.biometric_available && vault.keychain_enabled && (
+                      <div className="setting-row">
+                        <div><b>Ask as soon as VVTerm opens</b><div className="muted">The lock screen shows the {biometricName()} sheet by itself. Off: press "Use {biometricName()}" yourself.</div></div>
+                        <Switch label="Ask on open" checked={s.biometric_on_open} onChange={v => update({biometric_on_open: v})} />
+                      </div>
+                    )}
+                  </section>
+                  <section className="card-section">
+                    <h4>Password hint</h4>
+                    <div className="muted">A reminder shown on the lock screen if you forget the master password. Anyone who opens VVTerm can read it, so never write the password in it.</div>
+                    <div className="input-row">
+                      <input aria-label="Password hint" className="control wide" maxLength={120} placeholder="A reminder only you understand" value={hint} onChange={e => setHint(e.target.value)} />
+                      <button disabled={hint.trim() === (vault.hint ?? '')}
+                        onClick={() => guard(async () => { await be.vault.setHint(hint); onVault() }, hint.trim() ? 'Password hint saved' : 'Password hint removed')}>Save</button>
                     </div>
                   </section>
                   <section className="card-section">

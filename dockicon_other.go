@@ -7,3 +7,6 @@ func setDockIcon([]byte) {}
 
 // hideFromDock is only needed on macOS.
 func hideFromDock() {}
+
+// hideFromDockOnLaunch is only needed on macOS.
+func hideFromDockOnLaunch() {}

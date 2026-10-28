@@ -26,6 +26,27 @@ func (s *VaultService) Status() vault.Status { return s.c.Vault.Status() }
 
 func (s *VaultService) Create(pw string) error { return s.c.Vault.Create(pw) }
 
+// CreateWithHint creates the vault and stores a reminder of the password. The hint must not contain the password.
+func (s *VaultService) CreateWithHint(pw, hint string) error {
+	if err := checkHint(pw, hint); err != nil {
+		return err
+	}
+	if err := s.c.Vault.Create(pw); err != nil {
+		return err
+	}
+	return s.c.Vault.SetHint(hint)
+}
+
+// SetHint changes the password reminder (empty removes it). The vault must be unlocked.
+func (s *VaultService) SetHint(hint string) error { return s.c.Vault.SetHint(hint) }
+
+func checkHint(pw, hint string) error {
+	if h := strings.ToLower(strings.TrimSpace(hint)); h != "" && strings.Contains(h, strings.ToLower(pw)) {
+		return errors.New("the hint must not contain the password itself")
+	}
+	return nil
+}
+
 func (s *VaultService) Unlock(pw string) error {
 	err := s.c.Vault.Unlock(pw)
 	if err != nil {

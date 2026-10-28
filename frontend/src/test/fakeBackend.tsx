@@ -101,7 +101,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     emit,
     vault: {
       status: async () => ({...state.vault}),
-      create: async pw => { rec('vault.create', pw); state.vault = {...state.vault, exists: true, unlocked: true} },
+      create: async (pw, hint) => { rec('vault.create', pw, ...(hint ? [hint] : [])); state.vault = {...state.vault, exists: true, unlocked: true, hint: hint || undefined} },
+      setHint: async h => { rec('vault.setHint', h); state.vault = {...state.vault, hint: h.trim() || undefined} },
       unlock: async pw => {
         rec('vault.unlock', pw)
         if (pw !== state.password) throw 'wrong master password'

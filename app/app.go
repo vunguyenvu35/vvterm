@@ -66,13 +66,17 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	if kc == nil {
+	realKeychain := kc == nil
+	if realKeychain {
 		kc = vault.OSKeychain{}
 	}
 	v, err := vault.NewWith(db.VaultPersister(), data, kc)
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+	if realKeychain && vault.BiometricAvailable() {
+		v.SetAuthenticator(vault.BiometricAuth) // the keychain key needs Touch ID, not just a click
 	}
 	if kdf != nil {
 		v.SetKDF(*kdf)
