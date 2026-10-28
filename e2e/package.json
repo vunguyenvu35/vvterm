@@ -1,0 +1,11 @@
+{
+  "name": "vvterm-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "walkthrough": "node walkthrough.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  }
+}

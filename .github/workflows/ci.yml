@@ -1,0 +1,44 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build frontend (the Go embed needs frontend/dist)
+        run: cd frontend && npm ci && npm run build
+      - run: go vet ./...
+      - run: go test -race -count=1 -cover ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cd frontend && npm ci && npx tsc --noEmit && npx vitest run
+
+  build:
+    needs: [go, frontend]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+      - run: $(go env GOPATH)/bin/wails build -ldflags "-X vvterm/app.Version=${{ github.sha }}"

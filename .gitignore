@@ -1,0 +1,42 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Go
+/bin/
+/coverage.out
+/coverage.html
+*.test
+
+# Wails build output
+/build/bin/
+/frontend/wailsjs/
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/*
+!/frontend/dist/.gitkeep
+/frontend/coverage/
+
+# Local data and secrets: never commit
+/data/
+/sync/
+vault.json
+hosts.json
+known_hosts
+settings.json
+*.vvbak
+*.pem
+id_ed25519
+id_rsa
+
+# Test artifacts (screenshots are committed under docs/screenshots)
+/e2e/test-results/
+/e2e/node_modules/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
