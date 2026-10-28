@@ -20,7 +20,7 @@ describe('pane status', () => {
 })
 
 describe('TabStatus', () => {
-  it('shows a spinner while connecting, a red dot when closed, and nothing when ready', () => {
+  it('shows a spinner while connecting, a green dot when connected and a red dot when disconnected', () => {
     const tab = newTab('h1', 'web')
     const id = tab.activePane
     render(<TabStatus tab={tab} />)
@@ -28,9 +28,9 @@ describe('TabStatus', () => {
     act(() => setPaneStatus(id, 'connecting'))
     expect(screen.getByRole('img', {name: 'Connecting'})).toBeInTheDocument()
     act(() => setPaneStatus(id, 'ready'))
-    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByRole('img', {name: 'Connected'})).toBeInTheDocument()
     act(() => setPaneStatus(id, 'closed'))
-    expect(screen.getByRole('img', {name: 'Closed'})).toBeInTheDocument()
+    expect(screen.getByRole('img', {name: 'Disconnected'})).toBeInTheDocument()
     act(() => setPaneStatus(id, null))
     expect(screen.queryByRole('img')).toBeNull()
   })
@@ -40,7 +40,7 @@ describe('TabStatus', () => {
     const ids = [tab.activePane]
     render(<TabStatus tab={tab} />)
     ids.forEach(i => act(() => setPaneStatus(i, 'closed')))
-    expect(screen.getByRole('img', {name: 'Closed'})).toBeInTheDocument()
+    expect(screen.getByRole('img', {name: 'Disconnected'})).toBeInTheDocument()
   })
 
   it('a file browser tab and a tab still choosing a protocol have none', () => {

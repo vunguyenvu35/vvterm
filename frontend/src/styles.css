@@ -734,6 +734,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .topbar > .tab.tab-home, .topbar > .tab.tab-home.active, .topbar > .tab.add, .topbar > .tab.pinned, .topbar > .tab.pinned.active { flex: none; min-width: 0; max-width: none; }
 .tab-status { flex: none; width: 9px; height: 9px; border-radius: 50%; }
 .tab-status.closed { background: var(--danger, #ef5b5b); }
+.tab-status.ready { background: #3ecf8e; }
 .tab-status.connecting { border: 2px solid #2f7bf566; border-top-color: #2f7bf5; animation: connect-spin .9s linear infinite; }
 [data-motion=reduced] .tab-status.connecting { animation: none; }
 .proto.off { opacity: .55; cursor: not-allowed; }
