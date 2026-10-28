@@ -100,7 +100,7 @@ label.field > span { display: block; color: var(--muted); font-size: 11px; margi
 .main { flex: 1; min-width: 0; overflow: auto; background: var(--bg); padding: 14px 22px 30px; }
 
 /* ---------- hosts page ---------- */
-.hosts-page { max-width: 1280px; }
+.hosts-page { max-width: none; } /* fills the window, also in full screen */
 .connect-bar { display: flex; align-items: center; gap: 10px; background: var(--bg-3); border: 1px solid transparent; border-radius: 10px; padding: 4px 6px 4px 14px; color: var(--muted); }
 .connect-bar:focus-within { border-color: var(--accent); background: var(--bg-2); }
 .connect-bar input { background: transparent !important; border: none; padding: 9px 0; color: var(--text); }
@@ -588,3 +588,70 @@ button.on-banner { background: #ffffff33; color: #fff; }
 input[type='password']::-webkit-caps-lock-indicator,
 input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidden !important; display: none !important; opacity: 0; pointer-events: none; }
 .caps-warning { position: fixed; z-index: 400; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #7a4b00; background: #ffd479; box-shadow: 0 1px 4px #0005; pointer-events: none; }
+
+/* ---- terminal sidebar (hosts, snippets, history, themes) ---- */
+.top-tools button.on { background: var(--bg-3); color: var(--accent, #3ecf8e); }
+.term-side { width: 300px; flex: none; margin: 8px 8px 8px 0; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.side-tabs { display: flex; gap: 6px; padding: 12px 12px 8px; }
+.side-tabs button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 9px; color: var(--muted); }
+.side-tabs button:hover { background: var(--bg-3); color: var(--text); }
+.side-tabs button.on { background: #3ecf8e26; color: #3ecf8e; }
+.side-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.side-bar { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.side-bar .side-search { flex: 1; }
+.side-new { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: var(--bg-3); border: none; border-radius: 8px; color: var(--text); }
+.side-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: var(--bg-3); border-radius: 8px; color: var(--muted); }
+.side-search input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; padding: 0; color: var(--text); height: 100%; }
+.side-list { display: flex; flex-direction: column; gap: 2px; }
+.side-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; background: transparent; border: none; border-radius: 8px; color: var(--text); min-width: 0; }
+.side-item:hover { background: var(--bg-3); }
+.side-item.col { flex-direction: column; align-items: stretch; gap: 4px; }
+.side-item code { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-title { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.side-main { display: flex; flex-direction: column; min-width: 0; }
+.side-main b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-main small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-cmd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-empty { color: var(--muted); padding: 14px 4px; font-size: 13px; }
+.side-fold { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 4px; background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0; color: var(--text); }
+.side-fold.open { color: #3ecf8e; }
+.side-font { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 8px; }
+.side-font input { width: 100%; }
+.side-size { display: flex; align-items: center; gap: 8px; }
+.side-size span { flex: 1; color: var(--muted); }
+.side-size button { width: 34px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.side-size output { min-width: 46px; text-align: center; padding: 6px 0; border: 1px solid var(--line); border-radius: 8px; }
+.side-sub { margin: 8px 0 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.side-item.theme.on { background: var(--bg-3); }
+.side-item.theme.on b { color: #3ecf8e; }
+.theme-thumb { width: 72px; height: 48px; flex: none; border-radius: 6px; border: 1px solid #ffffff22; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px; }
+.theme-thumb i { display: block; height: 4px; border-radius: 2px; }
+.window-bar { justify-content: center; }
+.window-title { color: var(--muted); font-size: 13px; }
+.term-window { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---- New host: Add Telnet card, theme cards ---- */
+.add-wide { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--text); font-weight: 600; }
+.add-wide:hover { background: var(--bg-3); }
+.card-sub { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
+.remove-telnet { margin-left: auto; font-size: 12px; }
+.theme-thumb.large { width: 72px; height: 50px; }
+.theme-thumb { position: relative; overflow: hidden; }
+.theme-strip { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; display: flex; }
+.theme-strip b { flex: 1; }
+.theme-picker { display: flex; flex-direction: column; gap: 6px; }
+.theme-current { display: flex; align-items: center; gap: 14px; width: 100%; padding: 6px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 12px; text-align: left; }
+.theme-current .theme-name { color: var(--accent, #3b82f7); font-weight: 500; }
+.theme-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; padding: 4px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 12px; }
+.theme-list button { display: flex; align-items: center; gap: 12px; padding: 6px; border: none; background: transparent; border-radius: 8px; text-align: left; color: var(--text); }
+.theme-list button:hover, .theme-list button.on { background: var(--card); }
+.theme-name { display: flex; flex-direction: column; }
+.theme-name small { color: var(--muted); font-size: 11.5px; }
+
+/* ---- SFTP right-click menu and permissions ---- */
+.perm-grid { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+.perm-grid th, .perm-grid td { padding: 8px 10px; text-align: center; }
+.perm-grid th[scope=row] { text-align: left; font-weight: 500; }
+.perm-octal { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.perm-octal input { width: 64px; text-align: center; margin-left: 8px; }
+.ctx-menu .danger-item { color: var(--danger, #ef5b5b); }

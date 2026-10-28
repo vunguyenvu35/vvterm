@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -99,5 +101,32 @@ func TestClipboardNeedsANativeWindow(t *testing.T) {
 	}
 	if err := s.SetClipboardText(strings.Repeat("x", maxClipboard+1)); err == nil {
 		t.Fatal("too much text")
+	}
+}
+
+func TestOpenPathRefusesFilesThatRunPrograms(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"x.command", "x.SH", "x.app", "x.exe", "x.pkg"} {
+		p := filepath.Join(dir, name)
+		_ = os.WriteFile(p, []byte("x"), 0o644)
+		if _, err := openCommand(p, ""); err == nil {
+			t.Errorf("%s must not be opened", name)
+		}
+	}
+	ok := filepath.Join(dir, "notes.txt")
+	_ = os.WriteFile(ok, []byte("x"), 0o644)
+	if cmd, err := openCommand(ok, ""); err != nil || cmd == nil {
+		t.Fatalf("%v", err)
+	}
+	if _, err := openCommand(filepath.Join(dir, "missing.txt"), ""); err == nil {
+		t.Fatal("a file that is not there")
+	}
+	s := NewSystemService()
+	if err := s.OpenPath(ok); err == nil {
+		t.Fatal("no native window: nothing is opened")
+	}
+	s.SetContext(context.Background())
+	if err := s.OpenPath("relative.txt"); err == nil {
+		t.Fatal("relative path")
 	}
 }

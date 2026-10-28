@@ -142,6 +142,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         return upsert(state.hosts, {port: 22, keepalive_sec: 30, ...h, label: h.label || h.hostname}, 'h')
       },
       deleteHost: async i => { state.hosts = state.hosts.filter(h => h.id !== i) },
+      setTelnetPassword: async (i, pw) => { rec('hosts.setTelnetPassword', i, pw) },
     },
     session: {
       open: async (h, c, r) => { rec('session.open', h, c, r); return id('s') },
@@ -191,6 +192,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         }
         return out.sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name))
       },
+      chmod: async (s, p, m) => { rec('sftp.chmod', s, p, m) },
       mkdir: async (s, p) => { rec('sftp.mkdir', s, p); if (state.remote[p]) throw 'file exists'; state.remote[p] = {dir: true, size: 0} },
       rename: async (s, a, b) => {
         rec('sftp.rename', s, a, b)
@@ -264,6 +266,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         }
         return out.sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name))
       },
+      chmod: async (p, m) => { rec('local.chmod', p, m) },
+      tempDir: async () => '/tmp/vvterm-open-1',
       mkdir: async p => { rec('local.mkdir', p); if (state.local[p]) throw 'file exists'; state.local[p] = {dir: true, size: 0} },
       rename: async (a, b) => {
         rec('local.rename', a, b)
@@ -296,6 +300,9 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       toggleMaximise: async () => { rec('system.toggleMaximise') },
       readClipboard: async () => { rec('system.readClipboard'); return state.clipboard },
       writeClipboard: async t => { rec('system.writeClipboard', t); state.clipboard = t },
+      openWindow: async (h, t) => { rec('system.openWindow', h, t) },
+      openPath: async p => { rec('system.openPath', p) },
+      openPathWith: async (p, a) => { rec('system.openPathWith', p, a) },
       openSettings: async () => {
         rec('system.openSettings')
         if (!state.nativeSettings) throw new Error('native windows are not available')

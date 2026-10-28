@@ -36,6 +36,8 @@ export interface Backend {
     listHosts(f: Partial<HostFilter>): Promise<Host[]>
     saveHost(h: Partial<Host>): Promise<Host>
     deleteHost(id: string): Promise<void>
+    /** keeps the Telnet password of a host in the vault (empty forgets it) */
+    setTelnetPassword(hostId: string, password: string): Promise<void>
   }
   session: {
     open(hostId: string, cols: number, rows: number): Promise<string>
@@ -76,6 +78,7 @@ export interface Backend {
     list(sid: string, dir: string): Promise<RemoteEntry[]>
     mkdir(sid: string, path: string): Promise<void>
     rename(sid: string, from: string, to: string): Promise<void>
+    chmod(sid: string, path: string, mode: number): Promise<void>
     remove(sid: string, path: string, recursive: boolean): Promise<void>
     upload(sid: string, local: string, remoteDir: string, overwrite: boolean): Promise<string>
     download(sid: string, remote: string, local: string, overwrite: boolean): Promise<void>
@@ -104,6 +107,9 @@ export interface Backend {
     mkdir(path: string): Promise<void>
     rename(from: string, to: string): Promise<void>
     remove(path: string, recursive: boolean): Promise<void>
+    chmod(path: string, mode: number): Promise<void>
+    /** a new private folder for files that are only looked at */
+    tempDir(): Promise<string>
   }
   snippets: {
     list(): Promise<Snippet[]>
@@ -118,6 +124,12 @@ export interface Backend {
     info(): Promise<{version: string}>
     /** Opens the Settings window (a second native window). Rejects where none exists: the UI then shows its in-app window. */
     openSettings(): Promise<void>
+    /** Opens a new native window with a new session to the same place (host id, "local", "serial:..."). Rejects where there is none. */
+    openWindow(hostId: string, title: string): Promise<void>
+    /** Opens a file with the app the system has for it (never a file that runs programs). */
+    openPath(path: string): Promise<void>
+    /** Opens a file with the chosen application. */
+    openPathWith(path: string, app: string): Promise<void>
     /** Zoom the native window (the green button / a double click on the title bar). A no-op in a browser. */
     toggleMaximise(): Promise<void>
     /** The system clipboard: through the native runtime (a webview often refuses to read it), else the browser. */
@@ -133,7 +145,7 @@ type Bound = Record<string, (...a: any[]) => Promise<any>>
 declare global {
   interface Window {
     go?: Record<string, Record<string, Bound>>
-    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void; WindowToggleMaximise?(): void}
+    runtime?: {EventsOn(name: string, cb: (...d: any[]) => void): () => void; WindowToggleMaximise?(): void; Quit?(): void}
   }
 }
 
@@ -177,6 +189,7 @@ export function wailsBackend(): Backend {
       listHosts: f => u('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f}),
       saveHost: h => u('HostService', 'SaveHost', h),
       deleteHost: id => u('HostService', 'DeleteHost', id),
+      setTelnetPassword: (id, pw) => u('HostService', 'SetTelnetPassword', id, pw),
     },
     session: {
       open: (h, c, r) => u('SessionService', 'Open', h, c, r),
@@ -217,6 +230,7 @@ export function wailsBackend(): Backend {
       list: async (s, d) => (await u<RemoteEntry[]>('SftpService', 'List', s, d)) ?? [],
       mkdir: (s, p) => u('SftpService', 'Mkdir', s, p),
       rename: (s, a, b) => u('SftpService', 'Rename', s, a, b),
+      chmod: (s, p, m) => u('SftpService', 'Chmod', s, p, m),
       remove: (s, p, r) => u('SftpService', 'Delete', s, p, r),
       upload: (s, l, d, o) => u('SftpService', 'Upload', s, l, d, o),
       download: (s, r, l, o) => u('SftpService', 'Download', s, r, l, o),
@@ -241,6 +255,8 @@ export function wailsBackend(): Backend {
       mkdir: p => call('usecase', 'LocalService', 'Mkdir', p),
       rename: (a, b) => call('usecase', 'LocalService', 'Rename', a, b),
       remove: (p, r) => call('usecase', 'LocalService', 'Delete', p, r),
+      chmod: (p, m) => call('usecase', 'LocalService', 'Chmod', p, m),
+      tempDir: () => call('usecase', 'LocalService', 'TempDir'),
     },
     snippets: {
       list: async () => (await u<Snippet[]>('SnippetService', 'List')) ?? [],
@@ -260,6 +276,9 @@ export function wailsBackend(): Backend {
       },
       info: () => call('app', 'SystemService', 'Info'),
       openSettings: () => call('app', 'SystemService', 'OpenSettings'),
+      openWindow: (h, t) => call('app', 'SystemService', 'OpenWindow', h, t),
+      openPath: p => call('app', 'SystemService', 'OpenPath', p),
+      openPathWith: (p, a) => call('app', 'SystemService', 'OpenPathWith', p, a),
       toggleMaximise: async () => { window.runtime?.WindowToggleMaximise?.() },
       readClipboard: async () => {
         try { return String((await call('app', 'SystemService', 'ClipboardText')) ?? '') } catch { return navigator.clipboard.readText() }
@@ -311,7 +330,44 @@ export function bridgeBackend(): Backend {
       join: pw => rpc('SyncService', 'JoinExisting', pw),
       status: () => rpc('SyncService', 'Status'),
     },
-    system: {...base.system, openSettings: unavailable},
+    system: {...base.system, openSettings: unavailable, openWindow: unavailable},
+  }
+}
+
+/** True in a terminal window process (Duplicate in new window): it has the TerminalWindow object bound. */
+export const inTerminalWindow = () => !!window.go?.app?.TerminalWindow
+
+/** What a terminal window was opened for, as the Go side was told. */
+export async function windowTarget(): Promise<{host_id: string; title: string}> {
+  return window.go!.app.TerminalWindow.Target() as unknown as {host_id: string; title: string}
+}
+
+/**
+ * Backend of a terminal window: sessions, settings and the host list go through the main process (the
+ * session's output comes back as local events); everything else is the same as anywhere.
+ */
+export function terminalWindowBackend(): Backend {
+  const base = wailsBackend()
+  const rpc = async <T,>(service: string, method: string, ...args: unknown[]): Promise<T> => {
+    const text: string = await window.go!.app.TerminalWindow.Call(service, method, JSON.stringify(args))
+    return (text ? JSON.parse(text) : undefined) as T
+  }
+  const unavailable = () => Promise.reject(new Error('not available in this window'))
+  return {
+    ...base,
+    session: {
+      ...base.session,
+      open: (h, c, r) => rpc('SessionService', 'Open', h, c, r),
+      attach: s => rpc('SessionService', 'Attach', s),
+      write: (s, d) => rpc('SessionService', 'Write', s, d),
+      resize: (s, c, r) => rpc('SessionService', 'Resize', s, c, r),
+      reconnect: (s, c, r) => rpc('SessionService', 'Reconnect', s, c, r),
+      close: s => rpc('SessionService', 'Close', s),
+      trustHostKey: (s, f) => rpc('SessionService', 'TrustHostKey', s, f),
+    },
+    hosts: {...base.hosts, listHosts: async f => (await rpc<Host[]>('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f})) ?? []},
+    settings: {get: () => rpc('SettingsService', 'Get'), save: unavailable},
+    system: {...base.system, openSettings: unavailable, openWindow: unavailable},
   }
 }
 

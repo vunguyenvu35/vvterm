@@ -458,3 +458,87 @@ describe('SftpBrowser: the host list stays current', () => {
     expect(calls(be, 'hosts.listHosts')).toHaveLength(0) // nothing is loaded twice
   })
 })
+
+describe('SftpBrowser: right-click menu', () => {
+  const menuOf = () => screen.getByRole('menu')
+  const items = () => within(menuOf()).getAllByRole('menuitem').map(i => i.textContent)
+
+  it('a file has Open, Open with, Copy to target directory, Rename, Delete, Refresh, New Folder and Edit Permissions', async () => {
+    setup()
+    await ready()
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    expect(items()).toEqual(['Open', 'Open with…', 'Copy to target directory', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Edit Permissions'])
+    expect(row(R(), 'readme.txt')).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(window, {key: 'Escape'})
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('empty space only offers Refresh and New Folder', async () => {
+    setup()
+    await ready()
+    fireEvent.contextMenu(within(R()).getByRole('table'))
+    expect(items()).toEqual(['Refresh', 'New Folder'])
+  })
+
+  it('Open on a folder goes into it, and on a remote file downloads it to a temporary folder and opens that', async () => {
+    const be = setup()
+    await ready()
+    fireEvent.contextMenu(row(R(), 'projects'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Open'}))
+    await waitFor(() => expect(screen.getByLabelText('Remote path')).toHaveValue('/projects'))
+    await userEvent.click(within(R()).getByRole('button', {name: 'Up one folder'}))
+    await waitFor(() => expect(names(R())).toContain('readme.txt'))
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Open'}))
+    await waitFor(() => expect(calls(be, 'system.openPath')).toEqual([['system.openPath', '/tmp/vvterm-open-1/readme.txt']]))
+    expect(calls(be, 'sftp.downloadAll')[0].slice(2)).toEqual([['/readme.txt'], '/tmp/vvterm-open-1', true])
+  })
+
+  it('a local file is opened in place, and Open with asks which app', async () => {
+    const be = setup()
+    await ready()
+    fireEvent.contextMenu(row(L(), 'notes.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Open'}))
+    await waitFor(() => expect(calls(be, 'system.openPath')).toEqual([['system.openPath', '/Users/me/notes.txt']]))
+  })
+
+  it('Copy to target directory sends the chosen items to the other pane, one or many', async () => {
+    const be = setup()
+    await ready()
+    await pick(L(), 'notes.txt')
+    fireEvent.contextMenu(row(L(), 'notes.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Copy to target directory'}))
+    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
+    expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/notes.txt'])
+  })
+
+  it('Rename and New Folder open the name box, Delete asks first', async () => {
+    const be = setup()
+    await ready()
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Rename'}))
+    expect(within(R()).getByLabelText('Name')).toHaveValue('readme.txt')
+    await userEvent.click(within(R()).getByRole('button', {name: 'Cancel'}))
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'New Folder'}))
+    expect(within(R()).getByLabelText('Name')).toHaveValue('')
+    await userEvent.click(within(R()).getByRole('button', {name: 'Cancel'}))
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Delete'}))
+    await waitFor(() => expect(ask).toHaveBeenCalled())
+    expect(calls(be, 'sftp.remove')).toHaveLength(0)
+  })
+
+  it('Edit Permissions changes the mode on the server', async () => {
+    const be = setup()
+    await ready()
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Edit Permissions'}))
+    await userEvent.clear(screen.getByLabelText('Octal permissions'))
+    await userEvent.type(screen.getByLabelText('Octal permissions'), '600')
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(calls(be, 'sftp.chmod')).toHaveLength(1))
+    expect(calls(be, 'sftp.chmod')[0].slice(2)).toEqual(['/readme.txt', 0o600])
+  })
+})

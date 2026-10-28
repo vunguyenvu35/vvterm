@@ -1,11 +1,13 @@
 import {useEffect, useRef, useState} from 'react'
 import {Field, SidePanel, Section} from '../ui/Modal'
-import {TERMINAL_THEMES} from '../terminal/themes'
+import {resolveTerminalTheme} from '../terminal/themes'
+import {ThemePicker} from '../terminal/ThemePicker'
+import {useAppearance} from '../settings/appearance'
 import {Select} from '../ui/Select'
 import {useBackend} from '../backend'
 import {errMsg, parseTags} from '../util'
-import {IconCheckCircle, IconEye, IconEyeOff, IconServer, IconXCircle} from '../ui/Icons'
-import type {ConnectionTest, Group, Host, HostKeyPrompt, Identity} from '../types'
+import {IconCheckCircle, IconEye, IconEyeOff, IconPlus, IconServer, IconXCircle} from '../ui/Icons'
+import type {ConnectionTest, Group, Host, HostKeyPrompt, Identity, Settings} from '../types'
 
 interface Props {
   host?: Host
@@ -33,6 +35,10 @@ let testSeq = 0
  */
 export function HostForm({host, isNew, groups, hosts, identities, onClose, onSaved, onConnect, onDraft}: Props) {
   const be = useBackend()
+  const [appSetting, setAppSetting] = useState('auto')
+  const [appTheme, setAppTheme] = useState<Settings['theme']>('dark')
+  const appearance = useAppearance(appTheme)
+  useEffect(() => { void be.settings.get().then(s => { setAppSetting(s.terminal_theme || 'auto'); setAppTheme(s.theme) }).catch(() => {}) }, [be])
   const [f, setF] = useState({
     label: host?.label ?? '',
     hostname: host?.hostname ?? '',
@@ -46,7 +52,11 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
     tags: (host?.tags ?? []).join(', '),
     keepalive_sec: String(host?.keepalive_sec ?? 30),
     // an empty Telnet port means Telnet is off for this host
+    telnet_on: !!host?.telnet_enabled,
     telnet_port: host?.telnet_enabled ? String(host.telnet_port || 23) : '',
+    telnet_username: host?.telnet_username ?? '',
+    telnet_password: '',
+    telnet_encoding: host?.telnet_encoding || 'utf-8',
     terminal_theme: host?.terminal_theme ?? '',
   })
   const [showPw, setShowPw] = useState(false)
@@ -56,7 +66,8 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
   const [prompt, setPrompt] = useState<{key: string; p: HostKeyPrompt} | null>(null)
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
-  const set = (k: keyof typeof f) => (e: {target: {value: string}}) => setF(x => ({...x, [k]: e.target.value}))
+  const [showTelnetPw, setShowTelnetPw] = useState(false)
+  const set = (k: Exclude<keyof typeof f, 'telnet_on'>) => (e: {target: {value: string}}) => setF(x => ({...x, [k]: e.target.value}))
   const existing = !!host && !isNew
 
   useEffect(() => { onDraft?.(f.label.trim() || f.hostname.trim()) }, [f.label, f.hostname, onDraft])
@@ -68,13 +79,15 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
     if (!f.hostname.trim()) { setErr('Hostname is required'); return null }
     if (/\s/.test(f.hostname) || /\s/.test(f.username)) { setErr('Hostname and username cannot contain spaces'); return null }
     if (!Number.isInteger(port) || port < 1 || port > 65535) { setErr('Port must be between 1 and 65535'); return null }
-    const telnet = f.telnet_port.trim() === '' ? 0 : Number(f.telnet_port)
-    if (f.telnet_port.trim() !== '' && (!Number.isInteger(telnet) || telnet < 1 || telnet > 65535)) { setErr('Telnet port must be between 1 and 65535'); return null }
+    const telnet = !f.telnet_on ? 0 : f.telnet_port.trim() === '' ? 23 : Number(f.telnet_port)
+    if (f.telnet_on && (!Number.isInteger(telnet) || telnet < 1 || telnet > 65535)) { setErr('Telnet port must be between 1 and 65535'); return null }
     setErr('')
     return {
       ...(existing ? host : {}),
       telnet_enabled: telnet > 0,
       telnet_port: telnet,
+      telnet_username: f.telnet_on ? f.telnet_username.trim() : '',
+      telnet_encoding: f.telnet_on && f.telnet_encoding !== 'utf-8' ? f.telnet_encoding : '',
       terminal_theme: f.terminal_theme,
       label: f.label.trim(),
       hostname: f.hostname.trim(),
@@ -100,7 +113,9 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
         const ident = await be.vault.addPassword(name, h.username ?? '', f.password)
         h.identity_id = ident.id
       }
-      return await be.hosts.saveHost(h)
+      const saved = await be.hosts.saveHost(h)
+      if (f.telnet_on && f.telnet_password) await be.hosts.setTelnetPassword(saved.id, f.telnet_password)
+      return saved
     } catch (e) {
       setErr(errMsg(e))
       return null
@@ -172,9 +187,26 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
 
       <Section>
         <div className="inline-field"><span>SSH on</span><input aria-label="Port" className="port" value={f.port} onChange={set('port')} /><span>port</span></div>
-        <div className="inline-field"><span>Telnet on</span><input aria-label="Telnet port" className="port" placeholder="23" value={f.telnet_port} onChange={set('telnet_port')} inputMode="numeric" /><span>port</span></div>
-        {f.telnet_port.trim() !== '' && <div className="muted telnet-warning" role="note">Telnet is not encrypted: everything you type, the password included, crosses the network in clear text. Use it only on a network you trust, for devices that offer nothing else.</div>}
       </Section>
+
+      {!f.telnet_on ? (
+        <button type="button" className="add-wide" onClick={() => setF(x => ({...x, telnet_on: true, telnet_port: x.telnet_port || '23'}))}><IconPlus size={17} /> Add Telnet</button>
+      ) : (
+        <Section>
+          <div className="inline-field"><span>Telnet on</span><input aria-label="Telnet port" className="port" placeholder="23" value={f.telnet_port} onChange={set('telnet_port')} inputMode="numeric" /><span>port</span>
+            <button type="button" className="link remove-telnet" onClick={() => setF(x => ({...x, telnet_on: false, telnet_port: '', telnet_username: '', telnet_password: ''}))}>Remove</button></div>
+          <div className="muted telnet-warning" role="note">Telnet is not encrypted: everything you type, the password included, crosses the network in clear text. Use it only on a network you trust, for devices that offer nothing else.</div>
+          <h4 className="card-sub">Credentials</h4>
+          <input aria-label="Telnet username" value={f.telnet_username} onChange={set('telnet_username')} placeholder="Username" autoComplete="off" />
+          <div className="pw-row">
+            <input aria-label="Telnet password" type={showTelnetPw ? 'text' : 'password'} value={f.telnet_password} onChange={set('telnet_password')} autoComplete="new-password"
+              placeholder={existing && host?.telnet_enabled ? 'Saved in the vault (type to replace)' : 'Password'} />
+            <button type="button" className="eye" aria-label={showTelnetPw ? 'Hide Telnet password' : 'Show Telnet password'} aria-pressed={showTelnetPw} onClick={() => setShowTelnetPw(v => !v)}>{showTelnetPw ? <IconEyeOff size={17} /> : <IconEye size={17} />}</button>
+          </div>
+          <Select label="Telnet encoding" value={f.telnet_encoding} onChange={v => setF(x => ({...x, telnet_encoding: v}))}
+            options={[{value: 'utf-8', label: 'UTF-8'}, {value: 'iso-8859-1', label: 'ISO-8859-1', hint: 'Latin-1, older devices'}]} />
+        </Section>
+      )}
 
       <Section title="Credentials">
         <Field label="Username"><input aria-label="Username" value={f.username} onChange={set('username')} placeholder="Username" autoComplete="off" /></Field>
@@ -191,8 +223,7 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
       </Section>
 
       <Section title="Terminal theme">
-        <Select label="Terminal theme" value={f.terminal_theme} onChange={v => setF(x => ({...x, terminal_theme: v}))}
-          options={[{value: '', label: 'Use the app setting', hint: 'Settings → Terminal'}, ...TERMINAL_THEMES.map(t => ({value: t.id, label: t.name, hint: t.dark ? 'dark' : 'light'}))]} />
+        <ThemePicker value={f.terminal_theme} onChange={v => setF(x => ({...x, terminal_theme: v}))} inherited={resolveTerminalTheme(appSetting, appearance)} />
       </Section>
 
       <Section title="Options">

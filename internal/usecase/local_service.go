@@ -94,6 +94,24 @@ func (s *LocalService) Rename(from, to string) error {
 	return os.Rename(a, b)
 }
 
+// Chmod sets the permission bits of a file or folder on this computer.
+func (s *LocalService) Chmod(path string, mode int) error {
+	p, err := localPath(path)
+	if err != nil {
+		return err
+	}
+	if err := s.protected(p); err != nil {
+		return err
+	}
+	if mode < 0 || mode > 0o7777 {
+		return errors.New("permissions out of range")
+	}
+	return os.Chmod(p, os.FileMode(mode))
+}
+
+// TempDir makes a new private folder for files that are only looked at (a remote file opened in an app).
+func (s *LocalService) TempDir() (string, error) { return os.MkdirTemp("", "vvterm-open-") }
+
 // Delete removes a file, or a folder with everything in it when recursive is true.
 func (s *LocalService) Delete(path string, recursive bool) error {
 	p, err := localPath(path)

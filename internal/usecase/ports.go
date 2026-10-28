@@ -81,6 +81,7 @@ type RemoteFS interface {
 	List(dir string) ([]domain.RemoteEntry, error)
 	Mkdir(path string) error
 	Rename(from, to string) error
+	Chmod(path string, mode uint32) error
 	Remove(path string, recursive bool) error
 	Upload(local, remote string, overwrite bool, progress func(done, total int64)) error
 	Download(remote, local string, overwrite bool, progress func(done, total int64)) error

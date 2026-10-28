@@ -348,3 +348,59 @@ func TestTelnetFailuresAreShownInTheTab(t *testing.T) {
 		t.Fatalf("%+v", e)
 	}
 }
+
+func TestTelnetHasItsOwnLoginAndSavedPassword(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var calls []telnetCall
+	var fk deviceFakes
+	installTelnet(h, &calls, &fk)
+	host := telnetHost(t, h, domain.Host{Username: "ssh-user", TelnetEnabled: true, TelnetPort: 23, TelnetUsername: "operator"})
+	if err := h.app.Host.SetTelnetPassword(host.ID, "s3cret"); err != nil {
+		t.Fatal(err)
+	}
+	sid, err := h.open(TelnetID(host.ID), 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.rec.wait(t, "term:ready:"+sid)
+	if len(calls) != 1 || calls[0].user != "operator" || calls[0].pass != "s3cret" {
+		t.Fatalf("the Telnet login is its own, not the SSH one: %+v", calls)
+	}
+	// no Telnet user name: the host's own is used; an empty password forgets the saved one
+	if err := h.app.Host.SetTelnetPassword(host.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, pass, err := h.app.Core.telnetCredentials(domain.Host{Meta: host.Meta, TelnetEnabled: true, TelnetPort: 23, Hostname: "x"}); err != nil || pass != "" {
+		t.Fatalf("%q %v", pass, err)
+	}
+	if err := h.app.Host.DeleteHost(host.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.app.Host.SetTelnetPassword(host.ID, "x"); err == nil {
+		t.Fatal("a deleted host takes no password")
+	}
+}
+
+func TestTelnetLatin1ServersAreConvertedBothWays(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var fk deviceFakes
+	var calls []telnetCall
+	installTelnet(h, &calls, &fk)
+	host := telnetHost(t, h, domain.Host{TelnetEnabled: true, TelnetPort: 23, TelnetEncoding: "iso-8859-1"})
+	sid, err := h.open(TelnetID(host.ID), 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.rec.wait(t, "term:ready:"+sid)
+	if err := h.app.Session.Write(sid, "café\r"); err != nil {
+		t.Fatal(err)
+	}
+	// the device got the Latin-1 byte 0xE9, and what it echoed came back as UTF-8
+	h.rec.waitOutput(t, sid, "echo:café\r")
+	if got := latin1ToUTF8([]byte{0x63, 0xe9}); string(got) != "cé" {
+		t.Fatalf("%q", got)
+	}
+	if _, err := h.app.Host.SaveHost(domain.Host{Meta: host.Meta, Label: "x", Hostname: "y", Port: 22, TelnetEncoding: "koi8-r"}); err == nil {
+		t.Fatal("unknown encoding")
+	}
+}

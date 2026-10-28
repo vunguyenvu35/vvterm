@@ -75,8 +75,14 @@ func (c *Core) telnetCredentials(h domain.Host) (addr, user, pass string, err er
 	if !h.TelnetEnabled {
 		return "", "", "", fmt.Errorf("Telnet is not enabled for %q: edit the host and turn it on", h.Label)
 	}
-	user = h.Username
-	if h.IdentityID != "" {
+	user = h.TelnetUsername
+	if user == "" {
+		user = h.Username
+	}
+	// a password saved for Telnet wins over the one of the host's identity
+	if pw, gerr := c.Vault.GetSecret(domain.TelnetSecretRef(h.ID)); gerr == nil {
+		pass = string(pw)
+	} else if h.IdentityID != "" {
 		id, ierr := c.Store.GetIdentity(h.IdentityID)
 		if ierr != nil {
 			return "", "", "", fmt.Errorf("identity of %q: %w", h.Label, ierr)

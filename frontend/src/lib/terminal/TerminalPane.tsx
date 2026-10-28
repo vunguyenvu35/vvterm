@@ -1,3 +1,4 @@
+import {createLineTracker, recordCommand} from './history'
 import {useEffect, useRef, useState} from 'react'
 import {ITheme, Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -134,10 +135,17 @@ export function TerminalPane(p: Props) {
       flush()
     }
 
+    const track = createLineTracker()
     t.onData(d => {
       if (stateRef.current === 'ready') {
         sendKeys(d)
         onTyped.current?.(d)
+        for (const line of track(d)) {
+          // only what the terminal echoed: a password prompt shows nothing, so nothing is remembered
+          const buf = t.buffer?.active
+          const shown = buf?.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? ''
+          if (buf?.type === 'normal' && shown.includes(line.trim().slice(-20))) recordCommand(line)
+        }
       } else if (stateRef.current === 'closed' && (d === '\r' || d === '\n')) {
         // Never reconnect automatically: replaying commands unexpectedly is dangerous.
         setClosed(null)

@@ -109,3 +109,33 @@ func TestLocalProtectsRootAndHome(t *testing.T) {
 		t.Fatalf("home %q", home)
 	}
 }
+
+func TestLocalChmodChangesTheBitsAndRefusesNonsense(t *testing.T) {
+	s, dir := localFixture(t)
+	f := filepath.Join(dir, "b.txt")
+	if err := s.Chmod(f, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(f); info.Mode().Perm() != 0o600 {
+		t.Fatalf("%v", info.Mode())
+	}
+	for _, bad := range []int{-1, 0o10000} {
+		if err := s.Chmod(f, bad); err == nil {
+			t.Fatalf("%o accepted", bad)
+		}
+	}
+	if err := s.Chmod("relative", 0o644); err == nil {
+		t.Fatal("relative path")
+	}
+	if err := s.Chmod("/", 0o777); err == nil {
+		t.Fatal("the root is protected")
+	}
+	d, err := s.TempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(d)
+	if info, err := os.Stat(d); err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+		t.Fatalf("%v %v", info, err)
+	}
+}

@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSplitH, IconSplitV} from '../ui/Icons'
+import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSidebar, IconSplitH, IconSplitV} from '../ui/Icons'
 import type {Tab} from '../layout'
 import {SnippetPicker} from '../snippets/SnippetPicker'
 import type {Snippet} from '../types'
@@ -19,10 +19,15 @@ interface Props {
   onRename?(id: string, name: string): void
   /** right-click menu: a new tab on the same host, next to this one */
   onDuplicate?(id: string): void
+  /** right-click menu: a new native window with a new session to the same place */
+  onDuplicateWindow?(id: string): void
   /** right-click menu: split the tab's focused pane */
   onSplitTab?(id: string, dir: 'row' | 'col'): void
   snippets: Snippet[]
   onRunSnippet(s: Snippet, execute: boolean): void
+  /** the panel on the right of a terminal (hosts, snippets, history, themes) */
+  sidebarOpen?: boolean
+  onToggleSidebar?(): void
 }
 
 /** Title bar with the Vaults (home) tab, one tab per terminal, and split controls. */
@@ -76,6 +81,7 @@ export function TopBar(p: Props) {
       {menu && menuTab && (
         <div className="ctx-menu" role="menu" aria-label={'Tab ' + menuTab.title} style={{left: menu.x, top: menu.y}} onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
           <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onDuplicate} onClick={() => { setMenu(null); p.onDuplicate?.(menuTab.id) }}>Duplicate</button>
+          <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onDuplicateWindow} onClick={() => { setMenu(null); p.onDuplicateWindow?.(menuTab.id) }}>Duplicate in new window</button>
           <button role="menuitem" disabled={!p.onRename} onClick={() => { setMenu(null); setEditing({id: menuTab.id, value: menuTab.title}) }}>Rename</button>
           <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'row') }}>Split right</button>
           <button role="menuitem" disabled={menuTab.kind === 'sftp' || !p.onSplitTab} onClick={() => { setMenu(null); p.onSplitTab?.(menuTab.id, 'col') }}>Split down</button>
@@ -90,6 +96,7 @@ export function TopBar(p: Props) {
         <button className="icon" title="Settings (⌘/Ctrl + ,)" aria-label="Open settings" onClick={p.onSettings}><IconGear /></button>
         <button className="icon" disabled={!inTerminal} title="Split right" aria-label="Split right" onClick={() => p.onSplit('row')}><IconSplitH /></button>
         <button className="icon" disabled={!inTerminal} title="Split down" aria-label="Split down" onClick={() => p.onSplit('col')}><IconSplitV /></button>
+        {p.onToggleSidebar && <button className={'icon' + (p.sidebarOpen ? ' on' : '')} disabled={!inTerminal} title={p.sidebarOpen ? 'Hide sidebar' : 'Show sidebar'} aria-label="Toggle sidebar" aria-pressed={!!p.sidebarOpen} onClick={p.onToggleSidebar}><IconSidebar /></button>}
       </div>
     </div>
   )

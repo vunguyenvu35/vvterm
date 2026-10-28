@@ -62,6 +62,14 @@ func NormalizeHost(h *Host) error {
 	if !h.TelnetEnabled {
 		h.TelnetPort = 0 // a port without Telnet means nothing
 	}
+	if len(h.TelnetUsername) > 128 || strings.ContainsAny(h.TelnetUsername, "\r\n\x00") {
+		return errors.New("invalid telnet user name")
+	}
+	switch h.TelnetEncoding = strings.ToLower(strings.TrimSpace(h.TelnetEncoding)); h.TelnetEncoding {
+	case "", "utf-8", "iso-8859-1":
+	default:
+		return errors.New("unknown telnet encoding")
+	}
 	if len(h.TerminalTheme) > 40 || strings.ContainsAny(h.TerminalTheme, " \t\r\n\x00/\\") {
 		return errors.New("invalid terminal theme")
 	}

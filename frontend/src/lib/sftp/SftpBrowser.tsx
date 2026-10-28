@@ -78,6 +78,12 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: give
     mkdir: p => be.local.mkdir(p),
     rename: (a, b) => be.local.rename(a, b),
     remove: (p, isDir) => be.local.remove(p, isDir),
+    chmod: (p, m) => be.local.chmod(p, m),
+    open: e => be.system.openPath(e.path),
+    openWith: async e => {
+      const app = await be.system.pickFile('Open with…')
+      if (app) await be.system.openPathWith(e.path, app)
+    },
   }))
 
   /** Moves everything given: existing files are skipped first, and one question offers to replace them. */
@@ -115,9 +121,9 @@ export function SftpBrowser({hostId = '', hostLabel = '', nonce = 0, hosts: give
       <div className="sftp-panes">
         <FilePane side="local" title="Local" icon={<IconFolder size={16} />} fs={localHome ? fs : null} startDir={localHome} reloadKey={localKey} showHiddenDefault={false}
           actions={<button disabled={!canUp} onClick={() => void move('upload', local.selected)} aria-label="Upload selected"><IconUpload size={15} /> Upload{count(local.selected.length)}</button>}
-          onState={setLocal} onDropEntry={onDropToLocal} />
+          onState={setLocal} onDropEntry={onDropToLocal} onCopyOut={items => void move('upload', items)} copyLabel="Copy to target directory" />
         <RemotePane host={host} hosts={hosts} onHost={h => { setHost(h); setTransfer(null); setRemote(NONE) }} reloadKey={remoteKey}
-          onState={setRemote} onDropEntry={onDropToRemote} onSession={setSid} />
+          onState={setRemote} onDropEntry={onDropToRemote} onSession={setSid} onCopyOut={items => void move('download', items)} />
       </div>
       <div className="sftp-foot">
         <button disabled={!canDown} onClick={() => void move('download', remote.selected)} aria-label="Download selected"><IconDownload size={15} /> Download{count(remote.selected.length)} to local folder</button>

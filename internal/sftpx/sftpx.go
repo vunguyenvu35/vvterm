@@ -97,6 +97,15 @@ func (f *FS) Mkdir(p string) error {
 	return f.c.Mkdir(p)
 }
 
+// Chmod sets the permission bits (rwx for owner, group, others, and setuid/setgid/sticky).
+func (f *FS) Chmod(p string, mode uint32) error {
+	p, err := remote(p, false)
+	if err != nil {
+		return err
+	}
+	return f.c.Chmod(p, os.FileMode(mode&0o7777))
+}
+
 func (f *FS) Rename(from, to string) error {
 	from, err := remote(from, false)
 	if err != nil {

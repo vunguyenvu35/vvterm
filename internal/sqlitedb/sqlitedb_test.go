@@ -437,3 +437,30 @@ func TestEveryAdditionIsPresentOnAFreshDatabaseAndTheStepCanRunTwice(t *testing.
 		t.Fatalf("running it again must change nothing: %v", err)
 	}
 }
+
+// A column added after a database already reached the newest version (the Telnet login) must still appear:
+// `make dev` failed with "no such column" for exactly that.
+func TestADatabaseAtTheNewestVersionStillGetsColumnsAddedLater(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "new.db")
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{"telnet_username", "telnet_encoding"} {
+		if _, err := d.db.Exec(`ALTER TABLE hosts DROP COLUMN ` + c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.Close()
+	d, err = Open(p) // user_version is already schemaVersion
+	if err != nil {
+		t.Fatalf("must open: %v", err)
+	}
+	defer d.Close()
+	if _, _, err := d.StorePersister().Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if _, err := d.db.Exec(`SELECT telnet_username, telnet_encoding FROM hosts`); err != nil {
+		t.Fatal(err)
+	}
+}

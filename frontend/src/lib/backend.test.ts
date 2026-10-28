@@ -77,3 +77,30 @@ describe('toggleMaximise', () => {
     await expect(wailsBackend().system.toggleMaximise()).resolves.toBeUndefined()
   })
 })
+
+describe('terminal window backend', () => {
+  afterEach(() => { delete (window as any).go })
+  it('is recognised by its own bound object and sends sessions, settings and hosts through it', async () => {
+    const {inTerminalWindow, terminalWindowBackend, windowTarget} = await import('./backend')
+    expect(inTerminalWindow()).toBe(false)
+    const calls: [string, string, string][] = []
+    ;(window as any).go = {app: {
+      TerminalWindow: {
+        Call: async (s: string, m: string, a: string) => { calls.push([s, m, a]); return m === 'Open' ? '"sid-1"' : m === 'ListHosts' ? 'null' : 'null' },
+        Target: async () => ({host_id: 'h1', title: 'web'}),
+      },
+      SystemService: {Info: async () => ({version: '1'})},
+    }}
+    expect(inTerminalWindow()).toBe(true)
+    expect(await windowTarget()).toEqual({host_id: 'h1', title: 'web'})
+    const be = terminalWindowBackend()
+    expect(await be.session.open('h1', 80, 24)).toBe('sid-1')
+    await be.session.write('sid-1', 'ls\r')
+    await be.session.resize('sid-1', 100, 30)
+    expect(await be.hosts.listHosts({})).toEqual([]) // null becomes an empty list
+    expect(calls.map(c => c[1])).toEqual(['Open', 'Write', 'Resize', 'ListHosts'])
+    expect(JSON.parse(calls[1][2])).toEqual(['sid-1', 'ls\r'])
+    await expect(be.system.openWindow('h1', 'x')).rejects.toThrow()
+    await expect(be.settings.save({} as never)).rejects.toThrow()
+  })
+})

@@ -59,3 +59,7 @@ export const IconBroadcast = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="2
 export const IconMaximizePane = (p: P) => <Icon {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Icon>
 export const IconMinimizePane = (p: P) => <Icon {...p}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Icon>
 export const IconCapsLock = (p: P) => <Icon {...p}><path d="M12 4 4.500 12H9v4h6v-4h4.500z" /><path d="M9 20h6" /></Icon>
+export const IconRocket = (p: P) => <Icon {...p}><path d="M5 19c-1 0-2-1-2-2 0-2 2-3 3-3l2 2c0 1-1 3-3 3zM9 15l-1-1c0-5 4-9 12-10 0 8-5 12-10 12zM15 9h.01" /></Icon>
+export const IconPalette = (p: P) => <Icon {...p}><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.5-2-.6-1.2.2-2.5 1.5-2.5H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3zM7.5 11h.01M10 7.5h.01M14.5 7.5h.01" /></Icon>
+export const IconSidebar = (p: P) => <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></Icon>
+export const IconChevronDown = (p: P) => <Icon {...p}><path d="m6 9 6 6 6-6" /></Icon>

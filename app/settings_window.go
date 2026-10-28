@@ -99,20 +99,7 @@ func NewSettingsWindow(dir string) (*SettingsWindow, error) {
 // raises the window when the main app asks for it.
 func (w *SettingsWindow) Startup(ctx context.Context) {
 	w.System.SetContext(ctx)
-	go func() {
-		misses := 0
-		for ctx.Err() == nil {
-			time.Sleep(2 * time.Second)
-			if w.client.Ping() != nil {
-				if misses++; misses >= 3 {
-					runtime.Quit(ctx)
-					return
-				}
-				continue
-			}
-			misses = 0
-		}
-	}()
+	quitWithMain(ctx, w.client)
 	go func() {
 		for ctx.Err() == nil {
 			focus, err := w.client.WaitFocus(ctx)
@@ -124,6 +111,24 @@ func (w *SettingsWindow) Startup(ctx context.Context) {
 				runtime.WindowUnminimise(ctx)
 				runtime.WindowShow(ctx)
 			}
+		}
+	}()
+}
+
+// quitWithMain ends this process when the main process stops answering.
+func quitWithMain(ctx context.Context, c *BridgeClient) {
+	go func() {
+		misses := 0
+		for ctx.Err() == nil {
+			time.Sleep(2 * time.Second)
+			if c.Ping() != nil {
+				if misses++; misses >= 3 {
+					runtime.Quit(ctx)
+					return
+				}
+				continue
+			}
+			misses = 0
 		}
 	}()
 }

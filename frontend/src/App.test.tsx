@@ -946,3 +946,38 @@ describe('App: the application menu bar', () => {
     expect(GO_ACTIONS).toHaveLength(23)
   })
 })
+
+describe('App: terminal sidebar and new windows', () => {
+  it('the sidebar sits beside a terminal only, can be hidden, and is remembered', async () => {
+    const be = setup()
+    await unlock(be)
+    expect(screen.queryByRole('complementary', {name: 'Terminal sidebar'})).toBeNull() // not on the Vaults page
+    await userEvent.dblClick(hostCard('web-1'))
+    expect(await screen.findByRole('complementary', {name: 'Terminal sidebar'})).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', {name: 'Toggle sidebar'}))
+    expect(screen.queryByRole('complementary', {name: 'Terminal sidebar'})).toBeNull()
+    expect(localStorage.getItem('vvterm.sidebar')).toBe('closed')
+    await userEvent.click(screen.getByRole('button', {name: 'Toggle sidebar'}))
+    expect(screen.getByRole('complementary', {name: 'Terminal sidebar'})).toBeInTheDocument()
+    localStorage.removeItem('vvterm.sidebar')
+  })
+
+  it('a theme picked in the sidebar is saved as the terminal theme', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(await screen.findByRole('button', {name: 'Themes and font'}))
+    await userEvent.click(screen.getByRole('option', {name: /Dracula/}))
+    await waitFor(() => expect(be.state.settings.terminal_theme).toBe('dracula'))
+  })
+
+  it('Duplicate in new window opens a window for the host of the tab', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    fireEvent.contextMenu(screen.getByRole('tab', {name: /web-1/}))
+    await userEvent.click(screen.getByRole('menuitem', {name: 'Duplicate in new window'}))
+    await waitFor(() => expect(be.state.calls.filter(c => c[0] === 'system.openWindow')).toEqual([['system.openWindow', 'h1', 'web-1']]))
+    expect(screen.getAllByTestId('terminal')).toHaveLength(1) // this window got no extra tab
+  })
+})

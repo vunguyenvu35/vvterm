@@ -34,6 +34,7 @@ type App struct {
 
 	bridge   *Bridge
 	launcher *SettingsLauncher
+	windows  *WindowLauncher
 	ctx      context.Context
 }
 
@@ -98,7 +99,12 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.System.SetContext(ctx)
-	a.Core.SetEmitter(func(event string, data ...any) { runtime.EventsEmit(ctx, event, data...) })
+	a.Core.SetEmitter(func(event string, data ...any) {
+		runtime.EventsEmit(ctx, event, data...)
+		if a.bridge != nil {
+			a.bridge.Publish(event, data)
+		}
+	})
 
 	// The Settings window is a second process that talks to this one. Without the bridge the frontend
 	// falls back to its in-app Settings window.
@@ -106,6 +112,8 @@ func (a *App) Startup(ctx context.Context) {
 	if err := a.bridge.Start(a.dir); err == nil {
 		a.launcher = NewSettingsLauncher(a.bridge)
 		a.System.SetSettingsOpener(a.launcher.Open)
+		a.windows = NewWindowLauncher()
+		a.System.SetWindowOpener(a.windows.Open)
 	}
 }
 
@@ -113,6 +121,9 @@ func (a *App) Startup(ctx context.Context) {
 func (a *App) Shutdown(ctx context.Context) {
 	if a.launcher != nil {
 		a.launcher.Close()
+	}
+	if a.windows != nil {
+		a.windows.Close()
 	}
 	if a.bridge != nil {
 		a.bridge.Close()

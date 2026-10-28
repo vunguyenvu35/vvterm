@@ -290,3 +290,5 @@ func TestDownloadIgnoresNamesThatWouldEscapeTheFolder(t *testing.T) {
 		t.Fatal("ordinary names are fine")
 	}
 }
+
+func (f *fakeRemote) Chmod(p string, m uint32) error { return nil }

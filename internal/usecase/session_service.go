@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"vvterm/internal/domain"
 	"vvterm/internal/sshx"
@@ -434,8 +435,16 @@ func (s *SessionService) openTelnet(sess *session, cols, rows int, onData func([
 	if err != nil {
 		return nil, h.Label, err
 	}
-	sh, err := s.c.OpenTelnet(addr, cols, rows, user, pass, onData)
-	return sh, h.Label, err
+	if h.TelnetEncoding != "iso-8859-1" {
+		sh, err := s.c.OpenTelnet(addr, cols, rows, user, pass, onData)
+		return sh, h.Label, err
+	}
+	// Latin-1 servers: what arrives is turned into UTF-8 for the terminal, what is typed back into Latin-1
+	sh, err := s.c.OpenTelnet(addr, cols, rows, user, pass, func(p []byte) { onData(latin1ToUTF8(p)) })
+	if err != nil {
+		return nil, h.Label, err
+	}
+	return latin1Shell{sh}, h.Label, nil
 }
 
 // openedMessage is the log line for a session that has no SSH connection.
@@ -447,4 +456,30 @@ func (s *SessionService) openedMessage(sess *session, label string) string {
 		return "Connected with Telnet (unencrypted) to " + label
 	}
 	return "Opened the serial port " + label
+}
+
+// latin1ToUTF8 turns ISO-8859-1 bytes into UTF-8.
+func latin1ToUTF8(p []byte) []byte {
+	out := make([]byte, 0, len(p))
+	for _, b := range p {
+		out = utf8.AppendRune(out, rune(b))
+	}
+	return out
+}
+
+// latin1Shell types UTF-8 text as ISO-8859-1 (characters that do not exist there become "?").
+type latin1Shell struct{ Shell }
+
+func (l latin1Shell) Write(p []byte) (int, error) {
+	out := make([]byte, 0, len(p))
+	for _, r := range string(p) {
+		if r > 0xff {
+			r = '?'
+		}
+		out = append(out, byte(r))
+	}
+	if _, err := l.Shell.Write(out); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

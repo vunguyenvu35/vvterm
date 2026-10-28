@@ -3,7 +3,8 @@ import {useBackend} from '../backend'
 import {errMsg} from '../util'
 import {IconFolder} from '../ui/Icons'
 import {OsIcon} from '../ui/OsIcon'
-import {FilePane, PaneFs, PaneState, DragPayload} from './FilePane'
+import {joinPath} from './format'
+import {FilePane, PaneFs, PaneState, DragPayload, Item} from './FilePane'
 import type {Host, HostKeyPrompt} from '../types'
 
 export interface RemoteHost {id: string; label: string}
@@ -18,13 +19,15 @@ interface Props {
   onDropEntry(p: DragPayload): void
   /** the SFTP session id once connected ('' when not) */
   onSession(sid: string): void
+  /** right-click: copy what is chosen to the folder open on this computer */
+  onCopyOut?(items: Item[]): void
 }
 
 /**
  * The Remote side: shows "Connect to host" until a saved host is chosen, then owns that host's SFTP
  * connection (through its jump chain, with the host key prompt) and browses it in a FilePane.
  */
-export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry, onSession}: Props) {
+export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry, onSession, onCopyOut}: Props) {
   const be = useBackend()
   const sid = useRef('')
   const alive = useRef(true)
@@ -61,6 +64,21 @@ export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry
           mkdir: p => be.sftp.mkdir(s, p),
           rename: (a, b) => be.sftp.rename(s, a, b),
           remove: (p, isDir) => be.sftp.remove(s, p, isDir),
+          chmod: (p, m) => be.sftp.chmod(s, p, m),
+          // a remote file is fetched into a private temporary folder and opened from there
+          open: async e => {
+            const dir = await be.local.tempDir()
+            const res = await be.sftp.downloadAll(s, [e.path], dir, true)
+            if (res.files < 1) throw new Error('Could not download the file')
+            await be.system.openPath(joinPath(dir, e.name))
+          },
+          openWith: async e => {
+            const app = await be.system.pickFile('Open with…')
+            if (!app) return
+            const dir = await be.local.tempDir()
+            await be.sftp.downloadAll(s, [e.path], dir, true)
+            await be.system.openPathWith(joinPath(dir, e.name), app)
+          },
         })
         setHome(info.home || '/')
         setState('ready')
@@ -120,7 +138,7 @@ export function RemotePane({host, hosts, onHost, reloadKey, onState, onDropEntry
   return (
     <div className="rpane">
       <FilePane side="remote" title={host.label} icon={<OsIcon os={hosts.find(x => x.id === host.id)?.os} size={16} />} fs={fs} startDir={home} reloadKey={reloadKey} showHiddenDefault
-        actions={<button onClick={() => onHost(null)} aria-label="Change host">Change host</button>} onState={onState} onDropEntry={onDropEntry} />
+        actions={<button onClick={() => onHost(null)} aria-label="Change host">Change host</button>} onState={onState} onDropEntry={onDropEntry} onCopyOut={onCopyOut} />
       {state === 'connecting' && !prompt && <div className="banner info">Connecting to {host.label}…</div>}
       {state === 'closed' && (
         <div className="banner" role="alert">

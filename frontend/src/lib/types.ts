@@ -27,6 +27,9 @@ export interface Host {
   /** also reachable with Telnet (unencrypted) on this port */
   telnet_enabled?: boolean
   telnet_port?: number
+  telnet_username?: string
+  /** '' or 'utf-8' (default), or 'iso-8859-1' */
+  telnet_encoding?: string
   /** this host's own terminal colour theme (an id from the catalogue); empty follows Settings */
   terminal_theme?: string
 }

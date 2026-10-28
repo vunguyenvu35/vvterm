@@ -2,6 +2,7 @@ import {DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode, useCallb
 import {errMsg} from '../util'
 import {useConfirm} from '../ui/Confirm'
 import {IconArrowUp, IconChevron, IconEdit, IconEye, IconEyeOff, IconFile, IconFolder, IconFolderPlus, IconHome, IconRefresh, IconTrash} from '../ui/Icons'
+import {PermissionsDialog} from './Permissions'
 import {breadcrumbs, formatBytes, formatDate, joinPath, kindOf, parentOf, validName} from './format'
 import type {RemoteEntry} from '../types'
 
@@ -11,6 +12,12 @@ export interface PaneFs {
   mkdir(path: string): Promise<void>
   rename(from: string, to: string): Promise<void>
   remove(path: string, isDir: boolean): Promise<void>
+  /** permission bits; absent: the menu has no Edit Permissions */
+  chmod?(path: string, mode: number): Promise<void>
+  /** open a file with the system's app for it */
+  open?(e: RemoteEntry): Promise<void>
+  /** open a file with an app the user picks */
+  openWith?(e: RemoteEntry): Promise<void>
 }
 
 export type Side = 'local' | 'remote'
@@ -36,6 +43,9 @@ interface Props {
   onState(s: PaneState): void
   /** something from the other pane was dropped here */
   onDropEntry(p: DragPayload): void
+  /** right-click: copy what is chosen to the folder open in the other pane */
+  onCopyOut?(items: Item[]): void
+  copyLabel?: string
 }
 
 const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
@@ -45,7 +55,7 @@ const label = (s: Side) => (s === 'local' ? 'Local' : 'Remote')
  * once (Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A), new folder / rename / delete, and drag and drop of the
  * selection to the other side. It knows nothing about SSH.
  */
-export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry}: Props) {
+export function FilePane({side, title, icon, fs, startDir, reloadKey, showHiddenDefault, actions, onState, onDropEntry, onCopyOut}: Props) {
   const confirm = useConfirm()
   const alive = useRef(true)
   const cwdRef = useRef('')
@@ -58,6 +68,8 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   const [error, setError] = useState('')
   const [hidden, setHidden] = useState(showHiddenDefault)
   const [over, setOver] = useState(false)
+  const [menu, setMenu] = useState<{x: number; y: number; entry: RemoteEntry | null} | null>(null)
+  const [perms, setPerms] = useState<RemoteEntry | null>(null)
   const [naming, setNaming] = useState<{mode: 'mkdir' | 'rename'; value: string; err: string} | null>(null)
 
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
@@ -120,6 +132,26 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
       setAnchor(e.path)
     }
   }
+  // the right-click menu closes on any click elsewhere, Escape, scrolling or a resize
+  useEffect(() => {
+    if (!menu) return
+    const off = () => setMenu(null)
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') off() }
+    window.addEventListener('mousedown', off)
+    window.addEventListener('resize', off)
+    window.addEventListener('keydown', key)
+    return () => { window.removeEventListener('mousedown', off); window.removeEventListener('resize', off); window.removeEventListener('keydown', key) }
+  }, [menu])
+  const openMenu = (ev: ReactMouseEvent, entry: RemoteEntry | null) => {
+    ev.preventDefault()
+    ev.stopPropagation()
+    if (!ready) return
+    if (entry && !selected.includes(entry.path)) { setSelected([entry.path]); setAnchor(entry.path) }
+    setMenu({x: Math.min(ev.clientX, window.innerWidth - 230), y: Math.min(ev.clientY, window.innerHeight - 330), entry})
+  }
+  const menuTargets = (entry: RemoteEntry) => (selected.includes(entry.path) ? chosen : [entry])
+  const act = (fn: () => void | Promise<void>) => { setMenu(null); void guard(async () => { await fn() }) }
+  const openEntry = (e: RemoteEntry) => (e.is_dir ? load(e.path) : fs?.open ? fs.open(e) : Promise.resolve())
   const selectAll = () => setSelected(shown.map(e => e.path))
 
   const submitName = (ev: FormEvent) => {
@@ -212,14 +244,14 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
       )}
 
       <div className="sftp-table" role="table" aria-label={`${label(side)} files`} aria-multiselectable="true" aria-busy={loading}
-        onDragOver={dragOver} onDragLeave={() => setOver(false)} onDrop={drop}
+        onDragOver={dragOver} onDragLeave={() => setOver(false)} onDrop={drop} onContextMenu={ev => openMenu(ev, null)}
         onKeyDown={ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'a') { ev.preventDefault(); selectAll() } }}>
         <div className="sftp-row head" role="row">
           <span role="columnheader">Name</span><span role="columnheader">Date Modified</span><span role="columnheader">Size</span><span role="columnheader">Kind</span>
         </div>
         {shown.map(e => (
           <div key={e.path} role="row" tabIndex={0} draggable aria-selected={selected.includes(e.path)} className={'sftp-row' + (selected.includes(e.path) ? ' selected' : '')}
-            onClick={ev => pick(e, ev)} onDragStart={ev => dragStart(ev, e)}
+            onClick={ev => pick(e, ev)} onDragStart={ev => dragStart(ev, e)} onContextMenu={ev => openMenu(ev, e)}
             onDoubleClick={() => e.is_dir && load(e.path)} onKeyDown={ev => ev.key === 'Enter' && e.is_dir && load(e.path)}>
             <span role="cell" className="name">{e.is_dir ? <IconFolder size={16} /> : <IconFile size={16} />}<span>{e.name}</span>{e.is_link && <small className="muted"> → link</small>}</span>
             <span role="cell" className="muted">{formatDate(e.mod_time)}</span>
@@ -230,6 +262,37 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
         {ready && !loading && shown.length === 0 && !error && <div className="empty-hint">This folder is empty.</div>}
       </div>
       {error && <div className="sftp-error error" role="alert">{error}</div>}
+      {menu && (
+        <div className="ctx-menu" role="menu" aria-label={menu.entry ? 'File menu' : 'Folder menu'} style={{left: menu.x, top: menu.y}} onMouseDown={ev => ev.stopPropagation()} onContextMenu={ev => ev.preventDefault()}>
+          {menu.entry && (() => {
+            const entry = menu.entry
+            const targets = menuTargets(entry)
+            const one = targets.length === 1
+            return (
+              <>
+                <button role="menuitem" disabled={!one || (!entry.is_dir && !fs?.open)} onClick={() => act(() => openEntry(entry))}>Open</button>
+                <button role="menuitem" disabled={!one || entry.is_dir || !fs?.openWith} onClick={() => act(() => fs!.openWith!(entry))}>Open with…</button>
+                <button role="menuitem" disabled={!onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>Copy to target directory</button>
+                <button role="menuitem" disabled={!one} onClick={() => { setMenu(null); setNaming({mode: 'rename', value: entry.name, err: ''}) }}>Rename</button>
+                <button role="menuitem" className="danger-item" onClick={() => { setMenu(null); void remove(targets) }}>Delete</button>
+                <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>
+                <button role="menuitem" onClick={() => { setMenu(null); setNaming({mode: 'mkdir', value: '', err: ''}) }}>New Folder</button>
+                <button role="menuitem" disabled={!one || !fs?.chmod} onClick={() => { setMenu(null); setPerms(entry) }}>Edit Permissions</button>
+              </>
+            )
+          })()}
+          {!menu.entry && (
+            <>
+              <button role="menuitem" onClick={() => act(() => load(cwd))}>Refresh</button>
+              <button role="menuitem" onClick={() => { setMenu(null); setNaming({mode: 'mkdir', value: '', err: ''}) }}>New Folder</button>
+            </>
+          )}
+        </div>
+      )}
+      {perms && fs?.chmod && (
+        <PermissionsDialog name={perms.name} mode={perms.mode} onClose={() => setPerms(null)}
+          onSave={async m => { await fs.chmod!(perms.path, m); await load(cwd) }} />
+      )}
     </section>
   )
 }

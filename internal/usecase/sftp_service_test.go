@@ -233,3 +233,25 @@ func TestSftpRejectsDangerousPathsAndShutdownClosesSessions(t *testing.T) {
 	}
 	t.Fatal("shutdown left the SFTP session open")
 }
+
+func TestSftpChmodReachesTheServerAndChecksTheBits(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	srv := startSFTPServer(t, map[string]string{"/a.txt": "a"})
+	host := h.sshHost(t, "files", srv, "")
+	info := h.openSftp(t, host.ID, "sftp-chmod")
+	if err := h.app.Sftp.Chmod(info.SID, "/a.txt", 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// the test server keeps no permission bits: what is checked is that the request reaches the file
+	if err := h.app.Sftp.Chmod(info.SID, "/missing.txt", 0o600); err == nil {
+		t.Fatal("a file that is not there")
+	}
+	for _, bad := range []int{-1, 0o10000} {
+		if err := h.app.Sftp.Chmod(info.SID, "/a.txt", bad); err == nil {
+			t.Fatalf("%o accepted", bad)
+		}
+	}
+	if err := h.app.Sftp.Chmod("nope", "/a.txt", 0o644); err == nil {
+		t.Fatal("closed session")
+	}
+}

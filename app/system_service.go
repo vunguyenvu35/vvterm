@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
+	runtime2 "runtime"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -14,6 +17,7 @@ import (
 type SystemService struct {
 	ctx          context.Context
 	openSettings func() error
+	openWindow   func(hostID, title string) error
 }
 
 func NewSystemService() *SystemService { return &SystemService{} }
@@ -35,6 +39,78 @@ func (s *SystemService) OpenSettings() error {
 		return errNoDialog
 	}
 	return s.openSettings()
+}
+
+// SetWindowOpener installs what OpenWindow runs (the launcher of terminal window processes).
+func (s *SystemService) SetWindowOpener(f func(hostID, title string) error) { s.openWindow = f }
+
+// OpenWindow opens a new native window with a new session to the same place (a host, this computer, a
+// serial port). It fails when there are no native windows, and the frontend says so.
+func (s *SystemService) OpenWindow(hostID, title string) error {
+	if s.noDialogs() || s.openWindow == nil {
+		return errNoDialog
+	}
+	if hostID == "" {
+		return errors.New("nothing to open")
+	}
+	return s.openWindow(hostID, title)
+}
+
+// riskyExt are files that run when they are opened: they are never opened from here, whatever their source.
+var riskyExt = map[string]bool{
+	".command": true, ".app": true, ".sh": true, ".bash": true, ".zsh": true, ".csh": true, ".pkg": true, ".dmg": true, ".workflow": true,
+	".terminal": true, ".exe": true, ".bat": true, ".cmd": true, ".com": true, ".scr": true, ".msi": true, ".ps1": true, ".vbs": true,
+	".jar": true, ".desktop": true, ".action": true, ".scpt": true, ".applescript": true,
+}
+
+func openCommand(path, with string) (*exec.Cmd, error) {
+	if riskyExt[strings.ToLower(filepath.Ext(path))] {
+		return nil, errors.New("this kind of file runs programs: it is not opened from here")
+	}
+	if info, err := os.Stat(path); err != nil || info.IsDir() && runtime2.GOOS != "darwin" {
+		return nil, errors.New("not a file that can be opened")
+	}
+	switch runtime2.GOOS {
+	case "darwin":
+		if with != "" {
+			return exec.Command("open", "-a", with, path), nil
+		}
+		return exec.Command("open", path), nil
+	case "windows":
+		if with != "" {
+			return exec.Command(with, path), nil
+		}
+		return exec.Command("cmd", "/c", "start", "", path), nil
+	default:
+		if with != "" {
+			return exec.Command(with, path), nil
+		}
+		return exec.Command("xdg-open", path), nil
+	}
+}
+
+// OpenPath opens a file with the application the system has for it.
+func (s *SystemService) OpenPath(path string) error { return s.openFile(path, "") }
+
+// OpenPathWith opens a file with the application chosen by the user (an app bundle or a program).
+func (s *SystemService) OpenPathWith(path, app string) error { return s.openFile(path, app) }
+
+func (s *SystemService) openFile(path, with string) error {
+	if s.noDialogs() {
+		return errNoDialog
+	}
+	if !filepath.IsAbs(path) {
+		return errors.New("an absolute path is needed")
+	}
+	cmd, err := openCommand(path, with)
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }
 
 func (s *SystemService) Info() AppInfo { return AppInfo{Version: Version} }

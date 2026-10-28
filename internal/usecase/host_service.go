@@ -21,4 +21,25 @@ func (s *HostService) GetHost(id string) (domain.Host, error) { return s.c.Store
 
 func (s *HostService) SaveHost(h domain.Host) (domain.Host, error) { return s.c.Store.SaveHost(h) }
 
-func (s *HostService) DeleteHost(id string) error { return s.c.Store.DeleteHost(id) }
+func (s *HostService) DeleteHost(id string) error {
+	if err := s.c.Store.DeleteHost(id); err != nil {
+		return err
+	}
+	if s.c.Vault != nil {
+		_ = s.c.Vault.DeleteSecret(domain.TelnetSecretRef(id)) // nothing to delete is fine
+	}
+	return nil
+}
+
+// SetTelnetPassword keeps the Telnet password of a host in the vault; an empty password forgets it.
+func (s *HostService) SetTelnetPassword(hostID, password string) error {
+	if _, err := s.c.Store.GetHost(hostID); err != nil {
+		return err
+	}
+	ref := domain.TelnetSecretRef(hostID)
+	if password == "" {
+		_ = s.c.Vault.DeleteSecret(ref)
+		return nil
+	}
+	return vaultErr(s.c.Vault.PutSecret(ref, domain.SecretPassword, []byte(password)))
+}

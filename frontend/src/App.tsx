@@ -18,11 +18,12 @@ import {PortForwardsPage} from './lib/panels/PortForwardsPage'
 import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
+import {SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
-import {closePane, duplicateOf, hasPane, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
+import {closePane, duplicateOf, hasPane, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, matches} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
@@ -62,6 +63,10 @@ export default function App() {
   const [active, setActive] = useState('home') // 'home' or a tab id
   const [page, setPage] = useState<Page>('hosts')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // the panel on the right of a terminal (hosts, snippets, history, themes): open or closed is remembered
+  const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('vvterm.sidebar') !== 'closed' } catch { return true } })
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('snippets')
+  const toggleSidebar = () => setSidebarOpen(o => { try { localStorage.setItem('vvterm.sidebar', o ? 'closed' : 'open') } catch { /* not remembered */ } return !o })
   const [dialog, setDialog] = useState<Dialog>(null)
   const [draft, setDraft] = useState('')
   const [fwDraft, setFwDraft] = useState<{label: string; type: ForwardType}>({label: '', type: 'local'})
@@ -173,6 +178,13 @@ export default function App() {
     setTabs(ts => { const i = ts.findIndex(t => t.id === id); return [...ts.slice(0, i + 1), copy, ...ts.slice(i + 1)] })
     setActive(copy.id)
   }
+  // a new native window with a new session to where the tab's focused pane is connected
+  const duplicateWindow = (id: string) => {
+    const src = tabs.find(t => t.id === id)
+    const leaf = src && leaves(src.root).find(l => l.id === src.activePane)
+    if (!src || !leaf) return
+    be.system.openWindow(leaf.hostId, src.title).catch(() => toast.error('New windows are not available here.'))
+  }
   const broadcastTab = (id: string) => setTabs(ts => ts.map(t => (t.id === id ? toggleBroadcast(t) : t)))
   const zoomPane = (id: string, pane: string) => setTabs(ts => ts.map(t => (t.id === id ? toggleZoom(t, pane) : t)))
   const focusPane = (tabId: string, paneId: string) => setTabs(ts => ts.map(t => (t.id === tabId && hasPane(t, paneId) ? {...t, activePane: paneId} : t)))
@@ -189,6 +201,12 @@ export default function App() {
     })
     setTabs(remaining)
     if (!remaining.some(t => t.id === tabId) && active === tabId) setActive(fallbackTab(remaining))
+  }
+  /** types text into the focused pane (the sidebar's snippets and history); `run` presses Enter too */
+  const insertIntoTerminal = (text: string, run: boolean) => {
+    const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
+    if (!tab || tab.kind === 'sftp') return toast.error('Open a terminal first.')
+    if (!writeToPane(tab.activePane, toTerminalInput(text, run))) toast.error('The focused terminal is not connected yet.')
   }
   const runSnippet = (s: Snippet, execute: boolean) => {
     const tab = tabs.find(t => t.id === (tabs.some(x => x.id === active) ? active : lastTerm))
@@ -275,7 +293,8 @@ export default function App() {
     <div className="shell">
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
         onNew={() => { goHome('hosts'); setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Search hosts"]')?.focus(), 0) }}
-        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onDuplicate={duplicateTab} onSplitTab={splitTab} snippets={snippets} onRunSnippet={runSnippet} />
+        onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} onRunSnippet={runSnippet}
+        sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
           <Nav page={page} onPage={changePage} onData={() => setDialog({k: 'data'})} settingsOpen={settingsOpen} onSettings={() => openSettings()} onLock={() => { void be.vault.lock().then(refreshVault) }} />
@@ -327,6 +346,10 @@ export default function App() {
           {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
         <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} />
+        {sidebarOpen && !onHome && activeTabObj && activeTabObj.kind !== 'sftp' && (
+          <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} snippets={snippets} settings={settings} appearance={appearance}
+            onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings} />
+        )}
       </div>
 
       {settingsOpen && (

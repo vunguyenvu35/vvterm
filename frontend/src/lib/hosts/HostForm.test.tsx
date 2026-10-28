@@ -253,30 +253,44 @@ describe('GroupForm', () => {
 
 
 describe('HostForm: Telnet and terminal theme', () => {
-  it('Telnet follows the SSH port; an empty Telnet port means it is off', async () => {
+  const addTelnet = () => userEvent.click(screen.getByRole('button', {name: 'Add Telnet'}))
+
+  it('Telnet is off until "Add Telnet" is pressed, and then comes right after the SSH port', async () => {
     const {be} = setup()
-    const ssh = screen.getByLabelText('Port'), telnet = screen.getByLabelText('Telnet port')
-    expect(ssh.compareDocumentPosition(telnet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(telnet).toHaveValue('')
-    expect(telnet).toHaveAttribute('placeholder', '23')
+    expect(screen.queryByLabelText('Telnet port')).toBeNull()
     expect(screen.queryByRole('note')).toBeNull()
     await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
     await userEvent.click(screen.getByRole('button', {name: 'Save'}))
     await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: false, telnet_port: 0}))
   })
 
-  it('typing a Telnet port enables it, warns that it is not encrypted, and saves the port', async () => {
+  it('Add Telnet shows the port (23), a warning, its own username, password and encoding', async () => {
     const {be} = setup()
     await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
-    await userEvent.type(screen.getByLabelText('Telnet port'), '2323')
+    await addTelnet()
+    expect(screen.getByLabelText('Telnet port')).toHaveValue('23')
     expect(screen.getByRole('note')).toHaveTextContent(/not encrypted/)
+    expect(screen.queryByRole('button', {name: 'Add Telnet'})).toBeNull()
+    await userEvent.clear(screen.getByLabelText('Telnet port'))
+    await userEvent.type(screen.getByLabelText('Telnet port'), '2323')
+    await userEvent.type(screen.getByLabelText('Telnet username'), 'operator')
+    const pw = screen.getByLabelText('Telnet password')
+    await userEvent.type(pw, 's3cret')
+    expect(pw).toHaveAttribute('type', 'password')
+    await userEvent.click(screen.getByRole('button', {name: 'Show Telnet password'}))
+    expect(pw).toHaveAttribute('type', 'text')
+    await userEvent.click(screen.getByRole('combobox', {name: /Telnet encoding/}))
+    await userEvent.click(screen.getByRole('option', {name: /ISO-8859-1/}))
     await userEvent.click(screen.getByRole('button', {name: 'Save'}))
-    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: true, telnet_port: 2323}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: true, telnet_port: 2323, telnet_username: 'operator', telnet_encoding: 'iso-8859-1'}))
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'hosts.setTelnetPassword' && c[2] === 's3cret')).toBe(true))
+    expect(JSON.stringify(savedPayload(be))).not.toContain('s3cret')
   })
 
   it('refuses a Telnet port that is not a port', async () => {
     const {be} = setup()
     await userEvent.type(screen.getByLabelText('Hostname'), 'switch.lan')
+    await addTelnet()
     for (const bad of ['0', '70000', 'abc', '2.5']) {
       await userEvent.clear(screen.getByLabelText('Telnet port'))
       await userEvent.type(screen.getByLabelText('Telnet port'), bad)
@@ -286,27 +300,32 @@ describe('HostForm: Telnet and terminal theme', () => {
     expect(be.state.calls.some(c => c[0] === 'hosts.saveHost')).toBe(false)
   })
 
-  it('editing a host shows its Telnet port, and clearing it turns Telnet off', async () => {
-    const {be} = setup(host({id: 'h1', label: 'sw', telnet_enabled: true, telnet_port: 2323} as never))
+  it('editing a host shows its Telnet settings, and Remove turns Telnet off', async () => {
+    const {be} = setup(host({id: 'h1', label: 'sw', telnet_enabled: true, telnet_port: 2323, telnet_username: 'op'} as never))
     expect(screen.getByLabelText('Telnet port')).toHaveValue('2323')
-    await userEvent.clear(screen.getByLabelText('Telnet port'))
+    expect(screen.getByLabelText('Telnet username')).toHaveValue('op')
+    await userEvent.click(screen.getByRole('button', {name: 'Remove'}))
+    expect(screen.getByRole('button', {name: 'Add Telnet'})).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', {name: 'Save'}))
-    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: false, telnet_port: 0}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({telnet_enabled: false, telnet_port: 0, telnet_username: ''}))
   })
 
-  it('a host can have its own terminal theme, or follow the app', async () => {
+  it('the theme is a picture card: pick one from the pictures, or go back to the app setting', async () => {
     const {be} = setup()
-    expect(screen.getByRole('combobox', {name: /^Terminal theme, Use the app setting/})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /^Terminal theme, Use the app setting/})).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Hostname'), 'prod.example')
-    await userEvent.selectOptions(screen.getByLabelText('Terminal theme'), 'dracula')
+    await userEvent.click(screen.getByRole('button', {name: /^Terminal theme/}))
+    await userEvent.click(screen.getByRole('option', {name: /Dracula/}))
+    expect(screen.getByRole('button', {name: /^Terminal theme, Dracula/})).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', {name: 'Save'}))
     await waitFor(() => expect(savedPayload(be)).toMatchObject({terminal_theme: 'dracula'}))
   })
 
   it('an existing host keeps its theme when edited, and can go back to the app setting', async () => {
     const {be} = setup(host({id: 'h1', label: 'sw', terminal_theme: 'nord'} as never))
-    expect(screen.getByRole('combobox', {name: /^Terminal theme, Nord/})).toBeInTheDocument()
-    await userEvent.selectOptions(screen.getByLabelText('Terminal theme'), '')
+    expect(screen.getByRole('button', {name: /^Terminal theme, Nord/})).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', {name: /^Terminal theme/}))
+    await userEvent.click(screen.getByRole('option', {name: /Use the app setting/}))
     await userEvent.click(screen.getByRole('button', {name: 'Save'}))
     await waitFor(() => expect(savedPayload(be)).toMatchObject({terminal_theme: ''}))
   })

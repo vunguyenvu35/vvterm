@@ -29,6 +29,10 @@ func main() {
 		runSettings(dir)
 		return
 	}
+	if len(os.Args) > 3 && os.Args[1] == app.WindowFlag {
+		runTerminalWindow(dir, os.Args[2], os.Args[3])
+		return
+	}
 	a, err := app.Build(dir, nil, nil)
 	if err != nil {
 		log.Fatalf("open data: %v", err)
@@ -78,6 +82,31 @@ func runSettings(dir string) {
 		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
 		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{w.Bridge, w.System},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runTerminalWindow is a terminal window (Duplicate in new window): another process with its own native
+// window and no data; its session lives in the main process.
+func runTerminalWindow(dir, hostID, title string) {
+	w, err := app.NewTerminalWindow(dir, hostID, title)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = wails.Run(&options.App{
+		Title:            title,
+		Width:            1100,
+		Height:           700,
+		MinWidth:         600,
+		MinHeight:        400,
+		AssetServer:      &assetserver.Options{Assets: assets},
+		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
+		OnStartup:        func(ctx context.Context) { w.Startup(ctx); setDockIcon(appIcon) },
+		OnShutdown:       w.Shutdown,
+		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
+		Bind:             []interface{}{w, w.System},
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -93,7 +93,7 @@ func TestBridgeOnlyExposesTheAllowList(t *testing.T) {
 	c, _ := ConnectBridge(dir)
 	for _, call := range [][2]string{
 		{"VaultService", "Unlock"}, {"VaultService", "ListIdentities"}, {"VaultService", "AddPassword"},
-		{"HostService", "ListHosts"}, {"SessionService", "Open"}, {"SftpService", "Open"}, {"NopeService", "Get"}, {"SettingsService", "Nope"},
+		{"HostService", "DeleteHost"}, {"SessionService", "TestConnection"}, {"SftpService", "Open"}, {"NopeService", "Get"}, {"SettingsService", "Nope"},
 	} {
 		if _, err := c.Call(call[0], call[1], "[]"); err == nil || !strings.Contains(err.Error(), "not available") {
 			t.Errorf("%s.%s must be refused, got %v", call[0], call[1], err)

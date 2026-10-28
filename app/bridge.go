@@ -15,6 +15,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,7 +49,23 @@ type Bridge struct {
 	srv      *http.Server
 	ln       net.Listener
 	file     string
+
+	evMu    sync.Mutex
+	events  []BridgedEvent
+	seq     int
+	watched map[string]bool
+	wake    chan struct{}
 }
+
+// BridgedEvent is a terminal event of a session that a window process opened through the bridge.
+type BridgedEvent struct {
+	Seq  int             `json:"seq"`
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args"`
+}
+
+// maxBridgedEvents bounds what a window that stopped reading can make the main process hold.
+const maxBridgedEvents = 4096
 
 func allow(names ...string) map[string]bool {
 	m := map[string]bool{}
@@ -61,10 +80,15 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 	return &Bridge{
 		onChange: onChange,
 		focus:    make(chan struct{}, 1),
+		watched:  map[string]bool{},
+		wake:     make(chan struct{}),
 		targets: map[string]bridgeTarget{
 			"SettingsService": {a.Settings, allow("Get", "Save")},
 			"VaultService":    {a.Vault, allow("Status", "ChangePassword", "SetAutoLock", "EnableBiometric", "DisableBiometric", "ResetVault")},
 			"SyncService":     {a.Sync, allow("Configure", "SyncNow", "JoinExisting", "Status")},
+			// a terminal window drives its own session and reads the hosts for their names and themes
+			"SessionService": {a.Session, allow("Open", "Attach", "Write", "Resize", "Reconnect", "Close", "TrustHostKey")},
+			"HostService":    {a.Host, allow("ListHosts")},
 		},
 	}
 }
@@ -104,13 +128,76 @@ func (b *Bridge) Dispatch(service, method string, args []json.RawMessage) (json.
 		}
 		result = o.Interface()
 	}
-	if b.onChange != nil && !(service == "SettingsService" && method == "Get") && method != "Status" {
+	if service == "SessionService" && method == "Open" {
+		if sid, ok := result.(string); ok {
+			b.watch(sid)
+		}
+	}
+	if b.onChange != nil && service != "SessionService" && service != "HostService" && !(service == "SettingsService" && method == "Get") && method != "Status" {
 		b.onChange(service)
 	}
 	if result == nil {
 		return json.RawMessage("null"), nil
 	}
 	return json.Marshal(result)
+}
+
+// watch starts relaying the events of a session that a window process opened.
+func (b *Bridge) watch(sid string) {
+	b.evMu.Lock()
+	b.watched[sid] = true
+	b.evMu.Unlock()
+}
+
+// Publish offers an event of the main process: it is kept only for sessions that a window process
+// opened ("term:data:<sid>", "term:ready:<sid>", ...), and handed to that window by the /events poll.
+func (b *Bridge) Publish(name string, data []any) {
+	parts := strings.SplitN(name, ":", 3)
+	if len(parts) != 3 || parts[0] != "term" {
+		return
+	}
+	b.evMu.Lock()
+	defer b.evMu.Unlock()
+	if !b.watched[parts[2]] {
+		return
+	}
+	args, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	b.seq++
+	b.events = append(b.events, BridgedEvent{Seq: b.seq, Name: name, Args: args})
+	if len(b.events) > maxBridgedEvents {
+		b.events = append([]BridgedEvent(nil), b.events[len(b.events)-maxBridgedEvents:]...)
+	}
+	close(b.wake)
+	b.wake = make(chan struct{})
+}
+
+// eventsAfter waits (up to 20 s) for events newer than seq.
+func (b *Bridge) eventsAfter(ctx context.Context, seq int) ([]BridgedEvent, int) {
+	deadline := time.After(20 * time.Second)
+	for {
+		b.evMu.Lock()
+		var out []BridgedEvent
+		for _, e := range b.events {
+			if e.Seq > seq {
+				out = append(out, e)
+			}
+		}
+		last, wake := b.seq, b.wake
+		b.evMu.Unlock()
+		if len(out) > 0 {
+			return out, last
+		}
+		select {
+		case <-wake:
+		case <-deadline:
+			return nil, last
+		case <-ctx.Done():
+			return nil, last
+		}
+	}
 }
 
 // RequestFocus asks the open Settings window to come to the front.
@@ -167,6 +254,13 @@ func (b *Bridge) handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	// long poll: the terminal events of the sessions a window process opened, after the given sequence number
+	mux.HandleFunc("/events", guard(func(w http.ResponseWriter, r *http.Request) {
+		after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+		evs, last := b.eventsAfter(r.Context(), after)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"events": evs, "last": last})
 	}))
 	// long poll: answers true when the main window wants the Settings window in front
 	mux.HandleFunc("/focus", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -315,4 +409,22 @@ func (c *BridgeClient) WaitFocus(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return out["focus"], nil
+}
+
+// Events blocks until the main process has terminal events after seq (or ~20 s pass) and returns them with
+// the newest sequence number.
+func (c *BridgeClient) Events(ctx context.Context, seq int) ([]BridgedEvent, int, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/events?after="+strconv.Itoa(seq), nil)
+	if err != nil {
+		return nil, seq, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Events []BridgedEvent `json:"events"`
+		Last   int            `json:"last"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, seq, err
+	}
+	return out.Events, out.Last, nil
 }

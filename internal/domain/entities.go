@@ -85,6 +85,10 @@ type Host struct {
 	// Telnet: the host can also be reached with Telnet on TelnetPort (unencrypted: opt in per host).
 	TelnetEnabled bool `json:"telnet_enabled,omitempty"`
 	TelnetPort    int  `json:"telnet_port,omitempty"`
+	// TelnetUsername is typed at the Telnet login prompt (empty: the host's user name). The password is in the
+	// vault (see TelnetSecretRef). TelnetEncoding is "" or "utf-8" (the default), or "iso-8859-1".
+	TelnetUsername string `json:"telnet_username,omitempty"`
+	TelnetEncoding string `json:"telnet_encoding,omitempty"`
 	// TerminalTheme is this host's own colour theme (an id from the UI catalogue); empty follows Settings.
 	TerminalTheme string `json:"terminal_theme,omitempty"`
 }
@@ -191,3 +195,6 @@ type ActivityFilter struct {
 	Query string   `json:"query"`
 	Limit int      `json:"limit"`
 }
+
+// TelnetSecretRef is where the vault keeps the Telnet password of a host.
+func TelnetSecretRef(hostID string) string { return "telnet:" + hostID }

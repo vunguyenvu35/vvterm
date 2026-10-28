@@ -1,0 +1,192 @@
+import {useEffect, useMemo, useState} from 'react'
+import {clearHistory, getHistory, subscribeHistory} from './history'
+import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
+import {IconBraces, IconChevron, IconChevronDown, IconClock, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconTrash} from '../ui/Icons'
+import type {Host, Settings, Snippet} from '../types'
+import type {Appearance} from '../settings/appearance'
+
+export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes'
+
+export const FONT_MIN = 8
+export const FONT_MAX = 32
+const FONTS = ['Source Code Pro', 'JetBrains Mono', 'Fira Code', 'Menlo', 'SF Mono', 'Monaco', 'Consolas', 'Courier New', 'monospace']
+
+interface Props {
+  tab: SidebarTab
+  onTab(t: SidebarTab): void
+  hosts: Host[]
+  snippets: Snippet[]
+  settings: Settings
+  appearance: Appearance
+  /** type this into the focused pane; `run` presses Enter after it */
+  onInsert(text: string, run: boolean): void
+  onNewSnippet?(): void
+  onConnect?(h: Host): void
+  /** a theme or font was picked: save these settings */
+  onSettings?(patch: Partial<Settings>): void
+}
+
+const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
+  {id: 'hosts', label: 'Hosts', icon: <IconRocket size={17} />},
+  {id: 'snippets', label: 'Snippets', icon: <IconBraces size={17} />},
+  {id: 'history', label: 'History', icon: <IconClock size={17} />},
+  {id: 'themes', label: 'Themes and font', icon: <IconPalette size={17} />},
+]
+
+/** A tiny terminal drawn in a theme's own colours. */
+export function ThemeThumb({colors}: {colors: {bg: string; fg: string; green: string; blue: string; red: string}}) {
+  return (
+    <span className="theme-thumb" style={{background: colors.bg}} aria-hidden="true">
+      <i style={{background: colors.fg, width: '80%'}} />
+      <i style={{background: colors.green, width: '95%'}} />
+      <i style={{background: colors.blue, width: '45%'}} />
+    </span>
+  )
+}
+
+/**
+ * The panel on the right of a terminal, like Termius: hosts to open, snippets to run, the commands typed
+ * before, and the colours and font of the terminal.
+ */
+export function TerminalSidebar(p: Props) {
+  return (
+    <aside className="term-side" aria-label="Terminal sidebar">
+      <div className="side-tabs" role="toolbar" aria-label="Sidebar sections">
+        {TABS.map(t => (
+          <button key={t.id} aria-pressed={p.tab === t.id} aria-label={t.label} title={t.label}
+            className={p.tab === t.id ? 'on' : ''} onClick={() => p.onTab(t.id)}>{t.icon}</button>
+        ))}
+      </div>
+      <div className="side-body">
+        {p.tab === 'hosts' && <HostsTab hosts={p.hosts} onConnect={p.onConnect} />}
+        {p.tab === 'snippets' && <SnippetsTab snippets={p.snippets} onInsert={p.onInsert} onNew={p.onNewSnippet} />}
+        {p.tab === 'history' && <HistoryTab onInsert={p.onInsert} />}
+        {p.tab === 'themes' && <ThemesTab settings={p.settings} appearance={p.appearance} onSettings={p.onSettings} />}
+      </div>
+    </aside>
+  )
+}
+
+function SearchBox({value, onChange, label}: {value: string; onChange(v: string): void; label: string}) {
+  return (
+    <label className="side-search">
+      <IconSearch size={15} />
+      <input aria-label={label} placeholder="Search" value={value} onChange={e => onChange(e.target.value)} />
+    </label>
+  )
+}
+
+function HostsTab({hosts, onConnect}: {hosts: Host[]; onConnect?(h: Host): void}) {
+  const [q, setQ] = useState('')
+  const shown = hosts.filter(h => `${h.label} ${h.hostname} ${h.username}`.toLowerCase().includes(q.trim().toLowerCase()))
+  return (
+    <>
+      <SearchBox value={q} onChange={setQ} label="Search hosts in the sidebar" />
+      <div className="side-list" role="list" aria-label="Hosts">
+        {shown.map(h => (
+          <button key={h.id} className="side-item" onClick={() => onConnect?.(h)} title={`Open ${h.label} in a new tab`}>
+            <IconServer size={15} />
+            <span className="side-main"><b>{h.label}</b><small>{h.username ? h.username + '@' : ''}{h.hostname}</small></span>
+          </button>
+        ))}
+        {shown.length === 0 && <div className="side-empty">{hosts.length ? 'No hosts match.' : 'No hosts yet.'}</div>}
+      </div>
+    </>
+  )
+}
+
+function SnippetsTab({snippets, onInsert, onNew}: {snippets: Snippet[]; onInsert(text: string, run: boolean): void; onNew?(): void}) {
+  const [q, setQ] = useState('')
+  const [searching, setSearching] = useState(false)
+  const shown = snippets.filter(s => `${s.label} ${s.script}`.toLowerCase().includes(q.trim().toLowerCase()))
+  return (
+    <>
+      <div className="side-bar">
+        {searching
+          ? <SearchBox value={q} onChange={setQ} label="Search snippets in the sidebar" />
+          : <button className="side-new" onClick={onNew}><IconBraces size={14} /> New Snippet</button>}
+        <button className="icon ghost" aria-label={searching ? 'Close search' : 'Search snippets'} onClick={() => { setSearching(!searching); setQ('') }}><IconSearch size={16} /></button>
+      </div>
+      <div className="side-list" role="list" aria-label="Snippets">
+        {shown.map(s => (
+          <button key={s.id} className="side-item col" onClick={() => onInsert(s.script, false)} onDoubleClick={() => onInsert(s.script, true)}
+            title="Click to type it, double-click to run it">
+            <span className="side-title"><IconBraces size={13} /> {s.label}</span>
+            <code>{s.script.replace(/\s+/g, ' ')}</code>
+          </button>
+        ))}
+        {shown.length === 0 && <div className="side-empty">{snippets.length ? 'No snippets match.' : 'No snippets yet.'}</div>}
+      </div>
+    </>
+  )
+}
+
+function HistoryTab({onInsert}: {onInsert(text: string, run: boolean): void}) {
+  const [q, setQ] = useState('')
+  const [items, setItems] = useState(getHistory)
+  useEffect(() => subscribeHistory(() => setItems(getHistory())), [])
+  const shown = useMemo(() => items.filter(c => c.toLowerCase().includes(q.trim().toLowerCase())), [items, q])
+  return (
+    <>
+      <div className="side-bar">
+        <SearchBox value={q} onChange={setQ} label="Search history" />
+        <button className="icon ghost danger" aria-label="Clear history" title="Clear history" disabled={items.length === 0} onClick={clearHistory}><IconTrash size={15} /></button>
+      </div>
+      <div className="side-list" role="list" aria-label="History">
+        {shown.map(c => (
+          <button key={c} className="side-item" onClick={() => onInsert(c, false)} onDoubleClick={() => onInsert(c, true)}
+            title="Click to type it, double-click to run it">
+            <span className="side-main"><span className="side-cmd">{c}</span></span>
+          </button>
+        ))}
+        {shown.length === 0 && <div className="side-empty">{items.length ? 'Nothing matches.' : 'Commands you type will show up here.'}</div>}
+      </div>
+    </>
+  )
+}
+
+function ThemesTab({settings, appearance, onSettings}: {settings: Settings; appearance: Appearance; onSettings?(patch: Partial<Settings>): void}) {
+  const [fontOpen, setFontOpen] = useState(true)
+  const size = settings.font_size || 14
+  const setSize = (n: number) => onSettings?.({font_size: Math.max(FONT_MIN, Math.min(FONT_MAX, n))})
+  const current = settings.terminal_theme || 'auto'
+  const app = resolveTerminalTheme('auto', appearance).theme
+  return (
+    <>
+      <button className={'side-fold' + (fontOpen ? ' open' : '')} aria-expanded={fontOpen} onClick={() => setFontOpen(!fontOpen)}>
+        Font {fontOpen ? <IconChevronDown size={16} /> : <IconChevron size={16} />}
+      </button>
+      {fontOpen && (
+        <div className="side-font">
+          <input aria-label="Font family" list="term-fonts" value={settings.font_family} spellCheck={false}
+            onChange={e => onSettings?.({font_family: e.target.value})} />
+          <datalist id="term-fonts">{FONTS.map(f => <option key={f} value={f} />)}</datalist>
+          <div className="side-size">
+            <span>Text Size</span>
+            <button aria-label="Smaller text" disabled={size <= FONT_MIN} onClick={() => setSize(size - 1)}><IconMinus size={15} /></button>
+            <output aria-label="Text size">{size}</output>
+            <button aria-label="Larger text" disabled={size >= FONT_MAX} onClick={() => setSize(size + 1)}><IconPlus size={15} /></button>
+          </div>
+        </div>
+      )}
+      <h4 className="side-sub">Themes</h4>
+      <div className="side-list" role="listbox" aria-label="Themes">
+        <ThemeRow id="auto" name="Match app theme" note="follows light / dark" on={current === 'auto'} colors={app} onPick={() => onSettings?.({terminal_theme: 'auto'})} />
+        {TERMINAL_THEMES.map(t => (
+          <ThemeRow key={t.id} id={t.id} name={t.name} note={t.dark ? 'dark' : 'light'} on={current === t.id} colors={t.theme}
+            onPick={() => onSettings?.({terminal_theme: t.id})} />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function ThemeRow(p: {id: string; name: string; note: string; on: boolean; colors: {background?: string; foreground?: string; green?: string; blue?: string; red?: string}; onPick(): void}) {
+  const c = p.colors
+  return (
+    <button role="option" aria-selected={p.on} className={'side-item theme' + (p.on ? ' on' : '')} onClick={p.onPick} data-theme-id={p.id}>
+      <ThemeThumb colors={{bg: c.background ?? '#000', fg: c.foreground ?? '#fff', green: c.green ?? '#0f0', blue: c.blue ?? '#00f', red: c.red ?? '#f00'}} />
+      <span className="side-main"><b>{p.name}</b><small>{p.note}</small></span>
+    </button>
+  )
+}

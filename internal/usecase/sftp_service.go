@@ -131,6 +131,18 @@ func (s *SftpService) Rename(sid, from, to string) error {
 	return x.fs.Rename(from, to)
 }
 
+// Chmod sets the permission bits of a remote file or folder (an octal number such as 0o644).
+func (s *SftpService) Chmod(sid, p string, mode int) error {
+	x, err := s.get(sid)
+	if err != nil {
+		return err
+	}
+	if mode < 0 || mode > 0o7777 {
+		return errors.New("permissions out of range")
+	}
+	return x.fs.Chmod(p, uint32(mode))
+}
+
 // Delete removes a file or directory; recursive is required for a non-empty directory.
 func (s *SftpService) Delete(sid, p string, recursive bool) error {
 	x, err := s.get(sid)

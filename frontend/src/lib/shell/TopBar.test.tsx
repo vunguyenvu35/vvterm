@@ -158,7 +158,7 @@ describe('TopBar: the right-click menu of a tab', () => {
     open()
     const menu = screen.getByRole('menu', {name: 'Tab web-1'})
     expect(menu).toHaveStyle({left: '30px', top: '20px'})
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Duplicate', 'Rename', 'Split right', 'Split down', 'Close'])
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Duplicate', 'Duplicate in new window', 'Rename', 'Split right', 'Split down', 'Close'])
   })
 
   it('each item acts on that tab and closes the menu', async () => {
