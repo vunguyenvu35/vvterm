@@ -442,6 +442,21 @@ func TestSwitchingProviderStartsANewConversation(t *testing.T) {
 	}
 }
 
+func TestTheUICanChooseTheRequestIdToListenBeforeItStarts(t *testing.T) {
+	x := newAH(t)
+	sid := x.session(t)
+	id, err := x.app.Assistant.Ask(sid, "q", AskOptions{RequestID: "req-12345"})
+	if err != nil || id != "req-12345" {
+		t.Fatalf("%q %v", id, err)
+	}
+	x.finish(t, id)
+	for _, bad := range []string{"a b", "x", "../../etc", strings.Repeat("a", 60)} {
+		if _, err := x.app.Assistant.Ask(sid, "q", AskOptions{RequestID: bad}); err == nil {
+			t.Errorf("request id %q must be rejected", bad)
+		}
+	}
+}
+
 func TestAskErrorsAreClassified(t *testing.T) {
 	x := newAH(t)
 	sid := x.session(t)

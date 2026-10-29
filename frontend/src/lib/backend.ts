@@ -2,6 +2,8 @@ import {createContext, useContext} from 'react'
 import type {
   ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
   ActivityEntry, KnownHost, RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
+  AiAskOptions, AiCommandCheck, AiCustomProvider, AiModelList, AiPolicy, AiPreview, AiProvider, AiSessionState, AiSettings,
+  McpImportItem, McpServer, McpServerInput, McpTool,
 } from './types'
 
 /**
@@ -100,6 +102,47 @@ export interface Backend {
   logs: {
     list(f: {kinds: string[]; query: string; limit: number}): Promise<ActivityEntry[]>
     clear(): Promise<void>
+  }
+  /**
+   * The AI terminal assistant. What an agent receives and what it says is redacted by the Go side; nothing
+   * here ever returns a secret. Events of a question: assistant:chunk|step|confirm|done|error:<id>.
+   */
+  assistant: {
+    providers(): Promise<AiProvider[]>
+    refreshProviders(): Promise<AiProvider[]>
+    /** rejects with the reason when the provider is not ready or fails the isolation self-test */
+    setProviderEnabled(id: string, on: boolean): Promise<void>
+    setDefaultProvider(id: string): Promise<void>
+    setProviderModel(id: string, model: string): Promise<void>
+    models(id: string, refresh: boolean): Promise<AiModelList>
+    settings(): Promise<AiSettings>
+    saveSettings(s: AiSettings): Promise<AiSettings>
+    saveCustomProvider(p: AiCustomProvider): Promise<void>
+    deleteCustomProvider(id: string): Promise<void>
+    sessionInfo(sid: string): Promise<AiSessionState>
+    setHostPolicy(hostId: string, policy: AiPolicy): Promise<void>
+    confirmShare(sid: string): Promise<void>
+    resetConversation(sid: string): Promise<void>
+    preview(sid: string, lines: number, selection: string): Promise<AiPreview>
+    /** returns the request id; rejects with "confirm_share" when the user must confirm sharing first */
+    ask(sid: string, question: string, opts: AiAskOptions): Promise<string>
+    cancel(id: string): Promise<void>
+    confirmTool(runId: string, callId: string, allow: boolean): Promise<void>
+    checkCommand(sid: string, cmd: string): Promise<AiCommandCheck>
+    /** puts the command on the prompt without pressing Enter */
+    insert(sid: string, cmd: string): Promise<void>
+    /** presses Enter too; `typed` must be "run" for a risky command */
+    run(sid: string, cmd: string, typed: string): Promise<void>
+    mcp: {
+      list(): Promise<McpServer[]>
+      save(s: McpServerInput): Promise<McpServer>
+      remove(id: string): Promise<void>
+      test(id: string): Promise<McpTool[]>
+      setTool(serverId: string, tool: string, mode: string): Promise<void>
+      approveNew(serverId: string): Promise<void>
+      importable(): Promise<McpImportItem[]>
+      import(ref: string): Promise<McpServer>
+    }
   }
   /** This computer's files (the Local pane of the SFTP screen). */
   local: {
@@ -252,6 +295,39 @@ export function wailsBackend(): Backend {
       list: async f => (await call<ActivityEntry[]>('usecase', 'LogService', 'List', f)) ?? [],
       clear: () => call('usecase', 'LogService', 'Clear'),
     },
+    assistant: {
+      providers: async () => (await u<AiProvider[]>('AssistantService', 'Providers')) ?? [],
+      refreshProviders: async () => (await u<AiProvider[]>('AssistantService', 'RefreshProviders')) ?? [],
+      setProviderEnabled: (id, on) => u('AssistantService', 'SetProviderEnabled', id, on),
+      setDefaultProvider: id => u('AssistantService', 'SetDefaultProvider', id),
+      setProviderModel: (id, m) => u('AssistantService', 'SetProviderModel', id, m),
+      models: async (id, r) => { const l = await u<AiModelList>('AssistantService', 'Models', id, r); return {...l, models: l?.models ?? []} },
+      settings: async () => { const s = await u<AiSettings>('AssistantService', 'Settings'); return {...s, patterns: s?.patterns ?? []} },
+      saveSettings: async s => { const r = await u<AiSettings>('AssistantService', 'SaveSettings', s); return {...r, patterns: r?.patterns ?? []} },
+      saveCustomProvider: p => u('AssistantService', 'SaveCustomProvider', p),
+      deleteCustomProvider: id => u('AssistantService', 'DeleteCustomProvider', id),
+      sessionInfo: sid => u('AssistantService', 'SessionInfo', sid),
+      setHostPolicy: (h, p) => u('AssistantService', 'SetHostPolicy', h, p),
+      confirmShare: sid => u('AssistantService', 'ConfirmShare', sid),
+      resetConversation: sid => u('AssistantService', 'ResetConversation', sid),
+      preview: async (sid, l, sel) => { const p = await u<AiPreview>('AssistantService', 'Preview', sid, l, sel); return {...p, findings: p?.findings ?? []} },
+      ask: (sid, q, o) => u('AssistantService', 'Ask', sid, q, o),
+      cancel: id => u('AssistantService', 'Cancel', id),
+      confirmTool: (r, c, a) => u('AssistantService', 'ConfirmTool', r, c, a),
+      checkCommand: (sid, cmd) => u('AssistantService', 'CheckCommand', sid, cmd),
+      insert: (sid, cmd) => u('AssistantService', 'Insert', sid, cmd),
+      run: (sid, cmd, t) => u('AssistantService', 'Run', sid, cmd, t),
+      mcp: {
+        list: async () => (await u<McpServer[]>('AssistantService', 'McpServers')) ?? [],
+        save: s => u('AssistantService', 'SaveMcpServer', s),
+        remove: id => u('AssistantService', 'DeleteMcpServer', id),
+        test: async id => (await u<McpTool[]>('AssistantService', 'TestMcpServer', id)) ?? [],
+        setTool: (s, t, m) => u('AssistantService', 'SetMcpTool', s, t, m),
+        approveNew: id => u('AssistantService', 'ApproveNewTools', id),
+        importable: async () => (await u<McpImportItem[]>('AssistantService', 'ImportableMcpServers')) ?? [],
+        import: ref => u('AssistantService', 'ImportMcpServer', ref),
+      },
+    },
     serial: {
       ports: async () => (await call<string[]>('usecase', 'SerialService', 'Ports')) ?? [],
     },
@@ -338,6 +414,30 @@ export function bridgeBackend(): Backend {
       syncNow: () => rpc('SyncService', 'SyncNow'),
       join: pw => rpc('SyncService', 'JoinExisting', pw),
       status: () => rpc('SyncService', 'Status'),
+    },
+    // the AI page of Settings: providers, models, options and MCP servers; never a terminal
+    assistant: {
+      ...base.assistant,
+      providers: async () => (await rpc<AiProvider[]>('AssistantService', 'Providers')) ?? [],
+      refreshProviders: async () => (await rpc<AiProvider[]>('AssistantService', 'RefreshProviders')) ?? [],
+      setProviderEnabled: (id, on) => rpc('AssistantService', 'SetProviderEnabled', id, on),
+      setDefaultProvider: id => rpc('AssistantService', 'SetDefaultProvider', id),
+      setProviderModel: (id, m) => rpc('AssistantService', 'SetProviderModel', id, m),
+      models: async (id, r) => { const l = await rpc<AiModelList>('AssistantService', 'Models', id, r); return {...l, models: l?.models ?? []} },
+      settings: async () => { const s = await rpc<AiSettings>('AssistantService', 'Settings'); return {...s, patterns: s?.patterns ?? []} },
+      saveSettings: async s => { const r = await rpc<AiSettings>('AssistantService', 'SaveSettings', s); return {...r, patterns: r?.patterns ?? []} },
+      saveCustomProvider: p => rpc('AssistantService', 'SaveCustomProvider', p),
+      deleteCustomProvider: id => rpc('AssistantService', 'DeleteCustomProvider', id),
+      mcp: {
+        list: async () => (await rpc<McpServer[]>('AssistantService', 'McpServers')) ?? [],
+        save: s => rpc('AssistantService', 'SaveMcpServer', s),
+        remove: id => rpc('AssistantService', 'DeleteMcpServer', id),
+        test: async id => (await rpc<McpTool[]>('AssistantService', 'TestMcpServer', id)) ?? [],
+        setTool: (s, t, m) => rpc('AssistantService', 'SetMcpTool', s, t, m),
+        approveNew: id => rpc('AssistantService', 'ApproveNewTools', id),
+        importable: async () => (await rpc<McpImportItem[]>('AssistantService', 'ImportableMcpServers')) ?? [],
+        import: ref => rpc('AssistantService', 'ImportMcpServer', ref),
+      },
     },
     system: {...base.system, openSettings: unavailable, openWindow: unavailable, setMenuShortcuts: async () => {}},
   }

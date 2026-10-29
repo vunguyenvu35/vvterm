@@ -8,7 +8,7 @@ import {WebLinksAddon} from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import {useBackend} from '../backend'
 import {b64ToBytes, errMsg} from '../util'
-import {registerPane, setPaneStatus} from './panes'
+import {registerPane, registerSelection, setPaneSession, setPaneStatus} from './panes'
 import {createHighlighter, HighlightTerm} from './highlight'
 import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
@@ -193,6 +193,7 @@ export function TerminalPane(p: Props) {
         retry.current()
       }
     })
+    const unregSelection = p.paneId ? registerSelection(p.paneId, () => t.getSelection()) : () => {}
     const unregister = p.paneId ? registerPane(p.paneId, text => {
       if (stateRef.current !== 'ready') return false
       sendKeys(text)
@@ -235,6 +236,7 @@ export function TerminalPane(p: Props) {
         const id = await be.session.open(p.hostId, t.cols || 80, t.rows || 24)
         if (disposed) { void be.session.close(id).catch(() => {}); return }
         sid.current = id
+        if (p.paneId) setPaneSession(p.paneId, id)
         offs.push(be.on(`term:data:${id}`, (b64: string) => {
           t.write(b64ToBytes(b64))
           // output can only come from a live shell: do not keep the connecting screen up until the ready event
@@ -267,6 +269,8 @@ export function TerminalPane(p: Props) {
       selSub?.dispose()
       hl.dispose()
       unregister()
+      unregSelection()
+      if (p.paneId) setPaneSession(p.paneId, null)
       ro.disconnect()
       offs.forEach(o => o())
       if (sid.current) void be.session.close(sid.current).catch(() => {})

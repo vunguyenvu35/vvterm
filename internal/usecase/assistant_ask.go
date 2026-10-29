@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +23,11 @@ type AskOptions struct {
 	Model     string `json:"model"`    // "" = the provider's default model
 	Lines     int    `json:"lines"`
 	Selection string `json:"selection"` // when set, only this text is shared instead of the screen
+	// RequestID is chosen by the UI so it can listen for the events before the question starts. Empty: made here.
+	RequestID string `json:"request_id"`
 }
+
+var requestID = regexp.MustCompile(`^[A-Za-z0-9_-]{6,40}$`)
 
 // CommandView is a suggested command with everything the card needs. Risk and reasons come from VVTerm.
 type CommandView struct {
@@ -134,7 +139,14 @@ func (a *AssistantService) Ask(sid, question string, opt AskOptions) (string, er
 	}
 	history := append([]assistant.Turn(nil), conv.turns...)
 	a.seq++
-	id := fmt.Sprintf("a%d", a.seq)
+	id := opt.RequestID
+	if id == "" {
+		id = fmt.Sprintf("ask-%04d", a.seq)
+	}
+	if !requestID.MatchString(id) || a.runs[id] != nil {
+		a.mu.Unlock()
+		return "", errors.New("invalid request id")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &assistRun{id: id, sid: sid, hostID: hostID, ctx: ctx, cancel: cancel, confirms: map[string]chan bool{}, toolRO: map[string]bool{}}
 	a.runs[id] = run
