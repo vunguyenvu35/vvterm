@@ -580,6 +580,10 @@ try {
   await win.getByRole('button', {name: 'Save profile'}).click()
   await win.locator('.avatar', {hasText: 'V'}).waitFor()
   assert.equal(await win.getByRole('button', {name: 'Sign in'}).isDisabled(), true)
+
+  // the update check asks GitHub for the latest release (a dev build is never told to update)
+  await win.getByRole('button', {name: 'Check for updates'}).click()
+  await page.getByText('You are on the latest version').waitFor()
   await shot(page, 'settings-account')
 
   // the window can be maximised, restored, and rolled up
