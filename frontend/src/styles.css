@@ -265,6 +265,7 @@ input[type='color'] { width: 44px; height: 38px; padding: 3px; }
 .settings-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
 .setting-row .muted { font-size: 12px; margin-top: 2px; }
+.setting-row > button, .setting-row > .badge { flex-shrink: 0; white-space: nowrap; }
 .control { width: 220px; }
 .control.narrow { width: 110px; }
 .fixed-row { display: flex; gap: 8px; align-items: center; flex: none; }
