@@ -24,6 +24,7 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 - **MCP servers.** Add MCP servers (a command or an HTTP address), test them, and choose a mode per tool: *Allow*, *Ask each time* or *Off*. New tools of a server stay off until you review them. Import servers from Claude Code or Gemini CLI. Currently used through Claude Code.
 - **Per-host switch.** On a host's form: *Off*, *Ask first (in the chat)* or *On*. Hosts are **On** by default and **Off** on production hosts.
 - **Typing Vietnamese (and other input methods)** in the terminal now shows the text you are composing at the cursor, highlighted, until you commit it.
+- **Vietnamese and other accented text typed in a terminal** is now sent to the shell as whole letters. macOS input methods can deliver a letter in pieces (the `ệ` of *việt* as `e` + dot + circumflex); `zsh` cannot edit those and showed them as `<0087>`.
 
 ### Your secrets stay yours
 

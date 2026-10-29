@@ -105,7 +105,7 @@ export function AssistantSettings() {
                   <b>{p.name}</b> {p.status.version && <span className="muted">{p.status.version}</span>}
                   <div className="muted">
                     <span className={'badge ai-state ' + p.status.state}>{STATE_LABEL[p.status.state] ?? p.status.state}</span>{' '}
-                    {p.status.detail}{p.status.hint && <> Run <code>{p.status.hint}</code>.</>}
+                    {p.status.detail && (/[.!?]$/.test(p.status.detail) ? p.status.detail : p.status.detail + '.')}{p.status.hint && <> Run <code>{p.status.hint}</code>.</>}
                   </div>
                 </div>
                 <Switch label={'Enable ' + p.name} checked={p.enabled} disabled={busy === p.id || (!p.enabled && !ready)} onChange={v => void toggle(p, v)} />

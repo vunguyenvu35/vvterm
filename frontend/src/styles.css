@@ -942,8 +942,9 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .ai-code pre { margin: 0; padding: 8px 10px; overflow-x: auto; font-size: 12px; }
 .ai-preview-panel { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 6px; }
 .ai-preview-panel .ai-preview { max-height: 180px; }
-.ai-msg.ai-ask { background: transparent; padding: 0; }
-.ai-msg.ai-ask > :not(.ai-preview-panel) { background: var(--bg-3); }
+.ai-msg.ai-ask { background: var(--bg-3); padding: 10px 12px; gap: 8px; }
+.ai-msg.ai-ask p { margin: 0; }
+.ai-msg.ai-ask .ai-preview-panel { background: transparent; border: none; padding: 0; }
 
 /* the edge of the right sidebar that can be dragged to change its width */
 .side-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 4; touch-action: none; }
@@ -984,3 +985,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .ai-send:disabled { background: var(--bg-2); color: var(--muted); opacity: 1; cursor: default; }
 .ai-send.stop { background: var(--bg-2); color: var(--text); border: 1px solid var(--line); }
 .ai-send.stop:hover { border-color: var(--danger); color: var(--danger); background: var(--bg-2); }
+.ai-policy .muted { white-space: nowrap; }
+
+.ai-provider-opts .select-wrap { flex: 0 0 min(260px, 55%); width: auto; }
+.ai-provider-opts .setting-row > div:first-child { min-width: 0; }
