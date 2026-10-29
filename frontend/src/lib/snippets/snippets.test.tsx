@@ -1,4 +1,4 @@
-import {render, screen, waitFor} from '@testing-library/react'
+import {render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {SnippetsPage} from './SnippetsPage'
 import {SnippetForm} from './SnippetForm'
@@ -119,5 +119,52 @@ describe('SnippetPicker', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Run snippet'}))
     await userEvent.click(screen.getByText('outside'))
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+})
+
+describe('SnippetsPage: filter, sort and view', () => {
+  const sn = (id: string, label: string, script: string, updated_at?: string, description?: string): Snippet => ({id, label, script, updated_at, description})
+  const list = [sn('1', 'Disk usage', 'df -h', '2026-10-01T00:00:00Z'), sn('2', 'Docker clean', 'docker system prune', '2026-10-20T00:00:00Z', 'free space'), sn('3', 'Alpha tail', 'tail -f /var/log/syslog', '2026-10-10T00:00:00Z')]
+  const labels = () => within(screen.getByRole('list', {name: 'Snippets'})).getAllByRole('listitem').map(c => c.querySelector('.label')?.textContent)
+  const mount = () => render(<SnippetsPage snippets={list} canRun onNew={vi.fn()} onRun={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} />)
+  beforeEach(() => localStorage.clear())
+
+  it('is sorted by name to begin with, and Name Z–A and Recently changed reorder it', async () => {
+    mount()
+    expect(labels()).toEqual(['Alpha tail', 'Disk usage', 'Docker clean'])
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /Name Z–A/}))
+    expect(labels()).toEqual(['Docker clean', 'Disk usage', 'Alpha tail'])
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /Recently changed/}))
+    expect(labels()).toEqual(['Docker clean', 'Alpha tail', 'Disk usage'])
+  })
+
+  it('searches the name, the description and the script', async () => {
+    mount()
+    await userEvent.type(screen.getByLabelText('Search snippets'), 'syslog')
+    expect(labels()).toEqual(['Alpha tail'])
+    await userEvent.clear(screen.getByLabelText('Search snippets'))
+    await userEvent.type(screen.getByLabelText('Search snippets'), 'free space')
+    expect(labels()).toEqual(['Docker clean'])
+    await userEvent.clear(screen.getByLabelText('Search snippets'))
+    await userEvent.type(screen.getByLabelText('Search snippets'), 'nothing like this')
+    expect(screen.getByText(/No snippet matches/)).toBeInTheDocument()
+  })
+
+  it('switches between grid and list and remembers it', async () => {
+    const {unmount} = mount()
+    expect(screen.getByRole('list', {name: 'Snippets'})).toHaveAttribute('data-view', 'grid')
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(screen.getByRole('list', {name: 'Snippets'})).toHaveClass('as-list')
+    unmount()
+    mount()
+    expect(screen.getByRole('list', {name: 'Snippets'})).toHaveAttribute('data-view', 'list')
+  })
+
+  it('shows no toolbar when there is nothing to filter', () => {
+    render(<SnippetsPage snippets={[]} canRun onNew={vi.fn()} onRun={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} />)
+    expect(screen.queryByLabelText('Search snippets')).toBeNull()
   })
 })

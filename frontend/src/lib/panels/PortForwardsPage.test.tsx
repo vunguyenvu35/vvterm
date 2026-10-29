@@ -46,7 +46,7 @@ describe('Port Forwarding page', () => {
     expect(await screen.findByText('MySQL prod')).toBeInTheDocument()
     expect(screen.getByText('Remote Rule')).toBeInTheDocument()
     expect(screen.getByText('Dynamic Rule')).toBeInTheDocument()
-    expect(Array.from(document.querySelectorAll('.card .tile')).map(t => t.textContent)).toEqual(['L', 'R', 'D'])
+    expect(Array.from(document.querySelectorAll('.card .tile')).map(t => t.textContent)).toEqual(['D', 'L', 'R']) // sorted by name: Dynamic Rule, MySQL prod, Remote Rule
     expect(forwardTitle({...fw, label: ''})).toBe('Local Rule')
     expect(describeForward({...fw, type: 'dynamic', bind_port: 0})).toBe('SOCKS5 127.0.0.1:auto')
   })
@@ -257,5 +257,78 @@ describe('Select Host step: groups', () => {
     const panel = screen.getByRole('dialog', {name: 'Select Host'})
     expect(within(panel).getByRole('heading', {name: 'Production'})).toBeInTheDocument()
     for (const name of ['in-group', 'orphan', 'free']) expect(within(panel).getByRole('button', {name: `Use host ${name}`})).toBeInTheDocument()
+  })
+})
+
+describe('Port Forwarding page: filter, sort and view', () => {
+  const rules: PortForward[] = [
+    {...fw, id: 'a', label: 'Zeta DB', bind_port: 5432},
+    {...fw, id: 'b', label: 'Alpha web', host_id: 'h2', bind_port: 8080, type: 'remote'},
+    {...fw, id: 'c', label: 'Mid proxy', bind_port: 1080, type: 'dynamic'},
+  ]
+  const titles = () => within(screen.getByRole('list', {name: 'Port forwards'})).getAllByRole('listitem').map(c => c.querySelector('.label')?.textContent)
+  const mount = () => {
+    const be = makeFake({forwards: rules, hosts: [h1, h2]})
+    be.state.running = {c: '127.0.0.1:1080'} // Mid proxy is running
+    render(<Providers be={be}><PortForwardsPage hosts={[h1, h2]} onNew={vi.fn()} onEdit={vi.fn()} /></Providers>)
+    return be
+  }
+  beforeEach(() => localStorage.clear())
+  const sortBy = async (name: RegExp) => { await userEvent.click(screen.getByRole('button', {name: 'Sort'})); await userEvent.click(screen.getByRole('menuitemradio', {name})) }
+
+  it('is sorted by name, and can be sorted by host, type, status or port', async () => {
+    mount()
+    await screen.findByText('Zeta DB')
+    expect(titles()).toEqual(['Alpha web', 'Mid proxy', 'Zeta DB'])
+    await sortBy(/^Host/)
+    expect(titles()).toEqual(['Mid proxy', 'Zeta DB', 'Alpha web']) // bastion (two rules, by name), then db-box
+    await sortBy(/^Status/)
+    expect(titles()).toEqual(['Mid proxy', 'Alpha web', 'Zeta DB']) // the running one first
+    await sortBy(/^Port/)
+    expect(titles()).toEqual(['Mid proxy', 'Zeta DB', 'Alpha web']) // 1080, 5432, 8080
+    await sortBy(/^Type/)
+    expect(titles()).toEqual(['Mid proxy', 'Zeta DB', 'Alpha web']) // Dynamic, Local, Remote
+  })
+
+  it('searches the name, the host, the ports and the type', async () => {
+    mount()
+    await screen.findByText('Zeta DB')
+    const box = screen.getByLabelText('Search port forwards')
+    await userEvent.type(box, 'db-box')
+    expect(titles()).toEqual(['Alpha web'])
+    await userEvent.clear(box)
+    await userEvent.type(box, '5432')
+    expect(titles()).toEqual(['Zeta DB'])
+    await userEvent.clear(box)
+    await userEvent.type(box, 'socks')
+    expect(titles()).toEqual(['Mid proxy'])
+    await userEvent.clear(box)
+    await userEvent.type(box, 'zzz')
+    expect(screen.getByText('No port forward matches.')).toBeInTheDocument()
+  })
+
+  it('filters by state and by type with chips that are only offered when they tell rules apart', async () => {
+    mount()
+    await screen.findByText('Zeta DB')
+    await userEvent.click(screen.getByRole('button', {name: 'Running'}))
+    expect(titles()).toEqual(['Mid proxy'])
+    await userEvent.click(screen.getByRole('button', {name: 'Running'}))
+    await userEvent.click(screen.getByRole('button', {name: 'Remote'}))
+    expect(titles()).toEqual(['Alpha web'])
+    await userEvent.click(screen.getByRole('button', {name: 'Local'}))
+    expect(titles()).toEqual(['Alpha web', 'Zeta DB'])
+  })
+
+  it('switches between grid and list and remembers it', async () => {
+    const {unmount} = render(<Providers be={makeFake({forwards: rules, hosts: [h1, h2]})}><PortForwardsPage hosts={[h1, h2]} onNew={vi.fn()} onEdit={vi.fn()} /></Providers>)
+    await screen.findByText('Zeta DB')
+    expect(screen.getByRole('list', {name: 'Port forwards'})).toHaveAttribute('data-view', 'grid')
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(screen.getByRole('list', {name: 'Port forwards'})).toHaveClass('as-list')
+    unmount()
+    render(<Providers be={makeFake({forwards: rules, hosts: [h1, h2]})}><PortForwardsPage hosts={[h1, h2]} onNew={vi.fn()} onEdit={vi.fn()} /></Providers>)
+    await screen.findByText('Zeta DB')
+    expect(screen.getByRole('list', {name: 'Port forwards'})).toHaveAttribute('data-view', 'list')
   })
 })
