@@ -18,6 +18,7 @@ dev:
 build:
 	$(WAILS) build -ldflags "-X vvterm/app.Version=$(VERSION)"
 	@if [ "$$(uname)" = Darwin ]; then ./scripts/macos-settings-helper.sh build/bin/vvterm.app; fi
+	@if [ "$$(uname)" = Darwin ]; then codesign --force --deep --sign - build/bin/vvterm.app; fi
 
 test: test-go test-web
 
