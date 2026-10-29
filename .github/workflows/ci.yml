@@ -7,6 +7,10 @@ name: ci
 on:
   workflow_dispatch:
 
+# the jobs only read the repository
+permissions:
+  contents: read
+
 jobs:
   go:
     runs-on: macos-latest
@@ -43,5 +47,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
       - run: $(go env GOPATH)/bin/wails build -ldflags "-X vvterm/app.Version=${{ github.sha }}"

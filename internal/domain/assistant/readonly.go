@@ -161,7 +161,7 @@ func readOnlySegment(s roSegment) bool {
 	case "docker":
 		return len(args) >= 1 && (args[0] == "ps" || args[0] == "images" || args[0] == "version")
 	case "git":
-		return len(args) >= 1 && (args[0] == "status" || args[0] == "branch" || args[0] == "log" || args[0] == "diff" || args[0] == "rev-parse" || (args[0] == "remote" && len(args) == 2 && args[1] == "-v"))
+		return gitReadOnly(args)
 	case "systemctl":
 		if len(args) >= 1 && (args[0] == "list-units" || args[0] == "list-unit-files" || args[0] == "is-enabled") {
 			return true
@@ -177,6 +177,13 @@ func readOnlySegment(s roSegment) bool {
 		}
 		return true
 	}
+	if name == "journalctl" {
+		for _, a := range args {
+			if strings.HasPrefix(a, "-") && !journalctlFlags[strings.SplitN(a, "=", 2)[0]] {
+				return false
+			}
+		}
+	}
 	for _, t := range s.tokens {
 		if strings.ContainsAny(t, " \t") { // a quoted argument with a space is only understood by echo and the filters
 			return false
@@ -184,6 +191,57 @@ func readOnlySegment(s roSegment) bool {
 	}
 	return readOnlyOne(strings.Join(s.tokens, " "))
 }
+
+var gitRef = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_./@^~-]{0,80}$`)
+
+// gitFlags are the only flags of each git subcommand that is accepted. A subcommand with free flags is not read-only:
+// "branch -D" deletes, "log --output=file" writes a file, "diff --ext-diff" runs a program from the configuration.
+var gitFlags = map[string][]string{
+	"status":    {"-s", "--short", "-b", "--branch", "--porcelain", "--ignored"},
+	"branch":    {"--list", "-l", "-a", "--all", "-r", "--remotes", "-v", "-vv", "--verbose", "--show-current"},
+	"log":       {"--oneline", "--graph", "--decorate", "--stat", "--name-only", "--name-status", "--shortstat", "--no-merges", "-n"},
+	"diff":      {"--stat", "--name-only", "--name-status", "--shortstat", "--cached", "--staged"},
+	"rev-parse": {"--abbrev-ref", "--short", "--is-inside-work-tree", "--show-toplevel", "--git-dir", "--verify"},
+}
+
+func gitReadOnly(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	sub, rest := args[0], args[1:]
+	if sub == "remote" {
+		return len(rest) == 1 && rest[0] == "-v"
+	}
+	allowed, ok := gitFlags[sub]
+	if !ok {
+		return false
+	}
+	for i, a := range rest {
+		switch {
+		case strings.HasPrefix(a, "-"):
+			found := false
+			for _, f := range allowed {
+				found = found || a == f
+			}
+			if !found && sub == "log" && regexp.MustCompile(`^-[0-9]{1,3}$`).MatchString(a) { // git log -5
+				found = true
+			}
+			if !found {
+				return false
+			}
+		case regexp.MustCompile(`^[0-9]{1,4}$`).MatchString(a) && i > 0 && rest[i-1] == "-n":
+		case gitRef.MatchString(a) && sub != "branch": // a revision or a path; "branch NAME" would create one
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// journalctlFlags are the flags of journalctl that only read the journal (others rotate, vacuum, sync or set it up).
+var journalctlFlags = map[string]bool{"-n": true, "--lines": true, "-u": true, "--unit": true, "-b": true, "--boot": true, "-e": true, "--pager-end": true,
+	"-p": true, "--priority": true, "-k": true, "--dmesg": true, "-r": true, "--reverse": true, "--no-pager": true, "--since": true, "--until": true,
+	"-o": true, "--output": true, "-x": true, "--no-hostname": true, "-q": true, "--quiet": true, "-a": true, "--all": true}
 
 // ReadOnlyAllowed reports whether a line only reads: every plain command in it is on the allow-list, and it uses nothing
 // else of the shell. Anything that looks like a secret's path is refused.

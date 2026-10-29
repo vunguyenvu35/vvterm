@@ -183,3 +183,20 @@ func TestTextAttachmentsAreChecked(t *testing.T) {
 		t.Fatal("CleanName")
 	}
 }
+
+func TestGitAndJournalctlAreReadOnlyOnlyWithTheirReadingFlags(t *testing.T) {
+	for _, c := range []string{"git status", "git status -s", "git branch", "git branch -a", "git branch --show-current", "git log --oneline -n 5", "git log -5 --stat",
+		"git diff --stat", "git diff --name-only HEAD", "git rev-parse --abbrev-ref HEAD", "git remote -v", "journalctl -n 100 -u nginx --no-pager", "journalctl --since today -p err"} {
+		if !ReadOnlyAllowed(c) {
+			t.Errorf("should allow %q", c)
+		}
+	}
+	for _, c := range []string{"git branch -D main", "git branch -m x y", "git branch newbranch", "git log --output=/tmp/x", "git diff --output=/tmp/x", "git diff --ext-diff",
+		"git log -p", "git log --textconv", "git status --no-optional-locks -c core.pager=x", "git -c core.pager=sh log", "git push", "git config user.name x", "git remote add x y",
+		"git remote -v x", "git fetch", "git checkout x", "git stash", "git rev-parse --git-path x --foo", "git log --format=%H", "git diff -- /etc/shadow",
+		"journalctl --sync", "journalctl --update-catalog", "journalctl --rotate", "journalctl --vacuum-size=1M", "journalctl --flush", "journalctl --setup-keys", "journalctl -f"} {
+		if ReadOnlyAllowed(c) {
+			t.Errorf("must not allow %q", c)
+		}
+	}
+}

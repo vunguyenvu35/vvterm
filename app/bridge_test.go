@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -333,4 +334,32 @@ func TestSettingsWindowIsRaisedAfterItStartsAndWhenAskedAgain(t *testing.T) {
 	if attempts != 4 {
 		t.Fatalf("asking again must raise the same window once more: %d", attempts)
 	}
+}
+
+// A web page or a rebinding attack cannot reach the bridge even with a token it somehow learned.
+func TestBridgeRefusesBrowserOriginsAndForeignHostNames(t *testing.T) {
+	_, b, _, _ := newBridgeApp(t)
+	for name, mod := range map[string]func(*http.Request){
+		"origin": func(r *http.Request) { r.Header.Set("Origin", "https://evil.example") },
+		"host":   func(r *http.Request) { r.Host = "evil.example:" + strings.Split(b.ln.Addr().String(), ":")[1] },
+	} {
+		req, _ := http.NewRequest("GET", "http://"+b.ln.Addr().String()+"/ping", nil)
+		req.Header.Set("Authorization", "Bearer "+b.token)
+		mod(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s: got %d, want 403 even with the right token", name, resp.StatusCode)
+		}
+	}
+	req, _ := http.NewRequest("GET", "http://"+b.ln.Addr().String()+"/ping", nil)
+	req.Header.Set("Authorization", "Bearer "+b.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("a plain client with the token must still work: %v %v", resp, err)
+	}
+	resp.Body.Close()
 }

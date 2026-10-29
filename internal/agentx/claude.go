@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -176,7 +178,13 @@ func (c *Claude) Ask(ctx context.Context, r assistant.Request, emit func(string)
 	if r.Gateway != nil {
 		cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"vvterm": map[string]any{
 			"type": "http", "url": r.Gateway.URL, "headers": map[string]string{"Authorization": "Bearer " + r.Gateway.Token}}}})
-		args = append(args, "--mcp-config", string(cfg), "--allowedTools", "mcp__vvterm")
+		// the gateway token goes in a private file, not on the command line: any process of this computer can read
+		// the arguments of another one (ps), and the token lets its holder call the gateway while the question runs
+		cfgPath := filepath.Join(dir, "mcp.json")
+		if err := os.WriteFile(cfgPath, cfg, 0o600); err != nil {
+			return "", err
+		}
+		args = append(args, "--mcp-config", cfgPath, "--allowedTools", "mcp__vvterm")
 		allowedMCP = "mcp__vvterm__"
 	}
 	stdin := userPrompt(r, false)

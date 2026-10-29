@@ -318,8 +318,13 @@ type CommandCheck struct {
 	TypedConfirm bool           `json:"typed_confirm"`
 }
 
+// hasControl reports a character that must not be typed into a terminal from the assistant: a control character (a
+// newline would run the command), or an invisible or direction-changing one (zero-width, right-to-left override…),
+// which would let a command read differently from what it does.
 func hasControl(s string) bool {
-	return strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) && r != '\t' })
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return (unicode.IsControl(r) && r != '\t') || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029'
+	})
 }
 
 func (a *AssistantService) check(g secretpolicy.Guard, cmd string, info SessionState) CommandCheck {
