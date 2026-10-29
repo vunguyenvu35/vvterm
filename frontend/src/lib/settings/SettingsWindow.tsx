@@ -1,5 +1,6 @@
 import {PointerEvent as ReactPointerEvent, useEffect, useRef, useState} from 'react'
 import {useBackend, type UpdateInfo} from '../backend'
+import {SupportPanel} from '../panels/SupportPanel'
 import {useToast} from '../ui/Toast'
 import {Switch} from '../ui/Switch'
 import {Select} from '../ui/Select'
@@ -40,7 +41,6 @@ const LINKS: [string, string][] = [
   ['Request a feature', REPO + '/issues/new'],
   ['Report a bug', REPO + '/issues/new'],
   ['Release notes', REPO + '/blob/main/RELEASE_NOTES.md'],
-  ['Support on Ko-fi', 'https://ko-fi.com/vunguyenvu'],
 ]
 
 const DONATE: [string, string][] = [
@@ -89,6 +89,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
 
   const [newer, setNewer] = useState<UpdateInfo | null>(null)
   const [checking, setChecking] = useState(false)
+  const [supportOpen, setSupportOpen] = useState(false)
   const checkUpdate = async () => {
     setChecking(true)
     try {
@@ -100,7 +101,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   useEffect(() => { void be.system.info().then(i => setVersion(i.version)).catch(() => {}) }, [be])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('.select-menu') && !document.querySelector('.key-capture')) onClose() // a dropdown or a recording eats its own Esc
+      if (e.key === 'Escape' && !document.querySelector('.select-menu') && !document.querySelector('.key-capture') && !document.querySelector('.modal')) onClose() // a dropdown or a recording eats its own Esc
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -190,6 +191,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
               {LINKS.map(([label, url]) => (
                 <button key={label} className="win-link" onClick={() => be.system.openUrl(url)}>{label}<IconArrowUpRight size={15} /></button>
               ))}
+              <button className="win-link" onClick={() => setSupportOpen(true)}>Support VVTerm</button>
               <div className="spacer" />
               {newer?.available && (
                 <button className="win-link" onClick={() => be.system.openUrl(newer.url)}>Version {newer.latest} is available<IconArrowUpRight size={15} /></button>
@@ -406,6 +408,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
           </div>
         )}
       </div>
+      {supportOpen && <SupportPanel onClose={() => setSupportOpen(false)} />}
     </div>
   )
 }

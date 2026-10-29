@@ -116,22 +116,54 @@ Your feedback is the point of this beta. Please [open an issue](../../issues/new
 
 ## Support VVTerm
 
-VVTerm is free and open source, built and maintained in spare time. If it saves you time, you can help keep it going:
-
 <p align="center">
-  <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/%E2%98%95%20Buy%20me%20a%20coffee-ko--fi.com%2Fvunguyenvu-FF5E5B?style=for-the-badge" alt="Buy me a coffee on Ko-fi"></a>
+  VVTerm is free and open source, built and maintained in spare time.<br>
+  If it saves you time, you can help keep it going.
 </p>
 
-☕ $3 – a cup of coffee · 🍜 $10 – a lunch · 🚀 $25 – fuel new features
+<table align="center">
+  <tr>
+    <td align="center" width="200"><h2>☕</h2><b>$3</b><br><sub>a cup of coffee</sub></td>
+    <td align="center" width="200"><h2>🍜</h2><b>$10</b><br><sub>a lunch</sub></td>
+    <td align="center" width="200"><h2>🚀</h2><b>$25</b><br><sub>fuel new features</sub></td>
+  </tr>
+</table>
 
-Or send USDT (check the network before you send):
+<p align="center">
+  <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support VVTerm on Ko-fi"></a>
+</p>
 
-| Network | Address |
-| --- | --- |
-| Tron (TRC20) | `TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK` |
-| BSC (BEP20) | `0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153` |
+<p align="center"><b>Prefer crypto?</b> Scan a code or copy an address, and check the network before you send.</p>
 
-Stars, bug reports and pull requests help just as much.
+<table align="center">
+  <tr>
+    <td align="center" width="300">
+      <img src="https://img.shields.io/badge/USDT-Tron%20%C2%B7%20TRC20-EF0027?logo=tron&logoColor=white&style=flat-square" alt="USDT on Tron (TRC20)"><br><br>
+      <img src="docs/donate/usdt-tron.png" width="190" alt="QR code of the USDT Tron address"><br>
+      <sub><code>TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK</code></sub>
+    </td>
+    <td align="center" width="300">
+      <img src="https://img.shields.io/badge/USDT-BSC%20%C2%B7%20BEP20-F0B90B?logo=binance&logoColor=black&style=flat-square" alt="USDT on BSC (BEP20)"><br><br>
+      <img src="docs/donate/usdt-bsc.png" width="190" alt="QR code of the USDT BSC address"><br>
+      <sub><code>0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153</code></sub>
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary>Copy an address</summary>
+
+```
+TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK
+```
+
+```
+0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153
+```
+
+</details>
+
+<p align="center"><sub>Stars, bug reports and pull requests help just as much. Thank you!</sub></p>
 
 ## Documentation
 

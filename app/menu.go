@@ -36,13 +36,14 @@ const (
 	ActVaults       = "go_vaults"
 	ActAbout        = "about"
 	ActCheckUpdate  = "check_update"
+	ActSupport      = "support"
 )
 
 // MenuActions lists every action name, for tests and for the frontend to stay in step.
 var MenuActions = []string{
 	ActNewHost, ActNewGroup, ActNewTerminal, ActSerial, ActImport, ActSettings, ActCloseTab, ActClosePane, ActLock,
 	ActZoomIn, ActZoomOut, ActZoomReset, ActBroadcast, ActSplitRight, ActSplitDown, ActDuplicateTab,
-	ActNewTab, ActNextTab, ActPrevTab, ActVaults, ActAbout, ActCheckUpdate,
+	ActNewTab, ActNextTab, ActPrevTab, ActVaults, ActAbout, ActCheckUpdate, ActSupport,
 	ActPagePrefix + "hosts", ActPagePrefix + "keychain", ActPagePrefix + "forwards", ActPagePrefix + "snippets",
 	ActPagePrefix + "sftp", ActPagePrefix + "knownhosts", ActPagePrefix + "logs",
 }
@@ -53,7 +54,6 @@ var HelpLinks = []struct{ Label, URL string }{
 	{"Request a Feature", "https://github.com/vunguyenvu35/vvterm/issues/new"},
 	{"Report a Bug", "https://github.com/vunguyenvu35/vvterm/issues/new"},
 	{"Release Notes", "https://github.com/vunguyenvu35/vvterm/blob/main/RELEASE_NOTES.md"},
-	{"Support on Ko-fi", "https://ko-fi.com/vunguyenvu"},
 }
 
 // menuShortcut is the shortcut (the id used in Settings → Shortcuts) that does the same as a menu action, so the
@@ -174,6 +174,8 @@ func BuildMenu(h MenuHooks) *menu.Menu {
 		url := l.URL
 		help.Append(menu.Text(l.Label, nil, func(*menu.CallbackData) { h.OpenURL(url) }))
 	}
+	help.Append(menu.Separator())
+	help.Append(act("Support VVTerm…", ActSupport, nil))
 
 	return menu.NewMenuFromItems(
 		menu.AppMenu(),

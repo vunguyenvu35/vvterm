@@ -140,9 +140,9 @@ func TestViewMenuZoomsSplitsAndShowsPages(t *testing.T) {
 func TestHelpMenuOpensOnlyTheProjectPages(t *testing.T) {
 	p := &menuProbe{}
 	help := submenu(BuildMenu(p.hooks()), "Help")
-	// About, Check for Updates and a separator come first, then one item per project link
+	// About, Check for Updates and a separator come first, then one item per project link, a separator and Support
 	const lead = 3
-	if len(help.SubMenu.Items) != lead+len(HelpLinks) || len(HelpLinks) != 5 {
+	if len(help.SubMenu.Items) != lead+len(HelpLinks)+2 || len(HelpLinks) != 4 {
 		t.Fatalf("%v", labels(help))
 	}
 	for i, l := range HelpLinks {
@@ -156,7 +156,7 @@ func TestHelpMenuOpensOnlyTheProjectPages(t *testing.T) {
 func TestHelpMenuHasAboutAndCheckForUpdates(t *testing.T) {
 	p := &menuProbe{}
 	help := submenu(BuildMenu(p.hooks()), "Help")
-	for label, want := range map[string]string{"About VVTerm": ActAbout, "Check for Updates…": ActCheckUpdate} {
+	for label, want := range map[string]string{"About VVTerm": ActAbout, "Check for Updates…": ActCheckUpdate, "Support VVTerm…": ActSupport} {
 		it := find(help, label)
 		if it == nil {
 			t.Fatalf("Help has no %q: %v", label, labels(help))

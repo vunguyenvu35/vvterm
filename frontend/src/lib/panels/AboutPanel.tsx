@@ -42,7 +42,7 @@ export function AboutPanel({onClose, checkNow = false}: {onClose(): void; checkN
           <button className="link" onClick={() => void be.system.openUrl(REPO)}>GitHub</button>{' · '}
           <button className="link" onClick={() => void be.system.openUrl(REPO + '/issues/new')}>Report a bug</button>{' · '}
           <button className="link" onClick={() => void be.system.openUrl(REPO + '/blob/main/LICENSE')}>License</button>{' · '}
-          <button className="link" onClick={() => void be.system.openUrl('https://ko-fi.com/vunguyenvu')}>Support</button>
+          <button className="link" onClick={() => void be.system.openUrl('https://ko-fi.com/vunguyenvu')}>Ko-fi</button>
         </div>
       </div>
     </Modal>

@@ -36,7 +36,7 @@ describe('SettingsWindow', () => {
     const nav = screen.getByRole('navigation', {name: 'Settings menu'})
     expect(within(nav).getAllByRole('tab').map(t => t.querySelector('span')?.textContent)).toEqual(['General', 'Account', 'Terminal', 'Security', 'AI assistant', 'Sync', 'Shortcuts'])
     expect(within(nav).getByRole('combobox', {name: /^Theme,/})).toBeInTheDocument()
-    for (const l of ['Documentation', 'Request a feature', 'Report a bug', 'Release notes', 'Support on Ko-fi']) {
+    for (const l of ['Documentation', 'Request a feature', 'Report a bug', 'Release notes', 'Support VVTerm']) {
       expect(within(nav).getByRole('button', {name: new RegExp(l)})).toBeInTheDocument()
     }
     expect(await screen.findByTestId('app-version')).toHaveTextContent('1.1.0-test')
@@ -231,10 +231,24 @@ describe('SettingsWindow', () => {
 
   it('help links open only the project pages', async () => {
     const {be} = setup()
-    await userEvent.click(screen.getByRole('button', {name: /Support on Ko-fi/}))
     await userEvent.click(screen.getByRole('button', {name: /Report a bug/}))
-    expect(be.state.calls).toContainEqual(['system.openUrl', 'https://ko-fi.com/vunguyenvu'])
     expect(be.state.calls).toContainEqual(['system.openUrl', 'https://github.com/vunguyenvu35/vvterm/issues/new'])
+  })
+
+  it('Support VVTerm opens Ko-fi and the USDT addresses (QR code, Copy)', async () => {
+    const {be} = setup()
+    await userEvent.click(screen.getByRole('button', {name: 'Support VVTerm'}))
+    const dlg = await screen.findByRole('dialog', {name: 'Support VVTerm'})
+    expect(within(dlg).getByText('TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK')).toBeInTheDocument()
+    expect(within(dlg).getByText('0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153')).toBeInTheDocument()
+    expect(within(dlg).getAllByRole('img')).toHaveLength(2)
+    await userEvent.click(within(dlg).getByRole('button', {name: 'Support on Ko-fi'}))
+    expect(be.state.calls).toContainEqual(['system.openUrl', 'https://ko-fi.com/vunguyenvu'])
+    await userEvent.click(within(dlg).getByRole('button', {name: 'Copy USDT · Tron address'}))
+    await waitFor(() => expect(be.state.calls).toContainEqual(['system.writeClipboard', 'TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK']))
+    await userEvent.keyboard('{Escape}') // closes the dialog, not the whole Settings window
+    expect(screen.queryByRole('dialog', {name: 'Support VVTerm'})).toBeNull()
+    expect(screen.getByRole('navigation', {name: 'Settings menu'})).toBeInTheDocument()
   })
 })
 

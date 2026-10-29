@@ -40,6 +40,12 @@ try {
   await win.getByRole('tab', {name: 'Account'}).click()
   await win.getByText('Donate').first().waitFor()
   await shot('settings-donate')
+
+  // Support VVTerm: Ko-fi, the amounts, and the USDT addresses as QR codes
+  await win.getByRole('button', {name: 'Support VVTerm'}).click()
+  const support = page.getByRole('dialog', {name: 'Support VVTerm'})
+  await support.getByText(/Prefer crypto/).waitFor()
+  await shot('support-dialog')
 } finally {
   await browser.close()
 }

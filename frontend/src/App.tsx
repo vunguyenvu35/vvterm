@@ -16,6 +16,7 @@ import {SnippetForm} from './lib/snippets/SnippetForm'
 import {toTerminalInput, writeToPane} from './lib/terminal/panes'
 import {PortForwardsPage} from './lib/panels/PortForwardsPage'
 import {AboutPanel} from './lib/panels/AboutPanel'
+import {SupportPanel} from './lib/panels/SupportPanel'
 import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
@@ -45,6 +46,7 @@ type Dialog =
   | {k: 'serial'}
   | {k: 'data'}
   | {k: 'about'; check?: boolean}
+  | {k: 'support'}
   | null
 
 
@@ -224,8 +226,10 @@ export default function App({initial}: {/** an app window opened for this place 
   menuHandler.current = (action: string) => {
     if (action === 'about') setDialog({k: 'about'})
     else if (action === 'check_update') setDialog({k: 'about', check: true})
+    else if (action === 'support') setDialog({k: 'support'})
   }
-  const aboutOnly = dialog?.k === 'about' ? <AboutPanel onClose={() => setDialog(null)} checkNow={dialog.check} /> : null
+  const aboutOnly = dialog?.k === 'about' ? <AboutPanel onClose={() => setDialog(null)} checkNow={dialog.check} />
+    : dialog?.k === 'support' ? <SupportPanel onClose={() => setDialog(null)} /> : null
   if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div>{aboutOnly}</div>
   if (!vault.unlocked) {
     return <><UnlockScreen status={vault} autoBiometric={settings.biometric_on_open} onDone={() => { void refreshVault() }} />{aboutOnly}</>
@@ -435,6 +439,7 @@ export default function App({initial}: {/** an app window opened for this place 
     else if (action === 'import') setDialog({k: 'data'})
     else if (action === 'about') setDialog({k: 'about'})
     else if (action === 'check_update') setDialog({k: 'about', check: true})
+    else if (action === 'support') setDialog({k: 'support'})
     else if (action === 'open_settings') openSettings()
     else if (action === 'duplicate_tab') { if (activeTabObj && !onHome) duplicateTab(activeTabObj.id) }
     else if (action === 'page:sftp') setActive(SFTP_TAB_ID)
@@ -513,6 +518,7 @@ export default function App({initial}: {/** an app window opened for this place 
       )}
       {dialog?.k === 'data' && <DataPanel onClose={close} onChanged={() => void refreshData()} />}
       {dialog?.k === 'about' && <AboutPanel onClose={close} checkNow={dialog.check} />}
+      {dialog?.k === 'support' && <SupportPanel onClose={close} />}
     </div>
   )
 }

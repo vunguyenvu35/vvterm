@@ -1007,7 +1007,7 @@ describe('App: tab menu, broadcast and maximise', () => {
 
 describe('App: the application menu bar', () => {
   // the actions of app/menu.go (MenuActions): the Go test keeps that list in step with the menu itself
-  const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'about', 'check_update', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
+  const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'about', 'check_update', 'support', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
     'broadcast_input', 'split_right', 'split_down', 'duplicate_tab', 'page:hosts', 'page:keychain', 'page:forwards', 'page:snippets', 'page:sftp', 'page:knownhosts', 'page:logs']
   const menu = (be: ReturnType<typeof makeFake>, action: string) => act(() => be.emit('menu:action', action))
 
@@ -1071,6 +1071,15 @@ describe('App: the application menu bar', () => {
     await screen.findByRole('button', {name: 'Open settings'})
     expect(be.state.calls.some(c => c[0] === 'system.checkUpdate')).toBe(false)
     localStorage.removeItem('vvterm.update.checked')
+  })
+
+  it('Help → Support VVTerm opens the Support dialog with the USDT addresses, also while the vault is locked', async () => {
+    const be = setup()
+    await screen.findByLabelText('Master password')
+    menu(be, 'support')
+    const dlg = await screen.findByRole('dialog', {name: 'Support VVTerm'})
+    expect(within(dlg).getByText(/Prefer crypto/)).toBeInTheDocument()
+    expect(within(dlg).getByText('TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK')).toBeInTheDocument()
   })
 
   it('Help → About and Check for Updates still work while the vault is locked', async () => {
@@ -1140,7 +1149,7 @@ describe('App: the application menu bar', () => {
     const be = setup()
     await unlock(be)
     for (const a of GO_ACTIONS) menu(be, a) // none of them may throw
-    expect(GO_ACTIONS).toHaveLength(25)
+    expect(GO_ACTIONS).toHaveLength(26)
   })
 })
 
