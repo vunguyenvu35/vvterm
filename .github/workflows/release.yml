@@ -1,0 +1,93 @@
+name: release
+# Builds VVTerm for macOS, Windows and Linux and attaches the files to a GitHub Release.
+# Start it by pushing a tag (git tag v1.2.0 && git push origin v1.2.0) or by hand (Actions tab -> release -> Run workflow).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-22.04
+            name: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read the version
+        id: ver
+        shell: bash
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+
+      - name: Linux packages
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+      - name: NSIS (Windows installer)
+        if: matrix.name == 'windows'
+        run: choco install nsis -y
+
+      - name: Build (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          make build
+          ./scripts/package-macos.sh
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: |
+          wails build -nsis -ldflags "-X vvterm/app.Version=${{ steps.ver.outputs.version }}"
+          mkdir dist
+          cp build/bin/vvterm.exe "dist/vvterm-${{ steps.ver.outputs.version }}-windows-amd64.exe"
+          cp build/bin/*installer.exe dist/ 2>/dev/null || true
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          wails build -ldflags "-X vvterm/app.Version=${{ steps.ver.outputs.version }}"
+          mkdir dist
+          tar -C build/bin -czf "dist/vvterm-${{ steps.ver.outputs.version }}-linux-amd64.tar.gz" vvterm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vvterm-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && rm -f *.sha256 && sha256sum * > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(cat VERSION)"
+          awk -v h="# VVTerm $VERSION" '$0==h{f=1;next} /^# VVTerm /{f=0} f' RELEASE_NOTES.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "VVTerm $VERSION" --notes-file notes.md --prerelease
