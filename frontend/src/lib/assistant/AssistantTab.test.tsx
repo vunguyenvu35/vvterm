@@ -32,6 +32,13 @@ describe('AssistantTab', () => {
     expect(onOpenSettings).toHaveBeenCalled()
   })
 
+  it('says it is looking for the tools while detection runs, then shows the panel', async () => {
+    setup({}, be => { be.state.ai.checking = 1 })
+    expect(await screen.findByTestId('ai-checking')).toHaveTextContent('Looking for AI tools')
+    expect(screen.queryByTestId('ai-setup')).toBeNull() // not the "enable a provider" screen
+    expect(await screen.findByTestId('ai-panel', {}, {timeout: 4000})).toBeInTheDocument()
+  })
+
   it('names a provider that is not signed in and how to fix it', async () => {
     setup({}, be => { be.state.ai.providers = [{...be.state.ai.providers[0], enabled: false, status: {state: 'needs_signin', version: '1', detail: '', hint: 'claude auth login'}}] })
     expect(await screen.findByTestId('ai-setup')).toHaveTextContent('Claude Code (run claude auth login)')

@@ -48,6 +48,8 @@ export interface Fake extends Backend {
       importable: McpImportItem[]
       /** while set, models() waits for it (a provider that is slow to answer) */
       modelsGate: Promise<void> | null
+      /** how many providers() calls still answer that the tools are being looked for (state '') */
+      checking: number
       /** what checkCommand answers for a command (default: low risk, everything allowed) */
       check: (cmd: string) => AiCommandCheck
     }
@@ -114,7 +116,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       preview: {text: 'Host: This computer\n$ df -h\n/dev/sda1 98% /var', findings: [], redacted: 0, lines: 3, alt_screen: false, vault_locked: false, empty: false, images: 0},
       enableError: {},
       reply: {text: 'The disk is full.', commands: [{cmd: 'df -h', why: 'check usage', risk: 'low', reasons: [], warnings: [], blocked: false, block_reason: ''}], provider: 'claude', model: '', redacted: 0},
-      asked: [], mcp: [], tools: {}, importable: [], modelsGate: null,
+      asked: [], mcp: [], tools: {}, importable: [], modelsGate: null, checking: 0,
       check: () => ({blocked: false, block_reason: '', risk: 'low', reasons: [], warnings: [], run_allowed: true, run_reason: '', typed_confirm: false}),
     },
     ...init,
@@ -265,7 +267,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       },
     },
     assistant: {
-      providers: async () => state.ai.providers.map(p => ({...p})),
+      providers: async () => (state.ai.checking-- > 0 ? state.ai.providers.map(p => ({...p, status: {...p.status, state: '' as const}})) : state.ai.providers.map(p => ({...p}))),
       refreshProviders: async () => { rec('assistant.refreshProviders'); return state.ai.providers.map(p => ({...p})) },
       setProviderEnabled: async (i, on) => {
         rec('assistant.setProviderEnabled', i, on)

@@ -17,6 +17,26 @@ import (
 // SettingsFlag is the command-line argument that starts the Settings window process.
 const SettingsFlag = "--settings"
 
+// RaiseProcess brings the window of another process of this app to the front (the macOS front-app rules need the
+// app in front to hand it over). It returns false when that process cannot be raised yet. Set by the main package.
+var RaiseProcess func(pid int) bool
+
+// raise asks for the Settings window to come to the front, trying for a few seconds because a process registers
+// with the window server a moment after it starts.
+func raise(pid int) {
+	if RaiseProcess == nil || pid <= 0 {
+		return
+	}
+	go func() {
+		for i := 0; i < 50; i++ {
+			if RaiseProcess(pid) {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+}
+
 // SettingsLauncher (main process) opens the Settings window as a second process, and brings the
 // existing one to the front instead of opening another.
 type SettingsLauncher struct {
@@ -45,6 +65,7 @@ func (l *SettingsLauncher) Open() error {
 	defer l.mu.Unlock()
 	if l.cmd != nil {
 		l.bridge.RequestFocus()
+		raise(l.cmd.Process.Pid)
 		return nil
 	}
 	cmd, err := l.start()
@@ -52,6 +73,7 @@ func (l *SettingsLauncher) Open() error {
 		return err
 	}
 	l.cmd = cmd
+	raise(cmd.Process.Pid)
 	go func() {
 		_ = cmd.Wait()
 		l.mu.Lock()

@@ -82,6 +82,13 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   }, [be, sid])
 
   useEffect(() => { void loadProviders() }, [loadProviders])
+  // the tools are looked for in the background: ask again until every state is known
+  const unknown = providers.some(p => p.status.state === '')
+  useEffect(() => {
+    if (!unknown) return
+    const t = window.setTimeout(() => { void loadProviders() }, 600)
+    return () => window.clearTimeout(t)
+  }, [unknown, providers, loadProviders])
   useEffect(() => { void loadInfo() }, [loadInfo])
   // Settings may change providers from its own window
   useEffect(() => be.on('bridge:changed', (s: string) => { if (s === 'AssistantService') void loadProviders() }), [be, loadProviders])
@@ -216,6 +223,9 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   }
 
   if (loadErr) return <div className="ai-empty"><div className="error" role="alert">{loadErr}</div><button onClick={() => void loadProviders()}>Retry</button></div>
+  if (providers.length > 0 && enabled.length === 0 && providers.some(p => p.status.state === '')) {
+    return <div className="ai-empty muted" data-testid="ai-checking" role="status">Looking for AI tools on this computer…</div>
+  }
   if (providers.length > 0 && enabled.length === 0) {
     const waiting = providers.filter(p => p.status.state === 'needs_signin')
     return (

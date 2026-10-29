@@ -120,6 +120,7 @@ func (a *App) Startup(ctx context.Context) {
 		}
 		a.closeSettingsWhenLocked(event)
 	})
+	go a.Assistant.Warm() // look for the AI tools now, so the assistant page does not have to wait for it
 
 	// The Settings window is a second process that talks to this one. Without the bridge the frontend
 	// falls back to its in-app Settings window.

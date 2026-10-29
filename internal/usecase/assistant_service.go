@@ -44,6 +44,7 @@ type AssistantService struct {
 	cfg       assistant.Config
 	loaded    bool
 	detected  bool
+	detecting bool
 	status    map[string]assistant.Status
 	models    map[string]modelCache
 	convs     map[string]*conversation
@@ -234,14 +235,30 @@ func (a *AssistantService) providerViews() []ProviderView {
 	return out
 }
 
-// Providers lists the detected providers. The first call runs detection, which starts no prompt.
-func (a *AssistantService) Providers() []ProviderView {
+// Warm starts detection in the background (once), so the answer is ready by the time a page asks for it. It
+// starts no prompt and returns at once.
+func (a *AssistantService) Warm() {
 	a.mu.Lock()
-	need := !a.detected
-	a.mu.Unlock()
-	if need {
-		a.detectAll()
+	if a.detected || a.detecting {
+		a.mu.Unlock()
+		return
 	}
+	a.detecting = true
+	a.mu.Unlock()
+	go func() {
+		a.detectAll()
+		a.mu.Lock()
+		a.detecting = false
+		a.mu.Unlock()
+		a.c.emit("assistant:providers")
+	}()
+}
+
+// Providers lists the providers at once. Detection (starting each CLI to ask its version and sign-in) can take a few
+// seconds, so it runs in the background: a provider that has not been looked at yet has an empty state, and the
+// caller asks again a moment later (or hears assistant:providers).
+func (a *AssistantService) Providers() []ProviderView {
+	a.Warm()
 	return a.providerViews()
 }
 

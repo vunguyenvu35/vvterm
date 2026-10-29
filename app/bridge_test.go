@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -280,5 +281,56 @@ func TestSettingsWindowCanConfigureTheAssistantButNotUseIt(t *testing.T) {
 		if _, err := c.Call("AssistantService", m, "[]"); err == nil || !strings.Contains(err.Error(), "not available") {
 			t.Errorf("AssistantService.%s must be refused from the Settings window, got %v", m, err)
 		}
+	}
+}
+
+// The Settings window is raised in front of the main window after it starts and again when it is asked for twice;
+// the raise is retried because a new process registers with the window server a moment late.
+func TestSettingsWindowIsRaisedAfterItStartsAndWhenAskedAgain(t *testing.T) {
+	_, b, _, _ := newBridgeApp(t)
+	var mu sync.Mutex
+	var pids []int
+	attempts := 0
+	old := RaiseProcess
+	t.Cleanup(func() { RaiseProcess = old })
+	RaiseProcess = func(pid int) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		pids = append(pids, pid)
+		return attempts > 2 // the process is not known to the window server at first
+	}
+	var cmd *exec.Cmd
+	l := &SettingsLauncher{bridge: b, start: func() (*exec.Cmd, error) {
+		cmd = exec.Command("sleep", "30")
+		return cmd, cmd.Start()
+	}}
+	t.Cleanup(func() { l.Close() })
+	if err := l.Open(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := attempts
+		mu.Unlock()
+		if n >= 3 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	mu.Lock()
+	if attempts != 3 || pids[0] != cmd.Process.Pid {
+		t.Fatalf("raise must be retried until it works, for the Settings process: attempts=%d pids=%v", attempts, pids)
+	}
+	mu.Unlock()
+	if err := l.Open(); err != nil { // already open: raised again, no second process
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts != 4 {
+		t.Fatalf("asking again must raise the same window once more: %d", attempts)
 	}
 }

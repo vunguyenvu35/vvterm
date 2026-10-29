@@ -25,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("data dir: %v", err)
 	}
+	app.RaiseProcess = raiseProcess // the Settings window is brought in front of the main one (macOS)
 	if len(os.Args) > 1 && os.Args[1] == app.SettingsFlag {
 		runSettings(dir)
 		return

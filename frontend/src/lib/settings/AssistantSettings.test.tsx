@@ -104,6 +104,19 @@ describe('AssistantSettings: providers', () => {
   })
 })
 
+describe('AssistantSettings: first paint', () => {
+  it('draws the page at once and fills in what is still being looked for', async () => {
+    const be = setup(b => { b.state.ai.checking = 2 })
+    // the sections are there before the tools have been found
+    expect(await screen.findByRole('region', {name: 'AI providers'})).toBeInTheDocument()
+    expect(await within(await row('claude')).findByText('Checking…')).toBeInTheDocument()
+    expect(screen.getByRole('region', {name: 'MCP servers'})).toBeInTheDocument()
+    expect(screen.queryByText('Loading…')).toBeNull()
+    await waitFor(() => expect(within(screen.getByTestId('provider-claude')).getByText('Ready')).toBeInTheDocument(), {timeout: 4000})
+    expect(be.state.ai.checking).toBeLessThan(0) // it asked again until the answer was known
+  })
+})
+
 describe('AssistantSettings: privacy', () => {
   it('says redaction cannot be turned off and offers no switch for it', async () => {
     setup()

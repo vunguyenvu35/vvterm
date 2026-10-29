@@ -39,6 +39,13 @@ export function AssistantSettings() {
     try { setHosts(await be.hosts.listHosts({})) } catch { /* the page still works: a server is then offered on every host */ }
   }, [be, toast])
   useEffect(() => { void load() }, [load])
+  // the tools are looked for in the background (starting each CLI takes a moment): ask again until every state is known
+  const checking = !!providers?.some(p => p.status.state === '')
+  useEffect(() => {
+    if (!checking) return
+    const t = window.setTimeout(() => { void load() }, 600)
+    return () => window.clearTimeout(t)
+  }, [checking, providers, load])
   // Settings is its own window: what changed in the main window (hosts, providers) is read again when it is focused
   useEffect(() => {
     const again = () => { void load() }
@@ -79,14 +86,16 @@ export function AssistantSettings() {
     try { const s = await be.assistant.saveSettings({...settings, ...patch}); setSettings(s); setPatterns(s.patterns.join('\n')); setLines(String(s.lines)) } catch (e) { toast.error(errMsg(e)) }
   }
 
-  if (!providers || !settings) return <div className="muted">Loading…</div>
+  // the page is drawn at once; what is still being read shows as such
+  const list = providers ?? []
   return (
     <>
       <section className="card-section" aria-label="AI providers">
         <h4>Providers</h4>
         <div className="muted">VVTerm runs the AI command-line tool you are already signed in to, so your own subscription is used and no key is stored here. A provider stays off until you switch it on.</div>
-        {providers.length === 0 && <div className="muted">No AI tools were found. Install Claude Code, Codex CLI or Gemini CLI, or add your own command below.</div>}
-        {providers.map(p => {
+        {!providers && <div className="muted" role="status">Looking for AI tools on this computer…</div>}
+        {providers && providers.length === 0 && <div className="muted">No AI tools were found. Install Claude Code, Codex CLI or Gemini CLI, or add your own command below.</div>}
+        {list.map(p => {
           const ready = p.status.state === 'ready'
           const ml = models[p.id]
           return (
@@ -134,26 +143,26 @@ export function AssistantSettings() {
         {customOpen && <CustomProviderForm onSaved={() => { setCustomOpen(false); void load() }} />}
       </section>
 
-      <section className="card-section" aria-label="AI privacy">
+      {settings && <section className="card-section" aria-label="AI privacy">
         <h4>Privacy</h4>
         <div className="muted">Secrets (keys, tokens, passwords, anything saved in the vault) are replaced by <code>*******</code> before text is sent to a provider and again before an answer is shown. This cannot be switched off. It is best-effort: a password typed in plain sentences cannot always be recognised.</div>
         <div className="setting-row">
           <div><b>Terminal lines shared</b><div className="muted">How many of the last lines of the screen go with a question (20 to 1000).</div></div>
           <input aria-label="Lines shared" type="number" min={20} max={1000} value={lines} className="ai-num" onChange={e => setLines(e.target.value)}
-            onBlur={() => { const n = Number(lines); if (n !== settings.lines) void saveSettings({lines: Number.isFinite(n) ? n : 200}) }} />
+            onBlur={() => { const n = Number(lines); if (n !== settings!.lines) void saveSettings({lines: Number.isFinite(n) ? n : 200}) }} />
         </div>
         <label className="field">
           <span>Extra patterns to hide (one regular expression per line; they only add to the built-in ones)</span>
           <textarea aria-label="Extra redaction patterns" rows={3} value={patterns} placeholder="EMP-\d{6}" onChange={e => setPatterns(e.target.value)}
-            onBlur={() => { const list = patterns.split('\n').map(s => s.trim()).filter(Boolean); if (list.join('\n') !== settings.patterns.join('\n')) void saveSettings({patterns: list}) }} />
+            onBlur={() => { const list = patterns.split('\n').map(s => s.trim()).filter(Boolean); if (list.join('\n') !== settings!.patterns.join('\n')) void saveSettings({patterns: list}) }} />
         </label>
         <div className="setting-row">
           <div><b>Run read-only commands by itself</b><div className="muted">The assistant may run a short list of commands that only read (ls, df, uptime, journalctl -n…) and read their output. Never on production hosts, never anything else.</div></div>
-          <Switch label="Run read-only commands by itself" checked={settings.auto_run} onChange={v => void saveSettings({auto_run: v})} />
+          <Switch label="Run read-only commands by itself" checked={settings!.auto_run} onChange={v => void saveSettings({auto_run: v})} />
         </div>
-      </section>
+      </section>}
 
-      <McpServersPanel providers={providers} hosts={hosts} />
+      <McpServersPanel providers={list} hosts={hosts} />
     </>
   )
 }

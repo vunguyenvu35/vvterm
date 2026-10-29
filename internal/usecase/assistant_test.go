@@ -205,9 +205,28 @@ func (x *ah) finish(t *testing.T, id string) assistantEvent {
 	return assistantEvent{}
 }
 
+// detected waits for the background detection and returns the providers.
+func (x *ah) detected(t *testing.T) []ProviderView {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		ps := x.app.Assistant.Providers()
+		done := true
+		for _, p := range ps {
+			done = done && p.Status.State != ""
+		}
+		if done {
+			return ps
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("detection did not finish")
+	return nil
+}
+
 func TestProvidersMustBeReadyAndPassTheIsolationTestToBeEnabled(t *testing.T) {
 	x := newAH(t)
-	ps := x.app.Assistant.Providers()
+	ps := x.detected(t)
 	if len(ps) != 1 || ps[0].Enabled || ps[0].Status.State != assistant.StateReady {
 		t.Fatalf("%+v", ps)
 	}
@@ -700,4 +719,49 @@ func TestImagesNeedTheUsersConfirmationAndAProviderThatTakesThem(t *testing.T) {
 	if e, _ := x.core.Activity.List(domain.ActivityFilter{Kinds: []string{domain.ActAssistant}}); len(e) == 0 || !strings.Contains(e[0].Message, "image(s) sent as they are") {
 		t.Fatalf("sending a picture must be logged: %v", e)
 	}
+}
+
+func TestProvidersAnswerAtOnceAndDetectionRunsInTheBackground(t *testing.T) {
+	x := newAH(t)
+	gate := make(chan struct{})
+	slow := &slowDetectAgent{fakeAgent: x.ag, gate: gate}
+	x.app.Core.Agents = []Agent{slow}
+	t0 := time.Now()
+	ps := x.app.Assistant.Providers()
+	if time.Since(t0) > time.Second {
+		t.Fatalf("Providers must not wait for detection: %s", time.Since(t0))
+	}
+	if len(ps) != 1 || ps[0].Status.State != "" {
+		t.Fatalf("a provider not looked at yet has no state: %+v", ps)
+	}
+	x.app.Assistant.Providers() // asking again must not start a second detection
+	close(gate)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && x.rec.count("assistant:providers") == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if x.rec.count("assistant:providers") != 1 {
+		t.Fatalf("the UI must be told when detection is done: %d", x.rec.count("assistant:providers"))
+	}
+	if ps = x.app.Assistant.Providers(); ps[0].Status.State != assistant.StateReady {
+		t.Fatalf("%+v", ps)
+	}
+	if slow.detects != 1 {
+		t.Fatalf("detected %d times", slow.detects)
+	}
+}
+
+type slowDetectAgent struct {
+	*fakeAgent
+	gate    chan struct{}
+	mu      sync.Mutex
+	detects int
+}
+
+func (s *slowDetectAgent) Detect(ctx context.Context) assistant.Status {
+	s.mu.Lock()
+	s.detects++
+	s.mu.Unlock()
+	<-s.gate
+	return s.fakeAgent.Detect(ctx)
 }
