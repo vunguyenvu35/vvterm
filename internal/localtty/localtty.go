@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	"github.com/creack/pty"
 )
@@ -91,8 +90,7 @@ func (s *Shell) Err() error { <-s.done; return s.err }
 func (s *Shell) Close() {
 	s.once.Do(func() {
 		if s.cmd.Process != nil {
-			_ = syscall.Kill(-s.cmd.Process.Pid, syscall.SIGHUP)
-			_ = s.cmd.Process.Signal(syscall.SIGHUP)
+			hangup(s.cmd.Process)
 		}
 		s.tty.Close()
 	})
