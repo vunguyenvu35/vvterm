@@ -19,6 +19,7 @@ import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
 import {CLOSE_HOST_TAB} from './lib/sftp/SftpBrowser'
+import {AI_NEXT_MODEL} from './lib/assistant/AssistantTab'
 import {SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
@@ -397,6 +398,7 @@ export default function App({initial}: {/** an app window opened for this place 
     prev_tab: () => cycle(-1),
     close_pane: () => { if (activeTabObj && inTerminalTab && !onHome) void closePaneAsk(activeTabObj.id, activeTabObj.activePane) },
     broadcast_input: () => { if (activeTabObj && inTerminalTab && !onHome) broadcastTab(activeTabObj.id) },
+    ai_next_model: () => { window.dispatchEvent(new Event(AI_NEXT_MODEL)) },
     split_right: () => { if (inTerminalTab) split('row') },
     split_down: () => { if (inTerminalTab) split('col') },
     zoom_in: () => zoomBy(10),

@@ -21,6 +21,9 @@ type Msg =
   | {kind: 'confirm'; rid: string; what: 'share' | 'images'; question: string; selection: string; files: Attach[]; preview?: AiPreview}
   | {kind: 'assistant'; rid: string; text: string; streaming: boolean; steps: AiStep[]; confirms: ConfirmReq[]; commands: AiCommand[]; meta?: string; error?: {message: string; code: string}}
 
+/** Fired by the "next model" shortcut; the open assistant moves to the next model of its provider. */
+export const AI_NEXT_MODEL = 'vvterm:ai-next-model'
+
 const store = {
   get: (k: string) => { try { return localStorage.getItem(k) ?? '' } catch { return '' } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* not remembered */ } },
@@ -225,6 +228,20 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
     setModel(v)
     store.set('vvterm.ai.model.' + provider, v)
   }
+  const modelsRef = useRef({models, model, busy})
+  modelsRef.current = {models, model, busy}
+  useEffect(() => {
+    const next = () => {
+      const {models: l, model: cur, busy: b} = modelsRef.current
+      if (b || !l || l.models.length < 2) return
+      const i = l.models.findIndex(m => m.id === cur)
+      const m = l.models[(i + 1) % l.models.length]
+      pickModel(m.id)
+      toast.info('Model: ' + m.name)
+    }
+    window.addEventListener(AI_NEXT_MODEL, next)
+    return () => window.removeEventListener(AI_NEXT_MODEL, next)
+  })
   const setPolicy = async (v: string) => {
     try { await be.assistant.setHostPolicy(hostId, v as AiPolicy); await loadInfo() } catch (e) { toast.error(errMsg(e)) }
   }

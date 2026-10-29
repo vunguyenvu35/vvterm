@@ -32,6 +32,7 @@ export const ACTIONS: ActionDef[] = [
   {id: 'prev_tab', label: 'Previous tab', group: 'Tabs', default: 'Ctrl+Shift+Tab'},
   {id: 'close_pane', label: 'Close the focused pane', group: 'Terminal', default: 'Mod+Shift+W'},
   {id: 'broadcast_input', label: 'Broadcast input to every pane of the tab', group: 'Terminal', default: 'Mod+Alt+B', defaultMac: 'Mod+B'},
+  {id: 'ai_next_model', label: 'Switch the assistant to its next model', group: 'Terminal', default: 'Mod+Shift+M'},
   {id: 'split_right', label: 'Split the pane right', group: 'Terminal', default: 'Mod+D'},
   {id: 'split_down', label: 'Split the pane down', group: 'Terminal', default: 'Mod+Shift+D'},
   {id: 'terminal_copy', label: 'Copy the selection', group: 'Terminal', default: 'Mod+Shift+C', defaultMac: 'Mod+C'},
