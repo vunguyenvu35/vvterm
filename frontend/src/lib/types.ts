@@ -233,6 +233,8 @@ export interface AiProvider {
   /** the default model of the provider; '' lets the CLI decide */
   model: string
   supports_mcp: boolean
+  /** takes pictures (sent as they are, after the user confirms) */
+  supports_images: boolean
   custom: boolean
 }
 
@@ -268,6 +270,8 @@ export interface AiPreview {
   alt_screen: boolean
   vault_locked: boolean
   empty: boolean
+  /** pictures that would be sent as they are: nothing can be hidden in a picture */
+  images: number
 }
 
 export interface AiCommand {
@@ -293,7 +297,8 @@ export interface AiCommandCheck {
   typed_confirm: boolean
 }
 
-export interface AiAskOptions {provider: string; model: string; lines: number; selection: string; request_id?: string}
+export interface AiAttachment {name: string; mime: string; /** the content of a text file */ text?: string; /** the base64 content of an image */ data?: string}
+export interface AiAskOptions {provider: string; model: string; lines: number; selection: string; request_id?: string; attachments?: AiAttachment[]; /** the user agreed to send pictures as they are */ allow_images?: boolean}
 export interface AiCustomProvider {id?: string; name: string; command: string; args?: string[]; prompt_via?: 'stdin' | 'arg'}
 
 export type McpMode = 'allow' | 'ask' | 'off'

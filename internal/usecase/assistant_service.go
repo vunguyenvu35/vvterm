@@ -50,14 +50,19 @@ type AssistantService struct {
 	confirmed map[string]bool
 	runs      map[string]*assistRun
 	mcpState  map[string]string
+	flights   map[string]*sync.Mutex // one model load per provider at a time
 	seq       int
 }
 
 type modelCache struct {
 	list []assistant.Model
+	ok   bool // the list was loaded: a failure is not kept for the whole TTL, it is tried again
 	err  string
 	at   time.Time
 }
+
+// modelsRetryAfter is how long a failed load is remembered before the next call tries again.
+const modelsRetryAfter = 3 * time.Second
 
 type conversation struct {
 	provider string
@@ -66,7 +71,7 @@ type conversation struct {
 
 func NewAssistantService(c *Core, s *SessionService) *AssistantService {
 	return &AssistantService{c: c, sess: s, status: map[string]assistant.Status{}, models: map[string]modelCache{},
-		convs: map[string]*conversation{}, confirmed: map[string]bool{}, runs: map[string]*assistRun{}, mcpState: map[string]string{}}
+		convs: map[string]*conversation{}, confirmed: map[string]bool{}, runs: map[string]*assistRun{}, mcpState: map[string]string{}, flights: map[string]*sync.Mutex{}}
 }
 
 // ---- configuration ----
@@ -164,7 +169,9 @@ type ProviderView struct {
 	Default     bool             `json:"default"`
 	Model       string           `json:"model"`
 	SupportsMCP bool             `json:"supports_mcp"`
-	Custom      bool             `json:"custom"`
+	// SupportsImages: the provider takes pictures (they are sent as they are, after the user confirms).
+	SupportsImages bool `json:"supports_images"`
+	Custom         bool `json:"custom"`
 }
 
 func (a *AssistantService) agents() []Agent {
@@ -220,8 +227,9 @@ func (a *AssistantService) providerViews() []ProviderView {
 	out := []ProviderView{}
 	for _, ag := range agents {
 		pc := cfg.Providers[ag.ID()]
+		ia, _ := ag.(ImageAgent)
 		out = append(out, ProviderView{ID: ag.ID(), Name: ag.Name(), Status: a.status[ag.ID()], Enabled: pc.Enabled,
-			Default: cfg.DefaultProvider == ag.ID(), Model: pc.Model, SupportsMCP: ag.SupportsMCP(), Custom: custom[ag.ID()]})
+			Default: cfg.DefaultProvider == ag.ID(), Model: pc.Model, SupportsMCP: ag.SupportsMCP(), SupportsImages: ia != nil && ia.SupportsImages(), Custom: custom[ag.ID()]})
 	}
 	return out
 }
@@ -307,49 +315,40 @@ func (a *AssistantService) SetDefaultProvider(id string) error {
 	})
 }
 
-// SetProviderModel stores a provider's default model ("" = the CLI decides). An id the provider did not list
-// is kept as a custom model of that provider.
+// SetProviderModel stores a provider's default model ("" = the CLI decides). The model is chosen from the list the
+// provider itself gave: an id it did not list is refused, so nothing typed by hand can reach a command line.
 func (a *AssistantService) SetProviderModel(id, model string) error {
 	model = strings.TrimSpace(model)
-	if model != "" && !modelID.MatchString(model) {
-		return errors.New("invalid model id")
-	}
 	if _, ok := a.agent(id); !ok {
 		return errors.New("unknown provider")
 	}
-	listed := false // read before update: update holds the lock
-	a.mu.Lock()
-	for _, m := range a.models[id].list {
-		listed = listed || m.ID == model
+	if model != "" {
+		list, err := a.Models(id, false)
+		if err != nil {
+			return err
+		}
+		listed := false
+		for _, m := range list.Models {
+			listed = listed || m.ID == model
+		}
+		if !listed || !modelID.MatchString(model) {
+			return errors.New("choose a model from the list")
+		}
 	}
-	a.mu.Unlock()
 	return a.update(func(c *assistant.Config) error {
 		pc := c.Providers[id]
 		pc.Model = model
-		if model != "" {
-			known := listed
-			for _, m := range pc.CustomModels {
-				known = known || m == model
-			}
-			if !known {
-				pc.CustomModels = append([]string{model}, pc.CustomModels...)
-				if len(pc.CustomModels) > 10 {
-					pc.CustomModels = pc.CustomModels[:10]
-				}
-			}
-		}
 		c.Providers[id] = pc
 		return nil
 	})
 }
 
 // ModelList is what a provider offers. Default comes first and passes no model flag; the rest is read from
-// the provider itself, then the custom ids the user used before. A provider that cannot list its models
-// returns only the first and the custom ones: nothing is invented.
+// the provider itself. A provider that cannot list its models returns only the first: nothing is invented.
 type ModelList struct {
 	Models []assistant.Model `json:"models"`
 	Error  string            `json:"error"`
-	// CanList is false when the provider has no way to list models (a custom id is the only option).
+	// CanList is false when the provider has no way to list models (only the default is offered).
 	CanList bool `json:"can_list"`
 }
 
@@ -359,20 +358,40 @@ func (a *AssistantService) Models(id string, refresh bool) (ModelList, error) {
 	if !ok {
 		return ModelList{}, errors.New("unknown provider")
 	}
+	// one load per provider at a time: the UI may ask from several places at once, and every load starts the CLI
+	a.mu.Lock()
+	fl := a.flights[id]
+	if fl == nil {
+		fl = &sync.Mutex{}
+		a.flights[id] = fl
+	}
+	a.mu.Unlock()
+	fl.Lock()
+	defer fl.Unlock()
+
 	a.mu.Lock()
 	mc, have := a.models[id]
 	a.mu.Unlock()
-	if !have || refresh || time.Since(mc.at) > modelsTTL {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	age := time.Since(mc.at)
+	fresh := have && mc.ok && age <= modelsTTL
+	reload := !fresh
+	if have && !mc.ok && age < modelsRetryAfter && !refresh {
+		reload = false // it just failed: show that instead of starting the CLI again at once
+	}
+	if refresh {
+		reload = true // an explicit Refresh always asks the provider
+	}
+	if reload {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		list, err := ag.Models(ctx)
 		cancel()
 		switch {
-		case err != nil && have:
+		case err != nil && have && mc.ok:
 			mc.err = "Could not refresh models: " + err.Error() // keep the previous list
 		case err != nil:
 			mc = modelCache{err: err.Error(), at: time.Now()}
 		default:
-			mc = modelCache{list: list, at: time.Now()}
+			mc = modelCache{list: list, ok: true, at: time.Now()}
 		}
 		a.mu.Lock()
 		a.models[id] = mc
@@ -385,12 +404,6 @@ func (a *AssistantService) Models(id string, refresh bool) (ModelList, error) {
 		if !seen[m.ID] {
 			seen[m.ID] = true
 			out.Models = append(out.Models, m)
-		}
-	}
-	for _, m := range a.config().Providers[id].CustomModels {
-		if !seen[m] {
-			seen[m] = true
-			out.Models = append(out.Models, assistant.Model{ID: m, Name: m, Description: "custom model id"})
 		}
 	}
 	return out, nil
@@ -575,6 +588,8 @@ type PreviewView struct {
 	AltScreen   bool                   `json:"alt_screen"`
 	VaultLocked bool                   `json:"vault_locked"`
 	Empty       bool                   `json:"empty"`
+	// Images is how many pictures would be sent as they are (they are not part of Text: nothing can be hidden in them).
+	Images int `json:"images"`
 }
 
 func (a *AssistantService) screenText(sid string, lines int, selection string) (text string, alt bool, hostID string, err error) {
@@ -599,11 +614,16 @@ func (a *AssistantService) screenText(sid string, lines int, selection string) (
 }
 
 // Preview shows what the assistant would receive. Nothing is sent.
-func (a *AssistantService) Preview(sid string, lines int, selection string) (PreviewView, error) {
+func (a *AssistantService) Preview(sid string, lines int, selection string, attachments []assistant.Attachment) (PreviewView, error) {
 	raw, alt, hostID, err := a.screenText(sid, lines, selection)
 	if err != nil {
 		return PreviewView{}, err
 	}
+	fileText, images, err := attached(attachments)
+	if err != nil {
+		return PreviewView{}, err
+	}
+	raw += fileText
 	g, locked, err := a.guard()
 	if err != nil {
 		return PreviewView{}, err
@@ -616,5 +636,5 @@ func (a *AssistantService) Preview(sid string, lines int, selection string) (Pre
 		fs = []secretpolicy.Finding{}
 	}
 	return PreviewView{Text: san.String(), Findings: fs, Redacted: secretpolicy.Total(fs), Lines: strings.Count(raw, "\n") + 1,
-		AltScreen: alt, VaultLocked: locked, Empty: strings.TrimSpace(raw) == ""}, nil
+		AltScreen: alt, VaultLocked: locked, Empty: strings.TrimSpace(raw) == "", Images: len(images)}, nil
 }

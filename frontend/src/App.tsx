@@ -119,7 +119,10 @@ export default function App({initial}: {/** an app window opened for this place 
     return () => { offLocked(); offBridge(); offHosts(); offMenu() }
   }, [be, refreshVault])
 
-  useEffect(() => { document.documentElement.dataset.theme = appearance }, [appearance])
+  useEffect(() => {
+    document.documentElement.dataset.theme = appearance
+    try { localStorage.setItem('vvterm.appearance', appearance) } catch { /* not remembered */ }
+  }, [appearance])
 
   // Configurable shortcuts (Settings → Shortcuts). The handlers are re-assigned on every render once the
   // vault is unlocked, so the listener below never sees stale state.

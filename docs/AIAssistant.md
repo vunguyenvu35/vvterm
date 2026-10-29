@@ -187,10 +187,7 @@ How each provider is asked (verified against the installed CLIs on 2026-10-29: C
 | Claude Code | The control protocol of the stream-json mode (`--input-format stream-json`): the initialize response lists the supported models for the account. | To verify in implementation: the CLI has no `models` subcommand, so this path must be confirmed against the installed version before it is relied on. |
 | Gemini CLI | None found: `gemini --help` has `-m/--model` but no listing command. | Not available. |
 
-When a provider cannot list its models the picker does **not** invent a list. It shows only:
-
-1. `Default (CLI decides)`, which passes no model flag and is always valid; and
-2. `Custom model id…`, a free-text field. The id is passed to the CLI unchanged. Ids the user has used before are remembered per provider.
+The model is **chosen from the list, never typed**. `Default (CLI decides)` is always first and passes no model flag. When a provider cannot list its models the picker does **not** invent a list: it offers only `Default`, and the panel says the provider uses its default model. A model id that the provider did not list is refused when it is saved.
 
 The list is cached in memory with a timestamp and refreshed by the Refresh button, by Settings opening, and when the cache is older than 24 hours. A failed refresh keeps the previous list and shows "Could not refresh models". Reading a catalogue never sends a prompt and costs no subscription usage. VVTerm reads only the model catalogue, never the credential files next to it (`auth.json` and similar).
 
@@ -283,7 +280,7 @@ MCP servers are stored in the database (name, type, command, arguments, URL, sco
 ## 8. User interface
 
 - **Panel.** A panel beside the terminal pane (right side). Layout alternatives (bottom overlay) are an open question ([12](#12-risks-and-open-questions)).
-- **Header.** Provider picker and **model picker** (the list from [5.4](#54-model-discovery), with `Default` and `Custom model id…`; the choice is per panel and remembered per provider), host policy toggle, and the badge `Sharing screen · N items redacted`, always visible. The badge turns grey when sharing is off.
+- **Header.** Provider picker and **model picker** (the list from [5.4](#54-model-discovery), with `Default` first; the choice is per panel and remembered per provider), host policy toggle, and the badge `Sharing screen · N items redacted`, always visible. The badge turns grey when sharing is off.
 - **Preview.** A "What will be sent" button shows the exact redacted payload. Redacted values appear as `*******`.
 - **Composer.** One line plus Send, with a "Use selection" shortcut that sends only the highlighted terminal text.
 - **Replies.** Streamed text, then command cards ([6](#6-command-execution-and-approval)).
@@ -398,7 +395,7 @@ Phases 1 and 2 are the commitment of this document; 3, 3b, and 4 are decided aft
 
 1. Panel placement: right sidebar or bottom overlay.
 2. Is chat history stored (redacted) in the database, or memory only? The draft default is memory only.
-3. Gemini (and any provider without a listing) shows only `Default` and a custom id. Acceptable, or should VVTerm ship a maintained suggestion list as an optional extra?
+3. Gemini (and any provider without a listing) offers only `Default`. Resolved: the model is chosen from the provider's own list, never typed.
 4. Should hosts tagged production be forced to `off`, or only default to it? The draft forces Run to be disabled but allows the assistant.
 5. Does each CLI allow its own MCP configuration to be disabled while one gateway entry is added? This decides per provider whether MCP is supported ([5.7](#57-mcp-servers-and-the-gateway)).
 6. Should the first release include HTTP servers, or only stdio servers? OAuth remote servers are excluded either way.
@@ -433,6 +430,16 @@ Run the live checks yourself with `VVTERM_LIVE=1 go test ./internal/agentx -run 
 - **Streaming** sends the whole text so far, cleaned again each time, so a secret split over two chunks is still masked; text that looks like the start of the JSON envelope is not shown.
 - **Auto-run (phase 4)** is the `terminal_run` tool of the gateway, offered only when the user turned it on, never on production hosts, only for commands on the allow-list (`assistant.ReadOnlyAllowed`: no shell syntax, fixed programs, no follow or watch modes, nothing that looks like a secret path).
 - **Activity log** has a new kind, `assistant`, with an *Assistant* filter on the Logs page.
+
+### Added after the first review
+
+- **Models are chosen, not typed.** The custom model id was removed; a failed load is retried (it is not remembered for a day), loads are single-flight per provider, and the panel shows *Loading models…* and a *Retry* button.
+- **Chat box.** It grows with the text, shows suggestions in an empty chat, renders code blocks with a Copy button, and takes **files and screenshots** by drag and drop, paste and the paperclip.
+  - **Text files** (up to 5, 100 KB each) are added to the context and go through the secret guard like the screen; the preview shows them redacted.
+  - **Pictures** (up to 3, 5 MB each; PNG, JPEG, GIF, WebP, checked by content) **cannot be checked for secrets**, so they are the one thing an agent receives unredacted. They are sent only after the user confirms each time, only to a provider that takes pictures (Claude Code and Codex, both verified live with a test picture), and the activity log records that pictures were sent as they are. `assistant.ConfirmedImage` can only be built by `ConfirmImage`, and `archtest` enforces it.
+- **Locking the vault closes the Settings window** (it shows security options and the providers), whether the user locked it or the inactivity timer did.
+- **No white flash when Settings opens:** the page paints its background before any script loads, the last appearance is remembered, and the Settings web view is transparent over the window colour.
+- **Antigravity (`agy`) is not offered as a provider.** It works headlessly (`agy --print --output-format stream-json`, `agy models`), but it applies the user's own allow-rules from `~/.gemini/antigravity-cli/settings.json` (on the test machine they allow `command(ls)`, `command(echo)` and Gmail and Calendar MCP tools). VVTerm has no flag to start it without them, so a tool call would not be refused, and the isolation self-test would correctly fail. The Gemini CLI shares `~/.gemini` with Antigravity, which sets `security.auth.selectedType` to `gateway`; Gemini CLI does not support that value, which is why it reports an invalid auth method.
 
 ### Not done
 

@@ -104,3 +104,43 @@ func TestSecretSplitOverTwoScreenRowsStaysOneLine(t *testing.T) {
 		t.Fatal("a wrapped line must stay one logical line")
 	}
 }
+
+func png() []byte { return append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 40)...) }
+
+func TestImagesAreIdentifiedByTheirContentNotTheirName(t *testing.T) {
+	img, err := ConfirmImage("../../etc/shot.txt", png())
+	if err != nil || img.MIME() != "image/png" || img.Name() != "shot.txt" || img.Ext() != ".png" {
+		t.Fatalf("%v %+v", err, img)
+	}
+	for name, data := range map[string][]byte{"text": []byte("just text"), "empty": nil, "pdf": []byte("%PDF-1.7"), "svg": []byte("<svg onload=x>"), "html": []byte("<html>")} {
+		if _, err := ConfirmImage(name+".png", data); err == nil {
+			t.Errorf("%s must not pass as an image", name)
+		}
+	}
+	if _, err := ConfirmImage("big.png", append(png(), make([]byte, MaxImageBytes)...)); err == nil {
+		t.Fatal("a huge image must be refused")
+	}
+	for mime, head := range map[string]string{"image/jpeg": "\xff\xd8\xff\xe0", "image/gif": "GIF89a", "image/webp": "RIFF\x00\x00\x00\x00WEBPVP8 "} {
+		if got := ImageMIME([]byte(head + "xxxxxxxx")); got != mime {
+			t.Errorf("%s: got %q", mime, got)
+		}
+	}
+}
+
+func TestTextAttachmentsAreChecked(t *testing.T) {
+	if err := CheckText(Attachment{Name: "a.log", Text: "line"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []Attachment{{Name: "e"}, {Name: "big", Text: strings.Repeat("a", MaxTextBytes+1)}, {Name: "bin", Text: "a\x00b"}, {Name: "bad", Text: "\xff\xfe"}} {
+		if CheckText(a) == nil {
+			t.Errorf("%q must be refused", a.Name)
+		}
+	}
+	got := AttachedText(Attachment{Name: "../x\n.log", Text: "hello"})
+	if !strings.Contains(got, `"x.log"`) || !strings.Contains(got, "<file>\nhello\n</file>") || strings.Contains(got, "..") {
+		t.Fatalf("%q", got)
+	}
+	if CleanName("  ") != "file" || len([]rune(CleanName(strings.Repeat("a", 500)))) != 120 {
+		t.Fatal("CleanName")
+	}
+}

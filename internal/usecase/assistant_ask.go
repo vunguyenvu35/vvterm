@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,9 +24,16 @@ type AskOptions struct {
 	Model     string `json:"model"`    // "" = the provider's default model
 	Lines     int    `json:"lines"`
 	Selection string `json:"selection"` // when set, only this text is shared instead of the screen
+	// Attachments are files added to the question: text files go through the secret guard like the screen; pictures
+	// cannot be checked, so they need AllowImages (the user confirmed) and a provider that takes images.
+	Attachments []assistant.Attachment `json:"attachments"`
+	AllowImages bool                   `json:"allow_images"`
 	// RequestID is chosen by the UI so it can listen for the events before the question starts. Empty: made here.
 	RequestID string `json:"request_id"`
 }
+
+// ErrConfirmImages is returned by Ask when pictures are attached and the user has not agreed to send them as they are.
+var ErrConfirmImages = errors.New("confirm_images")
 
 var requestID = regexp.MustCompile(`^[A-Za-z0-9_-]{6,40}$`)
 
@@ -122,6 +130,19 @@ func (a *AssistantService) Ask(sid, question string, opt AskOptions) (string, er
 	if err != nil {
 		return "", err
 	}
+	fileText, images, err := attached(opt.Attachments)
+	if err != nil {
+		return "", err
+	}
+	if len(images) > 0 {
+		if ia, ok := ag.(ImageAgent); !ok || !ia.SupportsImages() {
+			return "", fmt.Errorf("%s cannot take images: send the text of the screen instead", ag.Name())
+		}
+		if !opt.AllowImages {
+			return "", ErrConfirmImages
+		}
+	}
+	screen += fileText
 	// every text an agent receives is made here, by the guard
 	system, _, e1 := g.Redact(assistant.SystemPrompt + systemExtra)
 	context_, fs, e2 := g.Redact(a.facts(hostID) + "\n" + screen)
@@ -152,7 +173,7 @@ func (a *AssistantService) Ask(sid, question string, opt AskOptions) (string, er
 	a.runs[id] = run
 	a.mu.Unlock()
 
-	req := assistant.Request{System: system, Context: context_, Question: q, History: history, Model: model}
+	req := assistant.Request{System: system, Context: context_, Question: q, History: history, Model: model, Images: images}
 	go a.execute(ctx, run, ag, req, g, redacted, info)
 	return id, nil
 }
@@ -241,7 +262,11 @@ func (a *AssistantService) execute(ctx context.Context, run *assistRun, ag Agent
 			a.mu.Unlock()
 		}
 	}
-	a.c.record(domain.ActAssistant, run.hostID, "", fmt.Sprintf("Asked %s (%d secrets redacted)", ag.Name(), redacted), true)
+	files := ""
+	if n := len(req.Images); n > 0 {
+		files = fmt.Sprintf(", %d image(s) sent as they are", n)
+	}
+	a.c.record(domain.ActAssistant, run.hostID, "", fmt.Sprintf("Asked %s (%d secrets redacted%s)", ag.Name(), redacted, files), true)
 	a.emit("assistant:done:"+run.id, view)
 }
 
@@ -435,3 +460,39 @@ func (a *AssistantService) runAndRead(sid, cmd string) (string, error) {
 }
 
 func marshalArgs(m map[string]any) json.RawMessage { b, _ := json.Marshal(m); return b }
+
+// attached checks the files of a question: the text of text files (to be added to the context before redaction) and the
+// pictures (to be sent as they are, only after the user agreed).
+func attached(list []assistant.Attachment) (text string, images []assistant.ConfirmedImage, err error) {
+	var texts, imgs, total int
+	for _, a := range list {
+		if a.Data != "" {
+			imgs++
+			if imgs > assistant.MaxImages {
+				return "", nil, fmt.Errorf("at most %d images can be added", assistant.MaxImages)
+			}
+			raw, derr := base64.StdEncoding.DecodeString(a.Data)
+			if derr != nil {
+				return "", nil, fmt.Errorf("%s could not be read", assistant.CleanName(a.Name))
+			}
+			if total += len(raw); total > assistant.MaxImagesTotal {
+				return "", nil, errors.New("the images are too large together")
+			}
+			img, cerr := assistant.ConfirmImage(a.Name, raw)
+			if cerr != nil {
+				return "", nil, cerr
+			}
+			images = append(images, img)
+			continue
+		}
+		texts++
+		if texts > assistant.MaxTextFiles {
+			return "", nil, fmt.Errorf("at most %d text files can be added", assistant.MaxTextFiles)
+		}
+		if cerr := assistant.CheckText(a); cerr != nil {
+			return "", nil, cerr
+		}
+		text += assistant.AttachedText(a)
+	}
+	return text, images, nil
+}

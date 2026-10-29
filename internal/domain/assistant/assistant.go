@@ -63,6 +63,8 @@ type Request struct {
 	History  []Turn
 	Model    string // "" lets the CLI decide
 	Gateway  *Gateway
+	// Images are pictures the user agreed to send as they are (see ConfirmedImage).
+	Images []ConfirmedImage
 }
 
 // Command is a command the assistant suggests. Risk is set by VVTerm, never taken from the agent.

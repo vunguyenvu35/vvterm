@@ -46,6 +46,8 @@ export interface Fake extends Backend {
       mcp: McpServer[]
       tools: Record<string, McpTool[]>
       importable: McpImportItem[]
+      /** while set, models() waits for it (a provider that is slow to answer) */
+      modelsGate: Promise<void> | null
       /** what checkCommand answers for a command (default: low risk, everything allowed) */
       check: (cmd: string) => AiCommandCheck
     }
@@ -105,14 +107,14 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     testResult: {ok: true, message: 'Connected to 10.0.0.1 as root', server_version: 'SSH-2.0-OpenSSH_9.6', latency_ms: 42, hops: 1},
     calls: [],
     ai: {
-      providers: [{id: 'claude', name: 'Claude Code', status: {state: 'ready', version: '2.1.0', detail: '', hint: ''}, enabled: true, default: true, model: '', supports_mcp: true, custom: false}],
+      providers: [{id: 'claude', name: 'Claude Code', status: {state: 'ready', version: '2.1.0', detail: '', hint: ''}, enabled: true, default: true, model: '', supports_mcp: true, supports_images: true, custom: false}],
       models: {claude: {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5'}, {id: 'sonnet', name: 'Sonnet 5.5'}], error: '', can_list: true}},
       settings: {lines: 200, patterns: [], auto_run: false, default_provider: 'claude'},
       info: {host_id: 'local', label: 'This computer', policy: 'on', stored: '', production: false, confirmed: true, connected: true},
-      preview: {text: 'Host: This computer\n$ df -h\n/dev/sda1 98% /var', findings: [], redacted: 0, lines: 3, alt_screen: false, vault_locked: false, empty: false},
+      preview: {text: 'Host: This computer\n$ df -h\n/dev/sda1 98% /var', findings: [], redacted: 0, lines: 3, alt_screen: false, vault_locked: false, empty: false, images: 0},
       enableError: {},
       reply: {text: 'The disk is full.', commands: [{cmd: 'df -h', why: 'check usage', risk: 'low', reasons: [], warnings: [], blocked: false, block_reason: ''}], provider: 'claude', model: '', redacted: 0},
-      asked: [], mcp: [], tools: {}, importable: [],
+      asked: [], mcp: [], tools: {}, importable: [], modelsGate: null,
       check: () => ({blocked: false, block_reason: '', risk: 'low', reasons: [], warnings: [], run_allowed: true, run_reason: '', typed_confirm: false}),
     },
     ...init,
@@ -273,7 +275,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       },
       setDefaultProvider: async i => { rec('assistant.setDefaultProvider', i); state.ai.providers = state.ai.providers.map(p => ({...p, default: p.id === i})); state.ai.settings.default_provider = i },
       setProviderModel: async (i, m) => { rec('assistant.setProviderModel', i, m); state.ai.providers = state.ai.providers.map(p => (p.id === i ? {...p, model: m} : p)) },
-      models: async (i, r) => { rec('assistant.models', i, r); return state.ai.models[i] ?? {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false} },
+      models: async (i, r) => { rec('assistant.models', i, r); if (state.ai.modelsGate) await state.ai.modelsGate; return state.ai.models[i] ?? {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false} },
       settings: async () => ({...state.ai.settings}),
       saveSettings: async s => { rec('assistant.saveSettings', s); state.ai.settings = {...s}; return {...s} },
       saveCustomProvider: async p => { rec('assistant.saveCustomProvider', p) },
@@ -282,11 +284,12 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       setHostPolicy: async (h, p) => { rec('assistant.setHostPolicy', h, p); state.ai.info = {...state.ai.info, stored: p, policy: p || (state.ai.info.production ? 'off' : 'ask')} },
       confirmShare: async sid => { rec('assistant.confirmShare', sid); state.ai.info = {...state.ai.info, confirmed: true} },
       resetConversation: async sid => { rec('assistant.resetConversation', sid) },
-      preview: async (sid, l, sel) => { rec('assistant.preview', sid, l, sel); return {...state.ai.preview} },
+      preview: async (sid, l, sel, att) => { rec('assistant.preview', sid, l, sel, att); return {...state.ai.preview, images: (att ?? []).filter(a => a.data).length} },
       ask: async (sid, q, o) => {
         rec('assistant.ask', sid, q, o)
         if (state.ai.info.policy === 'ask' && !state.ai.info.confirmed) throw 'confirm_share'
         if (state.ai.info.policy === 'off') throw 'The assistant is turned off for this host'
+        if ((o.attachments ?? []).some(a => a.data) && !o.allow_images) throw 'confirm_images'
         const rid = o.request_id || id('ask-')
         state.ai.asked.push(rid)
         return rid

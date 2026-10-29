@@ -16,16 +16,15 @@ const MODES: {value: McpMode; label: string}[] = [{value: 'allow', label: 'Allow
  * VVTerm gateway, which starts the servers, checks every call's arguments for secrets, redacts every result and
  * asks you first for anything that is not a plain read. New tools of a server stay off until you review them.
  */
-export function McpServersPanel({providers}: {providers: AiProvider[]}) {
+export function McpServersPanel({providers, hosts}: {providers: AiProvider[]; hosts: Host[]}) {
   const be = useBackend()
   const toast = useToast()
   const [servers, setServers] = useState<McpServer[] | null>(null)
-  const [hosts, setHosts] = useState<Host[]>([])
   const [editing, setEditing] = useState<McpServer | 'new' | null>(null)
   const [importing, setImporting] = useState(false)
 
   const load = useCallback(async () => {
-    try { setServers(await be.assistant.mcp.list()); setHosts(await be.hosts.listHosts({})) } catch (e) { toast.error(errMsg(e)) }
+    try { setServers(await be.assistant.mcp.list()) } catch (e) { toast.error(errMsg(e)) }
   }, [be, toast])
   useEffect(() => { void load() }, [load])
 

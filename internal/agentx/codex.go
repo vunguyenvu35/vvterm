@@ -25,6 +25,9 @@ func (c *Codex) ID() string        { return "codex" }
 func (c *Codex) Name() string      { return "Codex CLI" }
 func (c *Codex) SupportsMCP() bool { return false } // not verified: see docs/AIAssistant.md 5.7
 
+// SupportsImages: pictures are written into the empty working directory and passed with -i.
+func (c *Codex) SupportsImages() bool { return true }
+
 func (c *Codex) bin() string {
 	if c.Bin != "" {
 		return c.Bin
@@ -127,7 +130,16 @@ func (c *Codex) Ask(ctx context.Context, r assistant.Request, emit func(string))
 	if r.Model != "" {
 		args = append(args, "-m", r.Model)
 	}
-	args = append(args, "-")
+	if len(r.Images) == 0 {
+		args = append(args, "-")
+	}
+	for i, im := range r.Images { // the prompt then comes from stdin: "-i" takes every value that follows it
+		path := filepath.Join(dir, fmt.Sprintf("image-%d%s", i+1, im.Ext()))
+		if err := os.WriteFile(path, im.Data(), 0o600); err != nil {
+			return "", err
+		}
+		args = append(args, "-i", path)
+	}
 	var last string
 	var failure string
 	stderr, err := run(ctx, runOpts{bin: bin, args: args, stdin: userPrompt(r, true), dir: dir, env: c.env(),

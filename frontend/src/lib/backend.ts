@@ -2,7 +2,7 @@ import {createContext, useContext} from 'react'
 import type {
   ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
   ActivityEntry, KnownHost, RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
-  AiAskOptions, AiCommandCheck, AiCustomProvider, AiModelList, AiPolicy, AiPreview, AiProvider, AiSessionState, AiSettings,
+  AiAskOptions, AiAttachment, AiCommandCheck, AiCustomProvider, AiModelList, AiPolicy, AiPreview, AiProvider, AiSessionState, AiSettings,
   McpImportItem, McpServer, McpServerInput, McpTool,
 } from './types'
 
@@ -123,7 +123,7 @@ export interface Backend {
     setHostPolicy(hostId: string, policy: AiPolicy): Promise<void>
     confirmShare(sid: string): Promise<void>
     resetConversation(sid: string): Promise<void>
-    preview(sid: string, lines: number, selection: string): Promise<AiPreview>
+    preview(sid: string, lines: number, selection: string, attachments?: AiAttachment[]): Promise<AiPreview>
     /** returns the request id; rejects with "confirm_share" when the user must confirm sharing first */
     ask(sid: string, question: string, opts: AiAskOptions): Promise<string>
     cancel(id: string): Promise<void>
@@ -199,7 +199,10 @@ declare global {
 
 function svc(pkg: string, name: string): Bound {
   const s = window.go?.[pkg]?.[name]
-  if (!s) throw new Error(`backend service ${pkg}.${name} is not available`)
+  if (!s) {
+    console.warn(`backend service ${pkg}.${name} is not available`)
+    throw new Error('VVTerm cannot reach its backend from this window. Close the window and open it again; if it keeps happening, restart VVTerm.')
+  }
   return s
 }
 
@@ -310,7 +313,7 @@ export function wailsBackend(): Backend {
       setHostPolicy: (h, p) => u('AssistantService', 'SetHostPolicy', h, p),
       confirmShare: sid => u('AssistantService', 'ConfirmShare', sid),
       resetConversation: sid => u('AssistantService', 'ResetConversation', sid),
-      preview: async (sid, l, sel) => { const p = await u<AiPreview>('AssistantService', 'Preview', sid, l, sel); return {...p, findings: p?.findings ?? []} },
+      preview: async (sid, l, sel, att) => { const p = await u<AiPreview>('AssistantService', 'Preview', sid, l, sel, att ?? []); return {...p, findings: p?.findings ?? []} },
       ask: (sid, q, o) => u('AssistantService', 'Ask', sid, q, o),
       cancel: id => u('AssistantService', 'Cancel', id),
       confirmTool: (r, c, a) => u('AssistantService', 'ConfirmTool', r, c, a),
@@ -409,6 +412,8 @@ export function bridgeBackend(): Backend {
       get: () => rpc('SettingsService', 'Get'),
       save: s => rpc('SettingsService', 'Save', s),
     },
+    // the host list (for choosing where an MCP server is offered) is read from the main process
+    hosts: {...base.hosts, listHosts: async f => (await rpc<Host[]>('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f})) ?? []},
     sync: {
       configure: url => rpc('SyncService', 'Configure', url),
       syncNow: () => rpc('SyncService', 'SyncNow'),

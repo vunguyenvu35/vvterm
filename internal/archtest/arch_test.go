@@ -155,6 +155,9 @@ func TestOnlySecretPolicyConstructsSanitized(t *testing.T) {
 		if strings.Contains(string(b), "Sanitized{") {
 			t.Errorf("%s builds a Sanitized value; only secretpolicy.Guard may", p)
 		}
+		if strings.Contains(string(b), "ConfirmedImage{") && !strings.Contains(filepath.ToSlash(p), "internal/domain/assistant/attachment.go") {
+			t.Errorf("%s builds a ConfirmedImage; only assistant.ConfirmImage may", p)
+		}
 		return nil
 	})
 	if err != nil {
@@ -168,6 +171,7 @@ func TestAgentRequestHoldsOnlySanitizedText(t *testing.T) {
 		f := rt.Field(i)
 		switch {
 		case f.Name == "Model" || f.Name == "Gateway":
+		case f.Name == "Images" && f.Type.Elem() == reflect.TypeOf(assistant.ConfirmedImage{}):
 		case f.Type == reflect.TypeOf(secretpolicy.Sanitized{}):
 		case f.Name == "History" && f.Type.Elem() == reflect.TypeOf(assistant.Turn{}):
 		default:

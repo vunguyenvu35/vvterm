@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor, within} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {AssistantTab} from './AssistantTab'
 import {setPaneSession} from '../terminal/panes'
@@ -155,18 +155,33 @@ describe('AssistantTab', () => {
     expect(localStorage.getItem('vvterm.ai.model.claude')).toBe('opus')
   })
 
-  it('a custom model id is stored with the provider and then used', async () => {
-    const {be} = setup()
-    await userEvent.click(await screen.findByRole('combobox', {name: /^Model,/}))
-    await userEvent.click(screen.getByRole('option', {name: 'Custom model id…'}))
-    await userEvent.type(screen.getByLabelText('Custom model id'), 'my-model-9')
-    await userEvent.click(screen.getByRole('button', {name: 'Use'}))
-    await waitFor(() => expect(be.state.calls).toContainEqual(['assistant.setProviderModel', 'claude', 'my-model-9']))
+  it('shows that the models are loading, and the list is for choosing', async () => {
+    let open!: () => void
+    const {be} = setup({}, b => { b.state.ai.modelsGate = new Promise<void>(r => { open = r }) })
+    const select = await screen.findByRole('combobox', {name: /^Model,/})
+    expect(select).toBeDisabled()
+    expect(select).toHaveTextContent('Loading models…')
+    act(() => open())
+    await waitFor(() => expect(screen.getByRole('combobox', {name: /^Model,/})).toBeEnabled())
+    expect(be.state.calls.filter(c => c[0] === 'assistant.models')).toHaveLength(1)
   })
 
-  it('a provider that cannot list models says so', async () => {
+  it('a models failure says why and can be retried, then the list appears', async () => {
+    const {be} = setup({}, b => { b.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}], error: 'Claude Code did not answer in time', can_list: true} })
+    expect(await screen.findByText(/Models could not be loaded: Claude Code did not answer in time/)).toBeInTheDocument()
+    be.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5'}], error: '', can_list: true}
+    await userEvent.click(screen.getByRole('button', {name: 'Retry'}))
+    await waitFor(() => expect(screen.queryByText(/Models could not be loaded/)).toBeNull())
+    expect(be.state.calls).toContainEqual(['assistant.models', 'claude', true])
+    await userEvent.click(screen.getByRole('combobox', {name: /^Model,/}))
+    expect(screen.getByRole('option', {name: /Opus 5.5/})).toBeInTheDocument()
+    expect(screen.queryByRole('option', {name: /Custom model id/})).toBeNull() // the model is chosen from the list, never typed
+  })
+
+  it('a provider that cannot list models says it uses its default one', async () => {
     setup({}, be => { be.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false} })
-    expect(await screen.findByText(/cannot list its models/)).toBeInTheDocument()
+    expect(await screen.findByText(/uses its default one/)).toBeInTheDocument()
+    expect(screen.queryByText(/custom/i)).toBeNull()
   })
 
   it('a real host can switch the assistant on or off for itself', async () => {
@@ -213,5 +228,135 @@ describe('AssistantTab', () => {
     be.state.ai.providers = be.state.ai.providers.map(p => ({...p, enabled: true}))
     act(() => be.emit('bridge:changed', 'AssistantService'))
     expect(await screen.findByTestId('ai-panel')).toBeInTheDocument()
+  })
+
+  describe('files and pictures', () => {
+    const pngFile = (name = 'shot.png') => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])], name, {type: 'image/png'})
+    const logFile = (name = 'deploy.log') => new File(['starting\nDB_PASSWORD=hunter2hunter2\nfailed'], name, {type: 'text/plain'})
+    const drop = (el: HTMLElement, files: File[]) => fireEvent.drop(el, {dataTransfer: {types: ['Files'], files}})
+    const panel = () => screen.findByTestId('ai-panel')
+
+    it('shows a drop target while a file is dragged over the panel', async () => {
+      setup()
+      const p = await panel()
+      fireEvent.dragEnter(p, {dataTransfer: {types: ['Files'], files: []}})
+      expect(await screen.findByText(/Drop files or screenshots/)).toBeInTheDocument()
+      fireEvent.dragLeave(p, {dataTransfer: {types: ['Files'], files: []}})
+      await waitFor(() => expect(screen.queryByText(/Drop files or screenshots/)).toBeNull())
+      fireEvent.dragEnter(p, {dataTransfer: {types: ['text/plain'], files: []}}) // dragging text is not a file drop
+      expect(screen.queryByText(/Drop files or screenshots/)).toBeNull()
+    })
+
+    it('a dropped text file becomes a chip and goes with the question; the chip is cleared after sending', async () => {
+      const {be} = setup()
+      drop(await panel(), [logFile()])
+      const chip = await screen.findByTestId('ai-chip')
+      expect(chip).toHaveTextContent('deploy.log')
+      await userEvent.type(screen.getByLabelText('Ask the assistant'), 'what failed?')
+      await userEvent.click(screen.getByRole('button', {name: 'Send'}))
+      await waitFor(() => expect(asks(be)).toHaveLength(1))
+      const opts = asks(be)[0][3] as {attachments: Array<{name: string; text?: string}>; allow_images: boolean}
+      expect(opts.attachments).toEqual([{name: 'deploy.log', mime: 'text/plain', text: 'starting\nDB_PASSWORD=hunter2hunter2\nfailed'}])
+      expect(opts.allow_images).toBe(false)
+      // the question shows its file, and the composer is empty again
+      expect(within(screen.getByText('what failed?').closest('.ai-msg') as HTMLElement).getByText('deploy.log')).toBeInTheDocument()
+      expect(screen.queryAllByTestId('ai-chip')).toHaveLength(1) // only the one in the sent message
+    })
+
+    it('a file can be sent without a question, and a chip can be removed', async () => {
+      const {be} = setup()
+      drop(await panel(), [logFile('a.log'), logFile('b.log')])
+      await waitFor(() => expect(screen.getAllByTestId('ai-chip')).toHaveLength(2))
+      await userEvent.click(screen.getByRole('button', {name: 'Remove a.log'}))
+      expect(screen.getAllByTestId('ai-chip')).toHaveLength(1)
+      await userEvent.click(screen.getByRole('button', {name: 'Send'}))
+      await waitFor(() => expect(asks(be)).toHaveLength(1))
+      expect(asks(be)[0][2]).toBe('Look at the attached file.')
+      expect((asks(be)[0][3] as {attachments: unknown[]}).attachments).toHaveLength(1)
+    })
+
+    it('the paperclip chooses files', async () => {
+      setup()
+      await panel()
+      await userEvent.upload(screen.getByLabelText('Choose files'), [logFile('x.log')])
+      expect(await screen.findByTestId('ai-chip')).toHaveTextContent('x.log')
+    })
+
+    it('a pasted screenshot is added instead of being typed in', async () => {
+      setup()
+      const box = await screen.findByLabelText('Ask the assistant')
+      fireEvent.paste(box, {clipboardData: {files: [pngFile('pasted.png')], types: ['Files']}})
+      expect(await screen.findByTestId('ai-chip')).toHaveTextContent('pasted.png')
+      expect(box).toHaveValue('')
+    })
+
+    it('pictures need an explicit confirmation, and Cancel sends nothing', async () => {
+      const {be} = setup()
+      drop(await panel(), [pngFile()])
+      await screen.findByTestId('ai-chip')
+      await userEvent.type(screen.getByLabelText('Ask the assistant'), 'what is this?')
+      await userEvent.click(screen.getByRole('button', {name: 'Send'}))
+      const dlg = await screen.findByRole('dialog', {name: 'Send pictures as they are?'})
+      expect(dlg).toHaveTextContent('cannot find a secret inside a picture')
+      expect(be.state.ai.asked).toHaveLength(0)
+      await userEvent.click(within(dlg).getByRole('button', {name: 'Cancel'}))
+      expect(be.state.ai.asked).toHaveLength(0)
+      expect(screen.getByLabelText('Ask the assistant')).toHaveValue('what is this?')
+      expect(screen.getByTestId('ai-chip')).toBeInTheDocument() // still attached
+      await userEvent.click(screen.getByRole('button', {name: 'Send'}))
+      await userEvent.click(within(await screen.findByRole('dialog', {name: 'Send pictures as they are?'})).getByRole('button', {name: 'Send pictures'}))
+      await waitFor(() => expect(be.state.ai.asked).toHaveLength(1))
+      expect((asks(be).at(-1)![3] as {allow_images: boolean}).allow_images).toBe(true)
+    })
+
+    it('a provider that cannot take pictures refuses them with a reason', async () => {
+      const {be} = setup({}, b => { b.state.ai.providers = b.state.ai.providers.map(p => ({...p, supports_images: false})) })
+      drop(await panel(), [pngFile()])
+      expect(await screen.findByText(/cannot take pictures/)).toBeInTheDocument()
+      expect(screen.queryByTestId('ai-chip')).toBeNull()
+      drop(await panel(), [logFile()]) // text still works
+      expect(await screen.findByTestId('ai-chip')).toBeInTheDocument()
+      expect(be.state.ai.asked).toHaveLength(0)
+    })
+
+    it('a file type that is not text or a picture is refused in plain words', async () => {
+      setup()
+      drop(await panel(), [new File(['%PDF'], 'report.pdf', {type: 'application/pdf'})])
+      expect(await screen.findByText(/not a text file or a picture/)).toBeInTheDocument()
+      expect(screen.queryByTestId('ai-chip')).toBeNull()
+    })
+
+    it('the preview before sharing includes the attached files and how many pictures go as they are', async () => {
+      const {be} = setup({}, b => { b.state.ai.info = {...b.state.ai.info, policy: 'ask', confirmed: false} })
+      drop(await panel(), [logFile(), pngFile()])
+      await waitFor(() => expect(screen.getAllByTestId('ai-chip')).toHaveLength(2))
+      await userEvent.type(screen.getByLabelText('Ask the assistant'), 'help')
+      await userEvent.click(screen.getByRole('button', {name: 'Send'}))
+      await screen.findByRole('dialog', {name: 'What will be sent'})
+      const call = be.state.calls.filter(c => c[0] === 'assistant.preview').at(-1)!
+      expect((call[4] as unknown[]).length).toBe(2)
+    })
+
+    it('suggestions in an empty chat ask at once', async () => {
+      const {be} = setup()
+      await userEvent.click(await screen.findByRole('button', {name: 'Explain the last error'}))
+      await waitFor(() => expect(asks(be)).toHaveLength(1))
+      expect(asks(be)[0][2]).toBe('Explain the last error')
+    })
+
+    it('an answer shows code as a block with a Copy button', async () => {
+      const {be} = setup()
+      await ask('how do I see the biggest folders?')
+      await waitFor(() => expect(asks(be)).toHaveLength(1))
+      const rid = (asks(be)[0][3] as {request_id: string}).request_id
+      act(() => be.emit(`assistant:done:${rid}`, reply({text: 'Try this:\n```bash\ndu -xh /var | sort -h\n```', commands: []})))
+      expect(await screen.findByText('du -xh /var | sort -h')).toBeInTheDocument()
+      expect(screen.getByRole('button', {name: 'Copy code'})).toBeInTheDocument()
+    })
+
+    it('the question and files come back when the send is refused', async () => {
+      setup({}, b => { b.state.ai.info = {...b.state.ai.info, policy: 'off'} })
+      expect(await screen.findByTestId('ai-off')).toBeInTheDocument() // nothing to drop on while the assistant is off
+    })
   })
 })

@@ -30,7 +30,10 @@ export default function SettingsApp() {
     return () => window.removeEventListener('focus', refresh)
   }, [refresh])
 
-  useEffect(() => { document.documentElement.dataset.theme = appearance }, [appearance])
+  useEffect(() => {
+    document.documentElement.dataset.theme = appearance
+    try { localStorage.setItem('vvterm.appearance', appearance) } catch { /* not remembered */ }
+  }, [appearance])
   useEffect(() => { document.documentElement.style.setProperty('zoom', String((settings.zoom || 100) / 100)) }, [settings.zoom])
   useEffect(() => { document.documentElement.dataset.motion = settings.reduce_motion ? 'reduced' : 'full' }, [settings.reduce_motion])
   useEffect(() => { document.title = 'Settings' }, [])

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -18,6 +19,7 @@ import (
 type fakeAgent struct {
 	id, name  string
 	mcp       bool
+	images    bool
 	status    assistant.Status
 	models    []assistant.Model
 	modelsErr error
@@ -269,23 +271,20 @@ func TestModelsComeFromTheProviderAndNothingIsInvented(t *testing.T) {
 	if err != nil || len(l.Models) != 3 || l.Models[0].ID != "" || l.Models[1].ID != "m1" || !l.CanList {
 		t.Fatalf("%v %+v", err, l)
 	}
-	// a custom id is remembered
-	if err := x.app.Assistant.SetProviderModel("fake", "my-model-9"); err != nil {
+	// the default model is chosen from that list, and only from it
+	if err := x.app.Assistant.SetProviderModel("fake", "m2"); err != nil {
 		t.Fatal(err)
 	}
-	l, _ = x.app.Assistant.Models("fake", false)
-	if len(l.Models) != 4 || l.Models[3].ID != "my-model-9" {
-		t.Fatalf("%+v", l.Models)
+	if x.app.Assistant.Providers()[0].Model != "m2" {
+		t.Fatal("the choice must be stored")
 	}
-	// a listed id is not duplicated into the custom list
-	_ = x.app.Assistant.SetProviderModel("fake", "m2")
-	if l, _ = x.app.Assistant.Models("fake", false); len(l.Models) != 4 {
-		t.Fatalf("%+v", l.Models)
+	if err := x.app.Assistant.SetProviderModel("fake", ""); err != nil {
+		t.Fatal(err)
 	}
 	// the list is cached; a failed refresh keeps it and says so
 	x.ag.modelsErr = errors.New("offline")
 	l, _ = x.app.Assistant.Models("fake", true)
-	if len(l.Models) != 4 || !strings.Contains(l.Error, "offline") {
+	if len(l.Models) != 3 || !strings.Contains(l.Error, "offline") {
 		t.Fatalf("%+v", l)
 	}
 	// a provider that cannot list: only Default (and customs)
@@ -295,10 +294,42 @@ func TestModelsComeFromTheProviderAndNothingIsInvented(t *testing.T) {
 	if len(l.Models) != 1 || l.CanList {
 		t.Fatalf("nothing must be invented: %+v", l)
 	}
-	for _, bad := range []string{"-x", "a b", "--model=evil", strings.Repeat("a", 200)} {
+	for _, bad := range []string{"-x", "a b", "--model=evil", "my-model-9", strings.Repeat("a", 200)} {
 		if err := x.app.Assistant.SetProviderModel("fake", bad); err == nil {
-			t.Errorf("model id %q must be rejected (it could be taken as a flag)", bad)
+			t.Errorf("model id %q must be rejected: it is not in the provider's list", bad)
 		}
+	}
+}
+
+func TestModelLoadsAreSingleFlightAndAFailureIsRetried(t *testing.T) {
+	x := newAH(t)
+	x.ag.models = []assistant.Model{{ID: "m1", Name: "Model 1"}}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ { // the UI asks from several places at once
+		wg.Add(1)
+		go func() { defer wg.Done(); x.app.Assistant.Models("fake", false) }()
+	}
+	wg.Wait()
+	if x.ag.modelCalls != 1 {
+		t.Fatalf("the provider must be asked once, not %d times", x.ag.modelCalls)
+	}
+	// a failure is not remembered for a day
+	y := newAH(t)
+	y.ag.modelsErr = errors.New("busy")
+	l, _ := y.app.Assistant.Models("fake", false)
+	if l.Error != "busy" || len(l.Models) != 1 {
+		t.Fatalf("%+v", l)
+	}
+	y.app.Assistant.Models("fake", false) // right behind the failure: no new CLI start
+	if y.ag.modelCalls != 1 {
+		t.Fatalf("a failure just seen must not start the CLI again at once: %d", y.ag.modelCalls)
+	}
+	time.Sleep(modelsRetryAfter + 100*time.Millisecond)
+	y.ag.modelsErr = nil
+	y.ag.models = []assistant.Model{{ID: "m1", Name: "Model 1"}}
+	l, _ = y.app.Assistant.Models("fake", false)
+	if l.Error != "" || len(l.Models) != 2 || y.ag.modelCalls != 2 {
+		t.Fatalf("a failed load must be tried again later: %+v calls=%d", l, y.ag.modelCalls)
 	}
 }
 
@@ -559,7 +590,7 @@ func TestPreviewIsExactlyWhatIsSent(t *testing.T) {
 	x := newAH(t)
 	sid := x.session(t)
 	x.print(t, "TOKEN=abcdef123456 value\r\nhello world\r\n")
-	pv, err := x.app.Assistant.Preview(sid, 0, "")
+	pv, err := x.app.Assistant.Preview(sid, 0, "", nil)
 	if err != nil || strings.Contains(pv.Text, "abcdef123456") || !strings.Contains(pv.Text, "hello world") || pv.Redacted == 0 {
 		t.Fatalf("%v %+v", err, pv)
 	}
@@ -567,8 +598,106 @@ func TestPreviewIsExactlyWhatIsSent(t *testing.T) {
 	if got := x.ag.requests()[0].Context.String(); got != pv.Text {
 		t.Fatalf("the preview must match what is sent:\n%q\n%q", pv.Text, got)
 	}
-	pv, _ = x.app.Assistant.Preview(sid, 0, "only this TOKEN=zzzz999999")
+	pv, _ = x.app.Assistant.Preview(sid, 0, "only this TOKEN=zzzz999999", nil)
 	if strings.Contains(pv.Text, "zzzz999999") || strings.Contains(pv.Text, "hello world") {
 		t.Fatalf("a selection replaces the screen: %q", pv.Text)
+	}
+}
+
+func (f *fakeAgent) SupportsImages() bool { return f.images }
+
+func pngB64() string {
+	return base64.StdEncoding.EncodeToString(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...))
+}
+
+func TestTextAttachmentsGoThroughTheSecretGuardLikeTheScreen(t *testing.T) {
+	x := newAH(t)
+	sid := x.session(t)
+	opts := AskOptions{RequestID: "req-attach1", Attachments: []assistant.Attachment{
+		{Name: "../deploy.log", MIME: "text/plain", Text: "starting\nDB_PASSWORD=hunter2hunter2\nkey AKIAIOSFODNN7EXAMPLE\ndone ok"},
+	}}
+	id, err := x.app.Assistant.Ask(sid, "what failed in the log?", opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := x.finish(t, id)
+	if ev.err != nil {
+		t.Fatal(ev.err)
+	}
+	sent := wire(x.ag.requests()[0])
+	if !strings.Contains(sent, `"deploy.log"`) || !strings.Contains(sent, "starting") || !strings.Contains(sent, "done ok") {
+		t.Fatalf("the file must be in the context:\n%s", sent)
+	}
+	if strings.Contains(sent, "hunter2hunter2") || strings.Contains(sent, "AKIAIOSFODNN7EXAMPLE") || strings.Contains(sent, "../") {
+		t.Fatalf("a secret or a path leaked:\n%s", sent)
+	}
+	if ev.reply.Redacted < 2 {
+		t.Fatalf("the file's secrets must be counted: %d", ev.reply.Redacted)
+	}
+	pv, err := x.app.Assistant.Preview(sid, 0, "", opts.Attachments)
+	if err != nil || !strings.Contains(pv.Text, "starting") || strings.Contains(pv.Text, "hunter2hunter2") || pv.Redacted < 2 {
+		t.Fatalf("the preview must show the redacted file: %v %+v", err, pv)
+	}
+}
+
+func TestAttachmentsAreCheckedAndLimited(t *testing.T) {
+	x := newAH(t)
+	sid := x.session(t)
+	many := func(n int) []assistant.Attachment {
+		var l []assistant.Attachment
+		for i := 0; i < n; i++ {
+			l = append(l, assistant.Attachment{Name: "f.txt", Text: "x"})
+		}
+		return l
+	}
+	for name, atts := range map[string][]assistant.Attachment{
+		"binary":       {{Name: "a.bin", Text: "a\x00b"}},
+		"empty":        {{Name: "e.txt"}},
+		"too large":    {{Name: "big.log", Text: strings.Repeat("a", assistant.MaxTextBytes+1)}},
+		"too many":     many(assistant.MaxTextFiles + 1),
+		"not an image": {{Name: "x.png", Data: base64.StdEncoding.EncodeToString([]byte("not a picture"))}},
+		"bad base64":   {{Name: "x.png", Data: "***"}},
+	} {
+		if _, err := x.app.Assistant.Ask(sid, "q", AskOptions{Attachments: atts, AllowImages: true}); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+	if len(x.ag.requests()) != 0 {
+		t.Fatal("nothing may reach the agent when an attachment is refused")
+	}
+}
+
+func TestImagesNeedTheUsersConfirmationAndAProviderThatTakesThem(t *testing.T) {
+	x := newAH(t)
+	sid := x.session(t)
+	img := []assistant.Attachment{{Name: "screenshot.png", MIME: "image/png", Data: pngB64()}}
+	if _, err := x.app.Assistant.Ask(sid, "what is this?", AskOptions{Attachments: img, AllowImages: true}); err == nil || !strings.Contains(err.Error(), "cannot take images") {
+		t.Fatalf("a provider that takes no images must refuse: %v", err)
+	}
+	x.ag.images = true
+	if p := x.app.Assistant.Providers()[0]; !p.SupportsImages {
+		t.Fatalf("%+v", p)
+	}
+	if _, err := x.app.Assistant.Ask(sid, "what is this?", AskOptions{Attachments: img}); !errors.Is(err, ErrConfirmImages) {
+		t.Fatalf("pictures cannot be checked for secrets, so the user must agree first: %v", err)
+	}
+	if len(x.ag.requests()) != 0 {
+		t.Fatal("nothing may be sent before the user agreed")
+	}
+	pv, _ := x.app.Assistant.Preview(sid, 0, "", img)
+	if pv.Images != 1 {
+		t.Fatalf("the preview must say a picture goes as it is: %+v", pv)
+	}
+	id, err := x.app.Assistant.Ask(sid, "what is this?", AskOptions{Attachments: img, AllowImages: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.finish(t, id)
+	req := x.ag.requests()[0]
+	if len(req.Images) != 1 || req.Images[0].MIME() != "image/png" || req.Images[0].Name() != "screenshot.png" {
+		t.Fatalf("%+v", req.Images)
+	}
+	if e, _ := x.core.Activity.List(domain.ActivityFilter{Kinds: []string{domain.ActAssistant}}); len(e) == 0 || !strings.Contains(e[0].Message, "image(s) sent as they are") {
+		t.Fatalf("sending a picture must be logged: %v", e)
 	}
 }

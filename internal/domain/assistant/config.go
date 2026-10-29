@@ -110,8 +110,7 @@ type ProviderConfig struct {
 	Enabled bool   `json:"enabled"`
 	Model   string `json:"model,omitempty"` // default model; "" = the CLI decides
 	// VerifiedVersion is the CLI version that passed the isolation self-test.
-	VerifiedVersion string   `json:"verified_version,omitempty"`
-	CustomModels    []string `json:"custom_models,omitempty"`
+	VerifiedVersion string `json:"verified_version,omitempty"`
 }
 
 // CustomProvider is a command the user wired up as a provider.

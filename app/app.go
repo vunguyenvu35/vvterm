@@ -118,6 +118,7 @@ func (a *App) Startup(ctx context.Context) {
 		if a.bridge != nil {
 			a.bridge.Publish(event, data)
 		}
+		a.closeSettingsWhenLocked(event)
 	})
 
 	// The Settings window is a second process that talks to this one. Without the bridge the frontend
@@ -181,4 +182,13 @@ func (a *App) menuWith(shortcuts map[string]string) *menu.Menu {
 			}
 		},
 	})
+}
+
+// closeSettingsWhenLocked ends the Settings window when the vault locks (by hand or by the inactivity timer): it
+// shows security options and the AI assistant's providers, and it must not stay open on a locked app. The Settings
+// process holds no data, so ending it loses nothing; it opens again from the main window after unlocking.
+func (a *App) closeSettingsWhenLocked(event string) {
+	if event == "vault:locked" && a.launcher != nil {
+		a.launcher.Close()
+	}
 }

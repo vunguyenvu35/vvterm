@@ -67,3 +67,5 @@ export const IconPlug = (p: P) => <Icon {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6
 export const IconPopOut = (p: P) => <Icon {...p}><path d="M14 4h6v6M20 4l-8 8M10 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" /></Icon>
 export const IconTag = (p: P) => <Icon {...p}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9zM8 8h.01" /></Icon>
 export const IconSparkle = (p: P) => <Icon {...p}><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" /><path d="M18.5 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /></Icon>
+export const IconPaperclip = (p: P) => <Icon {...p}><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.6 8.6a2 2 0 0 1-3-3L15 7" /></Icon>
+export const IconSend = (p: P) => <Icon {...p}><path d="M5 12h14m-6-6 6 6-6 6" /></Icon>

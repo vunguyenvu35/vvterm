@@ -8,7 +8,9 @@ Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: be
 
 - **AI assistant** in the terminal sidebar, using the command-line AI you are signed in to (Claude Code, Codex CLI, Gemini CLI or a command of your own): no key to store. Secrets are masked as `*******` before anything is sent and in every answer; **What will be sent** shows the exact text. It suggests commands: **Insert** (no Enter) or **Run…** after a confirmation.
 - **Settings → AI assistant**: providers found on this computer (off until you switch them on, after an isolation self-test), models read from the provider itself, privacy options, and **MCP servers** through a VVTerm gateway (arguments are checked for secrets, results are redacted, new tools stay off until reviewed).
+- Chat box that takes **files and screenshots** (drag and drop, paste, paperclip): text files are redacted, pictures are sent only after you confirm, because secrets in a picture cannot be hidden. Code in answers has a Copy button.
 - **Per-host switch** (Off / Ask / On; off on production hosts by default).
+- **Fix:** locking the vault now closes the Settings window; it no longer opens with a white flash.
 - **Fix:** the vault no longer auto-locks while you are typing in a terminal; terminal activity now counts as use.
 - Design and verification notes: [docs/AIAssistant.md](docs/AIAssistant.md).
 

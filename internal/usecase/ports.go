@@ -143,6 +143,9 @@ type Agent interface {
 	Ask(ctx context.Context, r assistant.Request, emit func(text string)) (string, error)
 }
 
+// ImageAgent is implemented by an agent that can receive pictures. An agent without it is never sent one.
+type ImageAgent interface{ SupportsImages() bool }
+
 // CustomAgentFactory builds the agent of a user-defined provider.
 type CustomAgentFactory func(assistant.CustomProvider) Agent
 

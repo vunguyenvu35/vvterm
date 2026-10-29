@@ -1,4 +1,4 @@
-import {render, screen, waitFor, within} from '@testing-library/react'
+import {act, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {AssistantSettings} from './AssistantSettings'
 import {host, makeFake, Providers} from '../../test/fakeBackend'
@@ -6,11 +6,11 @@ import type {AiProvider, McpTool} from '../types'
 
 type Fake = ReturnType<typeof makeFake>
 
-const prov = (o: Partial<AiProvider> = {}): AiProvider => ({id: 'claude', name: 'Claude Code', status: {state: 'ready', version: '2.1.0', detail: '', hint: ''}, enabled: false, default: false, model: '', supports_mcp: true, custom: false, ...o})
+const prov = (o: Partial<AiProvider> = {}): AiProvider => ({id: 'claude', name: 'Claude Code', status: {state: 'ready', version: '2.1.0', detail: '', hint: ''}, enabled: false, default: false, model: '', supports_mcp: true, supports_images: false, custom: false, ...o})
 
 function setup(mutate?: (be: Fake) => void) {
   const be = makeFake({hosts: [host({id: 'h1', label: 'web-1'})]})
-  be.state.ai.providers = [prov(), prov({id: 'codex', name: 'Codex CLI', supports_mcp: false}), prov({id: 'gemini', name: 'Gemini CLI', status: {state: 'needs_signin', version: '0.4', detail: 'not signed in', hint: 'gemini'}})]
+  be.state.ai.providers = [prov(), prov({id: 'codex', name: 'Codex CLI', supports_mcp: false, supports_images: false}), prov({id: 'gemini', name: 'Gemini CLI', status: {state: 'needs_signin', version: '0.4', detail: 'not signed in', hint: 'gemini'}})]
   be.state.ai.settings = {...be.state.ai.settings, default_provider: ''}
   mutate?.(be)
   render(<Providers be={be}><AssistantSettings /></Providers>)
@@ -52,12 +52,30 @@ describe('AssistantSettings: providers', () => {
     expect(calls(be, 'assistant.models').length).toBeGreaterThan(0)
   })
 
+  it('shows that models are loading, then a failure with Retry', async () => {
+    let open!: () => void
+    const be = setup(b => {
+      b.state.ai.providers[0] = prov({enabled: true, default: true})
+      b.state.ai.modelsGate = new Promise<void>(r => { open = r })
+      b.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}], error: 'timed out', can_list: true}
+    })
+    const claude = await row('claude')
+    expect(within(claude).getByText(/Loading the models from the provider/)).toBeInTheDocument()
+    expect(within(claude).getByRole('combobox', {name: /^Default model of Claude Code/})).toBeDisabled()
+    act(() => open())
+    expect(await within(claude).findByText(/Models could not be loaded: timed out/)).toBeInTheDocument()
+    be.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5'}], error: '', can_list: true}
+    await userEvent.click(within(claude).getByRole('button', {name: 'Retry'}))
+    await waitFor(() => expect(within(screen.getByTestId('provider-claude')).queryByText(/could not be loaded/)).toBeNull())
+    expect(calls(be, 'assistant.models').filter(c => c[2] === true)).toHaveLength(1)
+  })
+
   it('says when a provider cannot list its models', async () => {
     setup(b => {
       b.state.ai.providers[1] = prov({id: 'codex', name: 'Codex CLI', enabled: true})
       b.state.ai.models.codex = {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false}
     })
-    expect(await within(await row('codex')).findByText(/cannot list its models/)).toBeInTheDocument()
+    expect(await within(await row('codex')).findByText(/uses its default one/)).toBeInTheDocument()
   })
 
   it('names the company that receives the redacted text and can make one the default', async () => {
@@ -113,6 +131,29 @@ describe('AssistantSettings: privacy', () => {
     expect(sw).not.toBeChecked()
     await userEvent.click(sw)
     await waitFor(() => expect(be.state.ai.settings.auto_run).toBe(true))
+  })
+})
+
+describe('AssistantSettings: the host list', () => {
+  it('is loaded once with the page and read again when the window is focused or the main window changed something', async () => {
+    const be = setup()
+    await userEvent.click(await screen.findByRole('button', {name: 'Add server'}))
+    expect(within(screen.getByRole('group', {name: 'Hosts'})).getByLabelText('web-1')).toBeInTheDocument()
+    be.state.hosts.push(host({id: 'h2', label: 'db-1'}))
+    act(() => { window.dispatchEvent(new Event('focus')) })
+    expect(await within(screen.getByRole('group', {name: 'Hosts'})).findByLabelText('db-1')).toBeInTheDocument()
+    be.state.hosts.push(host({id: 'h3', label: 'cache-1'}))
+    act(() => be.emit('bridge:changed', 'HostService'))
+    expect(await within(screen.getByRole('group', {name: 'Hosts'})).findByLabelText('cache-1')).toBeInTheDocument()
+  })
+
+  it('a host list that cannot be read does not break the page or show an error', async () => {
+    const be = makeFake()
+    be.hosts.listHosts = async () => { throw new Error('VVTerm cannot reach its backend from this window.') }
+    render(<Providers be={be}><AssistantSettings /></Providers>)
+    await userEvent.click(await screen.findByRole('button', {name: 'Add server'}))
+    expect(screen.queryByText(/cannot reach its backend/)).toBeNull()
+    expect(within(screen.getByRole('group', {name: 'Hosts'})).getByLabelText('All hosts')).toBeChecked()
   })
 })
 

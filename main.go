@@ -83,7 +83,7 @@ func runSettings(dir string) {
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
 		OnStartup:        func(ctx context.Context) { w.Startup(ctx); hideFromDock() },
 		Menu:             w.Menu(),
-		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
+		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset(), WebviewIsTransparent: true},
 		Bind:             []interface{}{w.Bridge, w.System},
 	})
 	if err != nil {

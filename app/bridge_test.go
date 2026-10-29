@@ -211,6 +211,48 @@ func TestOpenSettingsFallsBackWithoutNativeWindows(t *testing.T) {
 	}
 }
 
+// Locking the vault ends the Settings window, whether the user locked it or the inactivity timer did.
+func TestLockingTheVaultClosesTheSettingsWindow(t *testing.T) {
+	a, b, _, _ := newBridgeApp(t)
+	if err := a.Vault.Create("a long master password"); err != nil {
+		t.Fatal(err)
+	}
+	var cmd *exec.Cmd
+	a.launcher = &SettingsLauncher{bridge: b, start: func() (*exec.Cmd, error) {
+		cmd = exec.Command("sleep", "30")
+		return cmd, cmd.Start()
+	}}
+	a.Core.SetEmitter(func(event string, data ...any) { a.closeSettingsWhenLocked(event) })
+	if err := a.launcher.Open(); err != nil {
+		t.Fatal(err)
+	}
+	a.Vault.Lock()
+	done := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("the Settings window must end when the vault locks")
+	}
+	// other events leave it alone
+	if err := a.Vault.Unlock("a long master password"); err != nil {
+		t.Fatal(err)
+	}
+	a.launcher.mu.Lock()
+	a.launcher.cmd = nil
+	a.launcher.mu.Unlock()
+	if err := a.launcher.Open(); err != nil {
+		t.Fatal(err)
+	}
+	a.closeSettingsWhenLocked("hosts:changed")
+	time.Sleep(200 * time.Millisecond)
+	if cmd.ProcessState != nil {
+		t.Fatal("an unrelated event must not close Settings")
+	}
+	_ = cmd.Process.Kill()
+}
+
 // The Settings window can configure the assistant but never drive a terminal with it: asking, running or
 // inserting commands, confirming a tool and sharing the screen stay with the main window.
 func TestSettingsWindowCanConfigureTheAssistantButNotUseIt(t *testing.T) {

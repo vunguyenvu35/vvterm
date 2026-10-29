@@ -1,11 +1,11 @@
-import {useCallback, useEffect, useState} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {Switch} from '../ui/Switch'
 import {Select} from '../ui/Select'
 import {errMsg, splitArgs} from '../util'
 import {McpServersPanel} from './McpServers'
-import type {AiModelList, AiProvider, AiSettings} from '../types'
+import type {AiModelList, AiProvider, AiSettings, Host} from '../types'
 
 const COMPANY: Record<string, string> = {claude: 'Anthropic', codex: 'OpenAI', gemini: 'Google'}
 
@@ -20,6 +20,7 @@ export function AssistantSettings() {
   const be = useBackend()
   const toast = useToast()
   const [providers, setProviders] = useState<AiProvider[] | null>(null)
+  const [hosts, setHosts] = useState<Host[]>([])
   const [models, setModels] = useState<Record<string, AiModelList>>({})
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [patterns, setPatterns] = useState('')
@@ -27,22 +28,41 @@ export function AssistantSettings() {
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState<Record<string, string>>({})
   const [customOpen, setCustomOpen] = useState(false)
+  const loading = useRef(new Set<string>())
 
   const load = useCallback(async () => {
     try {
       const [ps, s] = await Promise.all([be.assistant.providers(), be.assistant.settings()])
       setProviders(ps); setSettings(s); setPatterns(s.patterns.join('\n')); setLines(String(s.lines))
     } catch (e) { toast.error(errMsg(e)) }
+    // the hosts a server can be limited to: loaded here, with the rest, so every part of the page shows the same list
+    try { setHosts(await be.hosts.listHosts({})) } catch { /* the page still works: a server is then offered on every host */ }
   }, [be, toast])
   useEffect(() => { void load() }, [load])
+  // Settings is its own window: what changed in the main window (hosts, providers) is read again when it is focused
+  useEffect(() => {
+    const again = () => { void load() }
+    window.addEventListener('focus', again)
+    const off = be.on('bridge:changed', again)
+    return () => { window.removeEventListener('focus', again); off() }
+  }, [be, load])
 
   // the model list of an enabled provider comes from the provider itself
   useEffect(() => {
     for (const p of providers ?? []) {
-      if (p.enabled && !models[p.id]) void be.assistant.models(p.id, false).then(l => setModels(m => ({...m, [p.id]: l}))).catch(() => {})
+      if (p.enabled && !models[p.id] && !loading.current.has(p.id)) {
+        loading.current.add(p.id)
+        void be.assistant.models(p.id, false).then(l => setModels(m => ({...m, [p.id]: l})))
+          .catch(e => setModels(m => ({...m, [p.id]: {models: [{id: '', name: 'Default (CLI decides)'}], error: errMsg(e), can_list: true}})))
+          .finally(() => loading.current.delete(p.id))
+      }
     }
   }, [be, providers, models])
 
+  const reloadModels = async (id: string) => {
+    setModels(m => { const n = {...m}; delete n[id]; return n })
+    try { const l = await be.assistant.models(id, true); setModels(m => ({...m, [id]: l})) } catch (e) { setModels(m => ({...m, [id]: {models: [{id: '', name: 'Default (CLI decides)'}], error: errMsg(e), can_list: true}})) }
+  }
   const refresh = async () => {
     setBusy('refresh')
     try { setProviders(await be.assistant.refreshProviders()); setModels({}) } catch (e) { toast.error(errMsg(e)) } finally { setBusy('') }
@@ -86,9 +106,15 @@ export function AssistantSettings() {
               {p.enabled && (
                 <div className="ai-provider-opts">
                   <div className="setting-row">
-                    <div><b>Default model</b><div className="muted">{ml && !ml.can_list ? 'This tool cannot list its models: use Default or a custom id.' : 'Loaded from the provider.'}{ml?.error ? ' ' + ml.error : ''}</div></div>
-                    <Select className="inline" label={'Default model of ' + p.name} value={p.model} onChange={v => void setModel(p, v)}
-                      options={(ml?.models ?? [{id: '', name: 'Default (CLI decides)'}]).map(m => ({value: m.id, label: m.name || m.id}))} />
+                    <div><b>Default model</b>
+                      <div className="muted">
+                        {!ml ? 'Loading the models from the provider…' : ml.error ? `Models could not be loaded: ${ml.error}` : !ml.can_list ? 'This tool cannot list its models, so it uses its default one.' : 'Loaded from the provider.'}
+                        {ml?.error && <> <button className="link" onClick={() => void reloadModels(p.id)}>Retry</button></>}
+                      </div>
+                    </div>
+                    <Select className="inline" label={'Default model of ' + p.name} value={ml ? p.model : ''} onChange={v => void setModel(p, v)} disabled={!ml}
+                      placeholder={ml ? undefined : 'Loading…'}
+                      options={(ml?.models ?? []).map(m => ({value: m.id, label: m.name || m.id}))} />
                   </div>
                   <div className="setting-row">
                     <div><b>Default provider</b><div className="muted">The assistant panel starts with this one.</div></div>
@@ -127,7 +153,7 @@ export function AssistantSettings() {
         </div>
       </section>
 
-      <McpServersPanel providers={providers} />
+      <McpServersPanel providers={providers} hosts={hosts} />
     </>
   )
 }

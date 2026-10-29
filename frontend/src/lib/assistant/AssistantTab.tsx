@@ -4,7 +4,11 @@ import {useToast} from '../ui/Toast'
 import {Select} from '../ui/Select'
 import {errMsg} from '../util'
 import {selectionOfPane} from '../terminal/panes'
+import {Modal} from '../ui/Modal'
 import {CommandCard} from './CommandCard'
+import {Composer, FileChip} from './Composer'
+import {MessageText} from './MessageText'
+import {readAttachment, toAttachment, type Attach} from './attachments'
 import {PreviewDialog} from './PreviewDialog'
 import {usePaneSession} from './useSession'
 import type {AiCommand, AiModelList, AiPolicy, AiPreview, AiProvider, AiReply, AiSessionState, AiStep} from '../types'
@@ -12,10 +16,9 @@ import type {AiCommand, AiModelList, AiPolicy, AiPreview, AiProvider, AiReply, A
 interface ConfirmReq {call: string; server: string; tool: string; args: string; answer?: 'allowed' | 'declined'}
 
 type Msg =
-  | {kind: 'user'; text: string; selection?: boolean}
+  | {kind: 'user'; text: string; selection?: boolean; files?: Attach[]}
   | {kind: 'assistant'; rid: string; text: string; streaming: boolean; steps: AiStep[]; confirms: ConfirmReq[]; commands: AiCommand[]; meta?: string; error?: {message: string; code: string}}
 
-const CUSTOM = '__custom__'
 const store = {
   get: (k: string) => { try { return localStorage.getItem(k) ?? '' } catch { return '' } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* not remembered */ } },
@@ -38,13 +41,16 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   const [provider, setProvider] = useState('')
   const [models, setModels] = useState<AiModelList | null>(null)
   const [model, setModel] = useState('')
-  const [customModel, setCustomModel] = useState<string | null>(null)
   const [info, setInfo] = useState<AiSessionState | null>(null)
   const [preview, setPreview] = useState<AiPreview | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const [pending, setPending] = useState<{question: string; selection: string} | null>(null)
+  const [pending, setPending] = useState<{question: string; selection: string; files: Attach[]} | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+  const [files, setFiles] = useState<Attach[]>([])
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
+  const [pictures, setPictures] = useState<{question: string; selection: string; files: Attach[]} | null>(null)
   const [runId, setRunId] = useState('')
   const [loadErr, setLoadErr] = useState('')
   const listEnd = useRef<HTMLDivElement>(null)
@@ -83,18 +89,24 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   useEffect(() => () => { offs.current.forEach(o => o()) }, [])
   useEffect(() => { listEnd.current?.scrollIntoView?.({block: 'end'}) }, [msgs])
 
-  // the models of the chosen provider come from the provider itself
-  useEffect(() => {
+  // The models of the chosen provider come from the provider itself. They load in the background (starting the CLI can
+  // take a moment), once per provider, and a failure can be retried: the list is for choosing, not for typing.
+  const providersRef = useRef(providers)
+  providersRef.current = providers
+  const [modelsBusy, setModelsBusy] = useState(false)
+  const loadModels = useCallback(async (refresh: boolean) => {
     if (!provider) { setModels(null); return }
-    let live = true
-    void be.assistant.models(provider, false).then(l => {
-      if (!live) return
+    setModelsBusy(true)
+    try {
+      const l = await be.assistant.models(provider, refresh)
       setModels(l)
-      const want = store.get('vvterm.ai.model.' + provider) || providers.find(p => p.id === provider)?.model || ''
+      const want = store.get('vvterm.ai.model.' + provider) || providersRef.current.find(p => p.id === provider)?.model || ''
       setModel(l.models.some(m => m.id === want) ? want : '')
-    }).catch(() => { if (live) setModels({models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false}) })
-    return () => { live = false }
-  }, [be, provider, providers])
+    } catch (e) {
+      setModels({models: [{id: '', name: 'Default (CLI decides)'}], error: errMsg(e), can_list: true})
+    } finally { setModelsBusy(false) }
+  }, [be, provider])
+  useEffect(() => { void loadModels(false) }, [loadModels])
 
   const policy = info?.policy ?? 'ask'
   const sharing = policy === 'on' || (policy === 'ask' && !!info?.confirmed)
@@ -107,11 +119,15 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
 
   const finish = () => { offs.current.forEach(o => o()); offs.current = []; setRunId('') }
 
-  const send = async (question: string, selection: string) => {
-    if (!sid || !question.trim() || busy) return
+  const QUICK = ['Explain the last error', 'What should I check first?', 'Summarize this output', 'Is anything wrong here?']
+
+  const send = async (question: string, selection: string, attached: Attach[] = files, allowImages = false) => {
+    if (!sid || (!question.trim() && attached.length === 0) || busy) return
+    question = question.trim() || (attached.some(a => a.kind === 'image') ? 'What is in this?' : 'Look at the attached file.')
     const rid = requestId()
-    setMsgs(ms => [...ms, {kind: 'user', text: question, selection: !!selection}, {kind: 'assistant', rid, text: '', streaming: true, steps: [], confirms: [], commands: []}])
+    setMsgs(ms => [...ms, {kind: 'user', text: question, selection: !!selection, files: attached}, {kind: 'assistant', rid, text: '', streaming: true, steps: [], confirms: [], commands: []}])
     setInput('')
+    setFiles([])
     setRunId(rid)
     // listen first: the answer can start before ask() returns
     offs.current = [
@@ -130,15 +146,18 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
       }),
     ]
     try {
-      await be.assistant.ask(sid, question, {provider, model, lines: 0, selection, request_id: rid})
+      await be.assistant.ask(sid, question, {provider, model, lines: 0, selection, request_id: rid, attachments: attached.map(toAttachment), allow_images: allowImages})
     } catch (e) {
       finish()
       setMsgs(ms => ms.filter(m => !(m.kind === 'assistant' && m.rid === rid)).slice(0, -1)) // take the question back
       if (errMsg(e) === 'confirm_share') {
-        setInput(question)
-        try { setPreview(await be.assistant.preview(sid, 0, selection)) } catch { /* shown without */ }
-        setPending({question, selection})
-      } else toast.error(errMsg(e))
+        setInput(question); setFiles(attached)
+        try { setPreview(await be.assistant.preview(sid, 0, selection, attached.map(toAttachment))) } catch { /* shown without */ }
+        setPending({question, selection, files: attached})
+      } else if (errMsg(e) === 'confirm_images') {
+        setInput(question); setFiles(attached)
+        setPictures({question, selection, files: attached})
+      } else { setInput(question); setFiles(attached); toast.error(errMsg(e)) }
     }
   }
 
@@ -146,7 +165,7 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
     if (!pending || !sid) return
     const p = pending
     setPending(null)
-    try { await be.assistant.confirmShare(sid); await loadInfo(); await send(p.question, p.selection) } catch (e) { toast.error(errMsg(e)) }
+    try { await be.assistant.confirmShare(sid); await loadInfo(); await send(p.question, p.selection, p.files) } catch (e) { toast.error(errMsg(e)) }
   }
 
   const cancel = () => { if (runId) void be.assistant.cancel(runId).catch(() => {}) }
@@ -161,20 +180,31 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
     if (!sel.trim()) { toast.error('Select some text in the terminal first'); return }
     void send(input.trim() || 'Explain this', sel)
   }
+  const addFiles = async (list: File[]) => {
+    let taken = files
+    for (const f of list) {
+      try {
+        const r = await readAttachment(f, taken, !!current?.supports_images)
+        if (r.ok) { taken = [...taken, r.attach]; setFiles(taken) } else toast.error(r.error)
+      } catch (e) { toast.error(errMsg(e)) }
+    }
+  }
+  // dragging a file over the panel shows where to drop it
+  const isFileDrag = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  const dragProps = {
+    onDragEnter: (e: React.DragEvent) => { if (isFileDrag(e)) { e.preventDefault(); dragDepth.current++; setDragging(true) } },
+    onDragOver: (e: React.DragEvent) => { if (isFileDrag(e)) e.preventDefault() },
+    onDragLeave: (e: React.DragEvent) => { if (isFileDrag(e) && --dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false) } },
+    onDrop: (e: React.DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.preventDefault(); dragDepth.current = 0; setDragging(false)
+      void addFiles(Array.from(e.dataTransfer.files))
+    },
+  }
 
-  const pickModel = async (v: string) => {
-    if (v === CUSTOM) { setCustomModel(''); return }
+  const pickModel = (v: string) => {
     setModel(v)
     store.set('vvterm.ai.model.' + provider, v)
-  }
-  const saveCustomModel = async () => {
-    const v = (customModel ?? '').trim()
-    if (!v) { setCustomModel(null); return }
-    try {
-      await be.assistant.setProviderModel(provider, v)
-      const l = await be.assistant.models(provider, false)
-      setModels(l); setModel(v); store.set('vvterm.ai.model.' + provider, v); setCustomModel(null)
-    } catch (e) { toast.error(errMsg(e)) }
   }
   const setPolicy = async (v: string) => {
     try { await be.assistant.setHostPolicy(hostId, v as AiPolicy); await loadInfo() } catch (e) { toast.error(errMsg(e)) }
@@ -182,7 +212,7 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   const newChat = () => { if (sid) void be.assistant.resetConversation(sid).catch(() => {}); setMsgs([]) }
   const openPreview = async () => {
     if (!sid) return
-    try { setPreview(await be.assistant.preview(sid, 0, '')); setShowPreview(true) } catch (e) { toast.error(errMsg(e)) }
+    try { setPreview(await be.assistant.preview(sid, 0, '', files.map(toAttachment))); setShowPreview(true) } catch (e) { toast.error(errMsg(e)) }
   }
 
   if (loadErr) return <div className="ai-empty"><div className="error" role="alert">{loadErr}</div><button onClick={() => void loadProviders()}>Retry</button></div>
@@ -199,26 +229,26 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   }
   if (providers.length === 0) return <div className="ai-empty muted" data-testid="ai-setup">No AI tools were found on this computer. Install Claude Code, Codex CLI or Gemini CLI, or add your own command in Settings.<button onClick={onOpenSettings}>Open Settings</button></div>
 
-  const modelOptions = [...(models?.models ?? []).map(m => ({value: m.id, label: m.name || m.id, hint: m.description})), {value: CUSTOM, label: 'Custom model id…'}]
+  const modelOptions = (models?.models ?? []).map(m => ({value: m.id, label: m.name || m.id, hint: m.description}))
   const policyOptions = [{value: '', label: `Default (${info?.production ? 'off' : 'ask first'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask first'}, {value: 'on', label: 'On'}]
 
   return (
-    <div className="ai-panel" data-testid="ai-panel">
+    <div className={'ai-panel' + (dragging ? ' dropping' : '')} data-testid="ai-panel" {...dragProps}>
+      {dragging && <div className="ai-drop" role="status">Drop files or screenshots to add them to your question</div>}
       <div className="ai-head">
         <div className="ai-pickers">
           <Select className="inline" label="AI provider" value={provider} onChange={v => { setProvider(v); store.set('vvterm.ai.provider', v); setMsgs([]) }}
             options={enabled.map(p => ({value: p.id, label: p.name}))} />
-          <Select className="inline" label="Model" value={model} onChange={v => void pickModel(v)} options={modelOptions} />
+          <Select className="inline" label="Model" value={modelsBusy ? '' : model} onChange={pickModel} options={modelOptions} disabled={modelsBusy}
+            placeholder={modelsBusy ? 'Loading models…' : undefined} />
         </div>
-        {customModel !== null && (
-          <div className="ai-custom-model">
-            <input aria-label="Custom model id" placeholder="model id" value={customModel} autoFocus onChange={e => setCustomModel(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') void saveCustomModel(); if (e.key === 'Escape') setCustomModel(null) }} />
-            <button className="primary" onClick={() => void saveCustomModel()}>Use</button>
+        {!modelsBusy && models?.error && (
+          <div className="ai-note ai-models-error" role="status">
+            <span>Models could not be loaded: {models.error}</span>
+            <button onClick={() => void loadModels(true)}>Retry</button>
           </div>
         )}
-        {models?.error && <div className="muted ai-note" role="status">{models.error}</div>}
-        {models && !models.can_list && <div className="muted ai-note">{current?.name} cannot list its models: use Default or type a model id.</div>}
+        {!modelsBusy && models && !models.can_list && <div className="muted ai-note">{current?.name} cannot list its models, so it uses its default one.</div>}
         <div className="ai-share">
           <span className={'ai-badge' + (sharing ? ' on' : '')} data-testid="ai-badge" title="The terminal text that goes to the AI is redacted first">
             {policy === 'off' ? 'Not sharing' : sharing ? `Sharing screen · ${preview?.redacted ?? 0} redacted` : 'Asks before sharing'}
@@ -240,13 +270,24 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
       ) : (
         <>
           <div className="ai-msgs" aria-live="polite">
-            {msgs.length === 0 && <div className="muted ai-hint">Ask about the screen: “why did this fail?”, “what does this error mean?”. Commands are only suggested; you decide what runs.</div>}
+            {msgs.length === 0 && (
+              <div className="ai-intro">
+                <b>Ask about this terminal</b>
+                <div className="muted">I read the screen (secrets hidden), explain it and suggest commands. You decide what runs. You can also drop a log or a screenshot here.</div>
+                <div className="ai-quick" role="group" aria-label="Suggestions">
+                  {QUICK.map(q => <button key={q} onClick={() => void send(q, '')} disabled={!sid || busy}>{q}</button>)}
+                </div>
+              </div>
+            )}
             {msgs.map((m, i) => m.kind === 'user' ? (
-              <div key={i} className="ai-msg user">{m.text}{m.selection && <span className="badge">selection</span>}</div>
+              <div key={i} className="ai-msg user">
+                {m.files && m.files.length > 0 && <div className="ai-chips">{m.files.map(f => <FileChip key={f.id} file={f} />)}</div>}
+                {m.text}{m.selection && <span className="badge">selection</span>}
+              </div>
             ) : (
               <div key={m.rid} className="ai-msg assistant" data-testid="ai-answer">
                 {m.steps.length > 0 && <ul className="ai-steps">{m.steps.map((s, k) => <li key={k} className={s.state}>{s.tool}: {s.state}{s.note ? ` (${s.note})` : ''}</li>)}</ul>}
-                {m.text && <div className="ai-text">{m.text}</div>}
+                {m.text && <MessageText text={m.text} />}
                 {m.streaming && !m.text && <div className="muted">Thinking…</div>}
                 {m.confirms.map(c => (
                   <div key={c.call} className="ai-confirm" role="group" aria-label={`Allow ${c.tool}?`}>
@@ -269,20 +310,20 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
             ))}
             <div ref={listEnd} />
           </div>
-          <div className="ai-composer">
-            <textarea aria-label="Ask the assistant" rows={2} placeholder={sid ? 'Ask about this terminal…' : 'Waiting for the terminal…'} value={input} disabled={!sid}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(input, '') } }} />
-            <div className="ai-composer-actions">
-              <button onClick={askSelection} disabled={!sid || busy} title="Send only the text selected in the terminal">Ask about selection</button>
-              <span className="spacer" />
-              {busy ? <button onClick={cancel}>Stop</button> : <button className="primary" onClick={() => void send(input, '')} disabled={!sid || !input.trim()}>Send</button>}
-            </div>
-          </div>
+          <Composer value={input} onChange={setInput} files={files} onRemoveFile={id => setFiles(fs => fs.filter(f => f.id !== id))} onAddFiles={list => void addFiles(list)}
+            onSend={() => void send(input, '')} onUseSelection={askSelection} onStop={cancel} busy={busy} ready={!!sid} images={!!current?.supports_images} />
         </>
       )}
 
       {showPreview && preview && <PreviewDialog preview={preview} provider={current?.name ?? ''} onClose={() => setShowPreview(false)} />}
+      {pictures && (
+        <Modal title="Send pictures as they are?" onClose={() => setPictures(null)}
+          footer={<><button onClick={() => setPictures(null)}>Cancel</button><button className="primary" onClick={() => { const p = pictures; setPictures(null); void send(p.question, p.selection, p.files, true) }}>Send pictures</button></>}>
+          <div className="ai-chips">{pictures.files.filter(f => f.kind === 'image').map(f => <FileChip key={f.id} file={f} />)}</div>
+          <p>VVTerm hides secrets in text, but it <b>cannot find a secret inside a picture</b>. Anything you can see in {pictures.files.length === 1 ? 'it' : 'them'} goes to <b>{current?.name}</b> as it is. The terminal text and text files are still redacted.</p>
+          <p className="muted">Check that no password, token or key is visible before you send.</p>
+        </Modal>
+      )}
       {pending && preview && <PreviewDialog preview={preview} provider={current?.name ?? ''} onClose={() => setPending(null)} onConfirm={() => void confirmShare()} />}
     </div>
   )
