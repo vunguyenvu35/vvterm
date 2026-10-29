@@ -4,9 +4,16 @@ package assistant
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"vvterm/internal/domain/secretpolicy"
+)
+
+// Errors an agent adapter returns; usecase tells them apart without knowing the adapters.
+var (
+	ErrNeedsSignIn = errors.New("the provider is not signed in")
+	ErrToolUse     = errors.New("the agent tried to use a tool, which is not allowed")
 )
 
 // State of a provider (an AI command-line tool) on this computer.

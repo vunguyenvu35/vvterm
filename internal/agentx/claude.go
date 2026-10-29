@@ -12,7 +12,7 @@ import (
 )
 
 // ErrToolUse is returned when an agent that must have no tools tried to use one. The call is stopped.
-var ErrToolUse = errors.New("the agent tried to use a tool, which is not allowed")
+var ErrToolUse = assistant.ErrToolUse
 
 // Claude drives Claude Code in print mode.
 type Claude struct {

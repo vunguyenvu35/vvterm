@@ -189,6 +189,7 @@ const (
 	ActTransfer   = "transfer"
 	ActVault      = "vault"
 	ActSync       = "sync"
+	ActAssistant  = "assistant"
 )
 
 // ActivityFilter narrows the log. Empty fields match everything.

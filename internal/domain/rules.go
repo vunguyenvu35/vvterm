@@ -158,7 +158,7 @@ const MaxActivityMessage = 500
 // NormalizeActivity makes an entry safe to store: one line, bounded, with a known kind.
 func NormalizeActivity(e *ActivityEntry) error {
 	switch e.Kind {
-	case ActConnect, ActDisconnect, ActHostKey, ActForward, ActSFTP, ActTransfer, ActVault, ActSync:
+	case ActConnect, ActDisconnect, ActHostKey, ActForward, ActSFTP, ActTransfer, ActVault, ActSync, ActAssistant:
 	default:
 		return fmt.Errorf("invalid activity kind %q", e.Kind)
 	}

@@ -17,10 +17,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"vvterm/internal/domain/assistant"
 )
 
 // ErrNeedsSignIn is returned when the CLI says the user is not signed in.
-var ErrNeedsSignIn = errors.New("the provider is not signed in")
+var ErrNeedsSignIn = assistant.ErrNeedsSignIn
 
 const (
 	maxStdout = 8 << 20

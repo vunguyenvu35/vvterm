@@ -22,16 +22,19 @@ type Services struct {
 	Log       *LogService
 	KnownHost *KnownHostsService
 	Settings  *SettingsService
+	Assistant *AssistantService
 }
 
 // New builds every use case service.
 func New(core *Core) *Services {
 	fwd := NewForwardService(core)
+	sess := NewSessionService(core, fwd)
 	return &Services{
 		Core:      core,
 		Host:      NewHostService(core),
 		Vault:     NewVaultService(core),
-		Session:   NewSessionService(core, fwd),
+		Session:   sess,
+		Assistant: NewAssistantService(core, sess),
 		Forward:   fwd,
 		Sync:      NewSyncService(core),
 		ImportExp: NewImportExportService(core),
