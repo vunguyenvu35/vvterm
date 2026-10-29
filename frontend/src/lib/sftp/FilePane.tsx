@@ -4,7 +4,11 @@ import {useConfirm} from '../ui/Confirm'
 import {IconArrowUp, IconChevron, IconClose, IconPlus, IconEye, IconEyeOff, IconFile, IconFolder, IconHome, IconRefresh, IconSearch} from '../ui/Icons'
 import {PermissionsDialog} from './Permissions'
 import {breadcrumbs, formatBytes, formatDate, joinPath, kindOf, parentOf, validName} from './format'
+import {byName, SortMenu, usePref, type SortOption} from '../ui/ListTools'
 import type {RemoteEntry} from '../types'
+
+type Sort = 'name' | 'name-desc' | 'size' | 'modified'
+const SORTS: SortOption<Sort>[] = [{value: 'name', label: 'Name A–Z'}, {value: 'name-desc', label: 'Name Z–A'}, {value: 'size', label: 'Size (largest first)'}, {value: 'modified', label: 'Modified (newest first)'}]
 
 /** What a pane needs from a file system: the Local pane backs it with this computer, the Remote pane with SFTP. */
 export interface PaneFs {
@@ -77,6 +81,7 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   const [menu, setMenu] = useState<{x: number; y: number; right?: boolean} | null>(null)
   const [filtering, setFiltering] = useState(false)
   const [filter, setFilter] = useState('')
+  const [sort, setSort] = usePref<Sort>('vvterm.sftp.sort', SORTS.map(o => o.value), 'name')
   const [perms, setPerms] = useState<RemoteEntry | null>(null)
   const [naming, setNaming] = useState<{mode: 'mkdir' | 'rename'; value: string; err: string} | null>(null)
 
@@ -106,7 +111,13 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
   useEffect(() => { if (reloadKey > 0 && cwdRef.current) void load(cwdRef.current) }, [reloadKey, load])
 
   const needle = filter.trim().toLowerCase()
-  const shown = (hidden ? entries : entries.filter(e => !e.name.startsWith('.'))).filter(e => !needle || e.name.toLowerCase().includes(needle))
+  const shown = useMemo(() => {
+    const list = (hidden ? entries : entries.filter(e => !e.name.startsWith('.'))).filter(e => !needle || e.name.toLowerCase().includes(needle))
+    const when = (e: RemoteEntry) => Date.parse(e.mod_time) || 0
+    // folders stay first, whatever the order
+    return [...list].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) ||
+      (sort === 'name-desc' ? byName(b.name, a.name) : sort === 'size' ? b.size - a.size || byName(a.name, b.name) : sort === 'modified' ? when(b) - when(a) || byName(a.name, b.name) : byName(a.name, b.name)))
+  }, [entries, hidden, needle, sort])
   const chosen = useMemo(() => entries.filter(e => selected.includes(e.path)), [entries, selected])
   const sel = chosen.length === 1 ? chosen[0] : null // rename needs exactly one
   useEffect(() => { onState({cwd, selected: chosen}) }, [cwd, chosen, onState])
@@ -226,6 +237,7 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
         {actions}
         {filtering && <input className="fpane-filter" aria-label={`${label(side)} filter`} autoFocus placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}
           onKeyDown={ev => { if (ev.key === 'Escape') { setFilter(''); setFiltering(false) } }} />}
+        <SortMenu value={sort} options={SORTS} onChange={setSort} />
         <button aria-label="Filter" aria-pressed={filtering} className={filtering ? 'on' : ''} onClick={() => { setFiltering(f => !f); setFilter('') }}><IconSearch size={15} /> Filter</button>
         <button aria-label="Actions" aria-haspopup="menu" aria-expanded={!!menu?.right} disabled={!ready} onMouseDown={ev => ev.stopPropagation()} onClick={toggleActions}>Actions <IconChevron size={12} /></button>
         <button className="icon" aria-label={hidden ? 'Hide hidden files' : 'Show hidden files'} aria-pressed={hidden} title={hidden ? 'Hide hidden files' : 'Show hidden files'} onClick={() => setHidden(h => !h)}>

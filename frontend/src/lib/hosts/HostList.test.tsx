@@ -344,3 +344,35 @@ describe('HostList: tag filter', () => {
     expect(screen.queryByRole('dialog', {name: 'Filter by tag'})).toBeNull()
   })
 })
+
+describe('HostList: sort', () => {
+  beforeEach(() => localStorage.clear())
+  const sortBy = async (name: RegExp) => { await userEvent.click(screen.getByRole('button', {name: 'Sort'})); await userEvent.click(screen.getByRole('menuitemradio', {name})) }
+
+  it('is sorted by name to begin with, and Name Z–A reverses it', async () => {
+    setup()
+    expect(labels()).toEqual(['box', 'cdn-1', 'db-1', 'web-1'])
+    await sortBy(/Name Z–A/)
+    expect(labels()).toEqual(['web-1', 'db-1', 'cdn-1', 'box'])
+  })
+
+  it('can put production first, or the hosts connected to most recently', async () => {
+    setup()
+    await sortBy(/Environment/)
+    expect(labels()).toEqual(['cdn-1', 'web-1', 'db-1', 'box']) // prod (by name), staging, dev
+    localStorage.setItem('vvterm.recent', JSON.stringify(['b', 'c']))
+    await sortBy(/Recently connected/)
+    expect(labels()).toEqual(['db-1', 'box', 'cdn-1', 'web-1']) // the two opened last, then the rest by name
+  })
+
+  it('sorts the group cards too, and the order is remembered', async () => {
+    const {unmount} = render(<HostList groups={[{id: 'g1', name: 'zeta', sort_order: 0}, {id: 'g2', name: 'alpha', sort_order: 0}]} hosts={[]} onConnect={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} onForwards={vi.fn()} onEditGroup={vi.fn()} onDeleteGroup={vi.fn()} onQuickConnect={vi.fn()} />)
+    const groupNames = () => screen.getAllByRole('button', {name: /^Open group /}).map(g => g.getAttribute('aria-label'))
+    expect(groupNames()).toEqual(['Open group alpha', 'Open group zeta'])
+    await sortBy(/Name Z–A/)
+    expect(groupNames()).toEqual(['Open group zeta', 'Open group alpha'])
+    unmount()
+    setup()
+    expect(labels()).toEqual(['web-1', 'db-1', 'cdn-1', 'box'])
+  })
+})

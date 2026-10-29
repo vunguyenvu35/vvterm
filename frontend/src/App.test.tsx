@@ -800,7 +800,7 @@ describe('App: Hosts toolbar order', () => {
     const be = setup()
     await unlock(be)
     const bar = document.querySelector('.toolbar') as HTMLElement
-    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'More ways to add hosts', 'Terminal', 'Serial', 'View', 'Filter by tag'])
+    expect(Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))).toEqual(['New host', 'More ways to add hosts', 'Terminal', 'Serial', 'Sort', 'View', 'Filter by tag'])
   })
 })
 

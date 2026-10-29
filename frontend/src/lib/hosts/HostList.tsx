@@ -1,6 +1,8 @@
 import {OS_INFO, OsIcon, osName} from '../ui/OsIcon'
 import {loadView, saveView, ViewMenu, ViewMode} from './ViewMenu'
 import {TagMenu} from './TagMenu'
+import {byName, SortMenu, usePref, type SortOption} from '../ui/ListTools'
+import {getRecent} from './recent'
 import {DragEvent, ReactNode, useEffect, useMemo, useState} from 'react'
 import type {Env, Group, Host} from '../types'
 import {formatAddr} from '../util'
@@ -57,6 +59,10 @@ function descendants(groups: Group[], id: string): Set<string> {
   return out
 }
 
+type Sort = 'name' | 'name-desc' | 'recent' | 'env'
+const SORTS: SortOption<Sort>[] = [{value: 'name', label: 'Name A–Z'}, {value: 'name-desc', label: 'Name Z–A'}, {value: 'recent', label: 'Recently connected'}, {value: 'env', label: 'Environment'}]
+const ENV_RANK: Record<string, number> = {prod: 0, staging: 1, dev: 2, '': 3}
+
 /** Termius-style hosts page: find/connect bar, environment filter, group cards and host cards. */
 export function HostList(p: Props) {
   const [q, setQ] = useState('')
@@ -64,6 +70,7 @@ export function HostList(p: Props) {
   const [view, setView] = useState<ViewMode>(loadView)
   const changeView = (v: ViewMode) => { setView(v); saveView(v) }
   const [groupId, setGroupId] = useState('')
+  const [sort, setSort] = usePref<Sort>('vvterm.hosts.sort', SORTS.map(o => o.value), 'name')
   useEffect(() => { if (p.resetKey) setGroupId('') }, [p.resetKey])
   const [tagFilter, setTagFilter] = useState<string[]>([])
   const allTags = useMemo(() => Array.from(new Set(p.hosts.flatMap(h => h.tags ?? []))).sort((a, b) => a.localeCompare(b)), [p.hosts])
@@ -100,12 +107,24 @@ export function HostList(p: Props) {
   }, [p.hosts, q, env, activeTags.join('\u0000')])
 
   const subgroups = useMemo(
-    () => p.groups.filter(g => (g.parent_id && groupIds.has(g.parent_id) ? g.parent_id : '') === current),
-    [p.groups, groupIds, current])
+    () => p.groups.filter(g => (g.parent_id && groupIds.has(g.parent_id) ? g.parent_id : '') === current).sort((a, b) => (sort === 'name-desc' ? byName(b.name, a.name) : byName(a.name, b.name))),
+    [p.groups, groupIds, current, sort])
   // "All hosts" lists every host, whichever group it is in; inside a group, the hosts of that group
-  const visibleHosts = filtering
+  const unsorted = filtering
     ? matches
     : current === '' ? p.hosts : p.hosts.filter(h => h.group_id === current)
+  const visibleHosts = useMemo(() => {
+    const recent = getRecent()
+    const rank = (h: Host) => { const i = recent.indexOf(h.id); return i < 0 ? 1e6 : i }
+    return [...unsorted].sort((a, b) => {
+      switch (sort) {
+        case 'name-desc': return byName(b.label, a.label)
+        case 'recent': return rank(a) - rank(b) || byName(a.label, b.label)
+        case 'env': return (ENV_RANK[a.env ?? ''] ?? 3) - (ENV_RANK[b.env ?? ''] ?? 3) || byName(a.label, b.label)
+        default: return byName(a.label, b.label)
+      }
+    })
+  }, [unsorted, sort])
 
   const count = (g: Group) => {
     const ids = descendants(p.groups, g.id)
@@ -164,6 +183,7 @@ export function HostList(p: Props) {
       <div className="toolbar">
         {p.toolbar}
         <div className="spacer" />
+        <SortMenu value={sort} options={SORTS} onChange={setSort} />
         <ViewMenu value={view} onChange={changeView} />
         <TagMenu tags={allTags} selected={activeTags} onChange={setTagFilter} />
         <div className="chips">

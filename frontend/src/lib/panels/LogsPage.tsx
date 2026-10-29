@@ -1,9 +1,10 @@
-import {useCallback, useEffect, useState} from 'react'
+import {useCallback, useEffect, useMemo, useState} from 'react'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {errMsg} from '../util'
 import {IconSearch, IconTrash} from '../ui/Icons'
+import {SortMenu, usePref, type SortOption} from '../ui/ListTools'
 import type {ActivityEntry} from '../types'
 
 /** The groups of the filter chips and the kinds each one shows. */
@@ -25,6 +26,9 @@ export function formatWhen(iso: string, now = new Date()): string {
   return date + ' ' + d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false})
 }
 
+type Sort = 'newest' | 'oldest' | 'host' | 'problems'
+const SORTS: SortOption<Sort>[] = [{value: 'newest', label: 'Newest first'}, {value: 'oldest', label: 'Oldest first'}, {value: 'host', label: 'Host'}, {value: 'problems', label: 'Problems first'}]
+
 /**
  * Logs: what happened in VVTerm: connections and how they ended, trusted host keys, forwards, SFTP
  * transfers, unlocks. Newest first, live. Secrets are never written to it.
@@ -37,6 +41,7 @@ export function LogsPage() {
   const [group, setGroup] = useState('all')
   const [q, setQ] = useState('')
   const [error, setError] = useState('')
+  const [sort, setSort] = usePref<Sort>('vvterm.logs.sort', SORTS.map(o => o.value), 'newest')
 
   const reload = useCallback(async () => {
     try {
@@ -53,6 +58,19 @@ export function LogsPage() {
     return be.on('log:added', () => void reload())
   }, [be, reload])
 
+  const shown = useMemo(() => {
+    const when = (e: ActivityEntry) => Date.parse(e.at) || 0
+    const newest = (a: ActivityEntry, b: ActivityEntry) => when(b) - when(a) || b.id - a.id
+    return [...(items ?? [])].sort((a, b) => {
+      switch (sort) {
+        case 'oldest': return -newest(a, b)
+        case 'host': return (a.host_label ?? '').localeCompare(b.host_label ?? '', undefined, {sensitivity: 'base', numeric: true}) || newest(a, b)
+        case 'problems': return Number(a.ok) - Number(b.ok) || newest(a, b)
+        default: return newest(a, b)
+      }
+    })
+  }, [items, sort])
+
   const clear = async () => {
     if (!(await confirm('Clear the whole log? This cannot be undone.', {confirmLabel: 'Clear', danger: true}))) return
     try {
@@ -66,19 +84,20 @@ export function LogsPage() {
 
   return (
     <div className="hosts-page" aria-label="Logs">
-      <div className="toolbar">
+      <div className="toolbar list-toolbar">
         <div className="search-box small grow"><IconSearch size={14} /><input aria-label="Search logs" placeholder="Search logs" value={q} onChange={e => setQ(e.target.value)} /></div>
         <div className="chips" role="group" aria-label="Show">
           {LOG_GROUPS.map(g => (
             <button key={g.id} className={'chip' + (group === g.id ? ' on' : '')} aria-pressed={group === g.id} onClick={() => setGroup(g.id)}>{g.label}</button>
           ))}
         </div>
+        <SortMenu value={sort} options={SORTS} onChange={setSort} />
         <button className="ghost-btn danger" aria-label="Clear logs" onClick={clear} disabled={!items?.length && !q && group === 'all'}><IconTrash size={14} /> Clear</button>
       </div>
 
       <h3 className="sec-title">Logs</h3>
       <div className="log-table" role="table" aria-label="Activity">
-        {(items ?? []).map(e => (
+        {shown.map(e => (
           <div key={e.id} role="row" className={'log-row' + (e.ok ? '' : ' bad')}>
             <span role="cell" className="log-when muted">{formatWhen(e.at)}</span>
             <span role="cell" className="log-dot" aria-label={e.ok ? 'ok' : 'failed'} />

@@ -202,3 +202,26 @@ describe('Known Hosts page: sort, filter and view', () => {
     expect(screen.getByRole('list', {name: 'Known hosts'})).toHaveClass('as-list')
   })
 })
+
+describe('Logs page: sort', () => {
+  const entries: ActivityEntry[] = [
+    log(1, 'connect', 'old ok', {at: '2026-10-27T10:00:00Z', host_label: 'web-2'}),
+    log(2, 'connect', 'newest', {at: '2026-10-29T10:00:00Z', host_label: 'db'}),
+    log(3, 'connect', 'a failure', {at: '2026-10-28T10:00:00Z', ok: false, host_label: 'web-10'}),
+  ]
+  const messages = () => within(screen.getByRole('table', {name: 'Activity'})).getAllByRole('row').map(r => r.querySelector('.log-msg')?.textContent)
+  beforeEach(() => localStorage.clear())
+  const sortBy = async (name: RegExp) => { await userEvent.click(screen.getByRole('button', {name: 'Sort'})); await userEvent.click(screen.getByRole('menuitemradio', {name})) }
+
+  it('is newest first, and can be oldest first, by host or with the problems first', async () => {
+    render(<Providers be={makeFake({logs: entries})}><LogsPage /></Providers>)
+    await screen.findByText('newest')
+    expect(messages()).toEqual(['newest', 'a failure', 'old ok'])
+    await sortBy(/Oldest first/)
+    expect(messages()).toEqual(['old ok', 'a failure', 'newest'])
+    await sortBy(/^Host/)
+    expect(messages()).toEqual(['newest', 'old ok', 'a failure']) // db, web-2, web-10
+    await sortBy(/Problems first/)
+    expect(messages()).toEqual(['a failure', 'newest', 'old ok'])
+  })
+})

@@ -586,3 +586,28 @@ describe('SftpBrowser: right-click menu', () => {
     expect(calls(be, 'sftp.chmod')[0].slice(2)).toEqual(['/readme.txt', 0o600])
   })
 })
+
+describe('SftpBrowser: sort', () => {
+  const remote = {'/': {dir: true, size: 0}, '/zdir': {dir: true, size: 0}, '/a.txt': {dir: false, size: 10}, '/b.txt': {dir: false, size: 5000}, '/c.txt': {dir: false, size: 300}}
+  beforeEach(() => localStorage.clear())
+  const sortBy = async (pane: HTMLElement, name: RegExp) => { await userEvent.click(within(pane).getByRole('button', {name: 'Sort'})); await userEvent.click(screen.getByRole('menuitemradio', {name})) }
+
+  it('keeps folders first and sorts the files by name, reversed, or by size', async () => {
+    setup({remote})
+    await waitFor(() => expect(names(R())).toHaveLength(4))
+    expect(names(R())).toEqual(['zdir', 'a.txt', 'b.txt', 'c.txt'])
+    await sortBy(R(), /Name Z–A/)
+    expect(names(R())).toEqual(['zdir', 'c.txt', 'b.txt', 'a.txt'])
+    await sortBy(R(), /Size/)
+    expect(names(R())).toEqual(['zdir', 'b.txt', 'c.txt', 'a.txt']) // largest first
+  })
+
+  it('works together with the filter', async () => {
+    setup({remote})
+    await waitFor(() => expect(names(R())).toHaveLength(4))
+    await sortBy(R(), /Size/)
+    await userEvent.click(within(R()).getByRole('button', {name: 'Filter'}))
+    await userEvent.type(within(R()).getByLabelText('Remote filter'), 'txt')
+    expect(names(R())).toEqual(['b.txt', 'c.txt', 'a.txt'])
+  })
+})

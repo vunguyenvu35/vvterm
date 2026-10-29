@@ -37,7 +37,7 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 
 ### Also new: find things in every list
 
-- **Snippets, Port Forwarding, Known Hosts and Keychain** now have what the host list has: a search box, filter chips (state and type of a forward, key type of a known host, key / password / ssh-agent in the Keychain), a **Sort** menu (name, host, type, status, port, recently changed…) and a **Grid / List** switch. The sort and the view are remembered for each page. Names sort the way people read them (case and accents ignored, `web-2` before `web-10`).
+- **Snippets, Port Forwarding, Known Hosts and Keychain** now have what the host list has: a search box, filter chips (state and type of a forward, key type of a known host, key / password / ssh-agent in the Keychain), a **Sort** menu (name, host, type, status, port, recently changed…) and a **Grid / List** switch. The **host list** gets a Sort menu too (name, production first, recently connected), the **Logs** page sorts by newest, oldest, host or problems first, and each **SFTP pane** sorts by name or size or date (folders always first). The sort and the view are remembered for each page. Names sort the way people read them (case and accents ignored, `web-2` before `web-10`).
 
 ### Also fixed in this release
 
