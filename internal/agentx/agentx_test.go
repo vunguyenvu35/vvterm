@@ -200,7 +200,9 @@ func TestVerifyIsolation(t *testing.T) {
 	if verifyIsolation(context.Background(), tools) == nil {
 		t.Fatal("tool use must fail the test")
 	}
-	broken := func(ctx context.Context, r assistant.Request, e func(string)) (string, error) { return "", errors.New("boom") }
+	broken := func(ctx context.Context, r assistant.Request, e func(string)) (string, error) {
+		return "", errors.New("boom")
+	}
 	if verifyIsolation(context.Background(), broken) == nil {
 		t.Fatal("an agent that cannot be tested must not pass")
 	}

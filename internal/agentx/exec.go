@@ -226,3 +226,9 @@ func needsSignIn(text string) bool {
 	}
 	return false
 }
+
+// BaseEnv is the scrubbed environment (see baseEnv), for other packages that start tools on the user's behalf.
+func BaseEnv(extra ...string) []string { return baseEnv(extra...) }
+
+// FindBinary looks a program up on the login shell's PATH and the usual install folders.
+func FindBinary(name string) string { return findBinary(name) }
