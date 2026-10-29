@@ -989,3 +989,14 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 
 .ai-provider-opts .select-wrap { flex: 0 0 min(260px, 55%); width: auto; }
 .ai-provider-opts .setting-row > div:first-child { min-width: 0; }
+
+/* list pages: the bar has room below it, and its controls share one height */
+.list-toolbar { margin-bottom: 14px; align-items: center; }
+.list-toolbar .search-box.small { height: 36px; }
+.list-toolbar .icon { width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center; }
+.list-toolbar .ghost-btn { height: 36px; }
+/* a snippet card in the grid is narrow: its buttons go under the text instead of taking the room the name needs */
+.cards:not(.as-list) .card.snippet { flex-wrap: wrap; }
+.cards:not(.as-list) .card.snippet .meta { flex: 1 1 0; }
+.cards:not(.as-list) .card.snippet .actions { flex: 1 0 100%; margin-left: 50px; background: transparent; justify-content: flex-start; }
+.card.snippet .label { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
