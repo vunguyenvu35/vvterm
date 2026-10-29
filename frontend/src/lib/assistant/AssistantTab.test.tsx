@@ -153,7 +153,7 @@ describe('AssistantTab', () => {
 
   it('the badge says how many items were redacted from the screen', async () => {
     setup({}, be => { be.state.ai.preview = {...be.state.ai.preview, redacted: 3} })
-    expect(await screen.findByText('Sharing screen · 3 redacted')).toBeInTheDocument()
+    expect(await screen.findByText('Sharing · 3 redacted')).toBeInTheDocument()
   })
 
   it('"What will be sent" opens in the chat (not a popup) and closes again', async () => {
@@ -167,42 +167,93 @@ describe('AssistantTab', () => {
     expect(screen.queryByRole('region', {name: 'What will be sent'})).toBeNull()
   })
 
-  it('the model list comes from the provider and the choice is sent with the question', async () => {
-    const {be} = setup()
-    await userEvent.click(await screen.findByRole('combobox', {name: /^Model,/}))
-    await userEvent.click(screen.getByRole('option', {name: /Opus 5.5/}))
+  const picker = () => screen.findByRole('button', {name: /^Model:/})
+
+  it('the model chip sits under the message box and its menu lists the provider\'s models in full', async () => {
+    const {be} = setup({}, b => { b.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5', description: 'Best for everyday, complex tasks and long running work'}], error: '', can_list: true} })
+    const chip = await picker()
+    expect(within(screen.getByTestId('ai-composer')).getByRole('button', {name: /^Model:/})).toBe(chip) // under the box, not in a header
+    await userEvent.click(chip)
+    const menu = screen.getByRole('dialog', {name: 'Provider and model'})
+    expect(within(menu).getByText('Best for everyday, complex tasks and long running work')).toBeInTheDocument() // the whole description
+    await userEvent.click(within(menu).getByRole('option', {name: /Opus 5.5/}))
+    expect(screen.queryByRole('dialog', {name: 'Provider and model'})).toBeNull() // choosing closes it
+    expect(await picker()).toHaveTextContent('Opus 5.5')
     await ask('q')
     await waitFor(() => expect(asks(be)).toHaveLength(1))
     expect((asks(be)[0][3] as {model: string}).model).toBe('opus')
     expect(localStorage.getItem('vvterm.ai.model.claude')).toBe('opus')
   })
 
-  it('shows that the models are loading, and the list is for choosing', async () => {
-    let open!: () => void
-    const {be} = setup({}, b => { b.state.ai.modelsGate = new Promise<void>(r => { open = r }) })
-    const select = await screen.findByRole('combobox', {name: /^Model,/})
-    expect(select).toBeDisabled()
-    expect(select).toHaveTextContent('Loading models…')
-    act(() => open())
-    await waitFor(() => expect(screen.getByRole('combobox', {name: /^Model,/})).toBeEnabled())
-    expect(be.state.calls.filter(c => c[0] === 'assistant.models')).toHaveLength(1)
+  it('the menu opens upward inside the window and closes with Escape or a click outside', async () => {
+    setup()
+    const chip = await picker()
+    await userEvent.click(chip)
+    const menu = screen.getByRole('dialog', {name: 'Provider and model'})
+    expect(parseInt(menu.style.left)).toBeGreaterThanOrEqual(8)
+    expect(parseInt(menu.style.width)).toBeLessThanOrEqual(window.innerWidth - 16)
+    expect(menu.style.bottom).not.toBe('')
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', {name: 'Provider and model'})).toBeNull()
+    await userEvent.click(chip)
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('dialog', {name: 'Provider and model'})).toBeNull()
   })
 
-  it('a models failure says why and can be retried, then the list appears', async () => {
+  it('the arrow keys move through the models and Enter chooses', async () => {
+    const {be} = setup()
+    await userEvent.click(await picker())
+    await userEvent.keyboard('{ArrowDown}{Enter}')
+    await waitFor(() => expect(localStorage.getItem('vvterm.ai.model.claude')).toBe('opus'))
+    expect(be.state.calls.length).toBeGreaterThan(0)
+  })
+
+  it('more than one provider can be switched from the same menu, and that starts a new chat', async () => {
+    const {be} = setup({}, b => {
+      b.state.ai.providers = [...b.state.ai.providers, {id: 'codex', name: 'Codex CLI', status: {state: 'ready', version: '1', detail: '', hint: ''}, enabled: true, default: false, model: '', supports_mcp: false, supports_images: true, custom: false}]
+      b.state.ai.models.codex = {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'gpt-x', name: 'GPT X'}], error: '', can_list: true}
+    })
+    await ask('first question')
+    await waitFor(() => expect(asks(be)).toHaveLength(1))
+    act(() => be.emit(`assistant:done:${(asks(be)[0][3] as {request_id: string}).request_id}`, reply()))
+    await screen.findByText('The disk is full.')
+    await userEvent.click(await picker())
+    await userEvent.click(within(screen.getByRole('radiogroup', {name: 'Provider'})).getByRole('radio', {name: 'Codex CLI'}))
+    expect(screen.queryByText('first question')).toBeNull() // a different provider starts a new conversation
+    expect(await screen.findByRole('option', {name: /GPT X/})).toBeInTheDocument() // and its own models load
+  })
+
+  it('shows that the models are loading', async () => {
+    let open!: () => void
+    const {be} = setup({}, b => { b.state.ai.modelsGate = new Promise<void>(r => { open = r }) })
+    const chip = await picker()
+    expect(chip).toBeEnabled()
+    expect(chip).toHaveTextContent('Loading models…')
+    await userEvent.click(chip)
+    expect(within(screen.getByRole('dialog', {name: 'Provider and model'})).getByRole('status')).toHaveTextContent('Loading the models')
+    act(() => open())
+    await waitFor(() => expect(screen.queryByText(/Loading the models/)).toBeNull())
+    expect(be.state.calls.filter(c => c[0] === 'assistant.models')).toHaveLength(1)
+    expect(screen.queryByLabelText('Custom model id')).toBeNull()
+  })
+
+  it('a models failure says why in the menu and can be retried, then the list appears', async () => {
     const {be} = setup({}, b => { b.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}], error: 'Claude Code did not answer in time', can_list: true} })
-    expect(await screen.findByText(/Models could not be loaded: Claude Code did not answer in time/)).toBeInTheDocument()
+    expect(await picker()).toHaveTextContent('Models unavailable')
+    await userEvent.click(await picker())
+    const menu = screen.getByRole('dialog', {name: 'Provider and model'})
+    expect(within(menu).getByText(/Models could not be loaded: Claude Code did not answer in time/)).toBeInTheDocument()
     be.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5'}], error: '', can_list: true}
-    await userEvent.click(screen.getByRole('button', {name: 'Retry'}))
-    await waitFor(() => expect(screen.queryByText(/Models could not be loaded/)).toBeNull())
+    await userEvent.click(within(menu).getByRole('button', {name: 'Retry'}))
+    expect(await within(menu).findByRole('option', {name: /Opus 5.5/})).toBeInTheDocument()
     expect(be.state.calls).toContainEqual(['assistant.models', 'claude', true])
-    await userEvent.click(screen.getByRole('combobox', {name: /^Model,/}))
-    expect(screen.getByRole('option', {name: /Opus 5.5/})).toBeInTheDocument()
-    expect(screen.queryByRole('option', {name: /Custom model id/})).toBeNull() // the model is chosen from the list, never typed
+    expect(within(menu).queryByRole('option', {name: /Custom model id/})).toBeNull() // chosen from the list, never typed
   })
 
   it('a provider that cannot list models says it uses its default one', async () => {
     setup({}, be => { be.state.ai.models.claude = {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false} })
-    expect(await screen.findByText(/uses its default one/)).toBeInTheDocument()
+    await userEvent.click(await picker())
+    expect(within(screen.getByRole('dialog', {name: 'Provider and model'})).getByText(/uses its default one/)).toBeInTheDocument()
     expect(screen.queryByText(/custom/i)).toBeNull()
   })
 

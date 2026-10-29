@@ -280,7 +280,8 @@ MCP servers are stored in the database (name, type, command, arguments, URL, sco
 ## 8. User interface
 
 - **Panel.** A panel beside the terminal pane (right side). Layout alternatives (bottom overlay) are an open question ([12](#12-risks-and-open-questions)).
-- **Header.** Provider picker and **model picker** (the list from [5.4](#54-model-discovery), with `Default` first; the choice is per panel and remembered per provider), host policy toggle, and the badge `Sharing screen · N items redacted`, always visible. The badge turns grey when sharing is off.
+- **Header.** The host policy toggle, **What will be sent**, **New chat**, and the badge `Sharing · N redacted`, always visible. The badge turns grey when sharing is off.
+- **Provider and model** are chosen from a chip under the message box (like other chat apps). Its menu opens upward, is as wide as the descriptions need and always inside the window, lists the models from [5.4](#54-model-discovery) with their full descriptions (`Default` first; remembered per provider), and switches the provider too (which starts a new chat).
 - **Preview.** A "What will be sent" button shows the exact redacted payload. Redacted values appear as `*******`.
 - **Composer.** One line plus Send, with a "Use selection" shortcut that sends only the highlighted terminal text.
 - **Replies.** Streamed text, then command cards ([6](#6-command-execution-and-approval)).

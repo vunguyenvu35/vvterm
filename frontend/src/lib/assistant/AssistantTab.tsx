@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {Select} from '../ui/Select'
+import {ModelPicker} from './ModelPicker'
 import {errMsg} from '../util'
 import {selectionOfPane} from '../terminal/panes'
 import {CommandCard} from './CommandCard'
@@ -250,29 +251,15 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   }
   if (providers.length === 0) return <div className="ai-empty muted" data-testid="ai-setup">No AI tools were found on this computer. Install Claude Code, Codex CLI or Gemini CLI, or add your own command in Settings.<button onClick={onOpenSettings}>Open Settings</button></div>
 
-  const modelOptions = (models?.models ?? []).map(m => ({value: m.id, label: m.name || m.id, hint: m.description}))
   const policyOptions = [{value: '', label: `Default (${info?.production ? 'off' : 'on'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask first, in the chat'}, {value: 'on', label: 'On'}]
 
   return (
     <div className={'ai-panel' + (dragging ? ' dropping' : '')} data-testid="ai-panel" {...dragProps}>
       {dragging && <div className="ai-drop" role="status">Drop files or screenshots to add them to your question</div>}
       <div className="ai-head">
-        <div className="ai-pickers">
-          <Select className="inline" label="AI provider" value={provider} onChange={v => { setProvider(v); store.set('vvterm.ai.provider', v); setMsgs([]) }}
-            options={enabled.map(p => ({value: p.id, label: p.name}))} />
-          <Select className="inline" label="Model" value={modelsBusy ? '' : model} onChange={pickModel} options={modelOptions} disabled={modelsBusy}
-            placeholder={modelsBusy ? 'Loading models…' : undefined} />
-        </div>
-        {!modelsBusy && models?.error && (
-          <div className="ai-note ai-models-error" role="status">
-            <span>Models could not be loaded: {models.error}</span>
-            <button onClick={() => void loadModels(true)}>Retry</button>
-          </div>
-        )}
-        {!modelsBusy && models && !models.can_list && <div className="muted ai-note">{current?.name} cannot list its models, so it uses its default one.</div>}
         <div className="ai-share">
           <span className={'ai-badge' + (sharing ? ' on' : '')} data-testid="ai-badge" title="The terminal text that goes to the AI is redacted first">
-            {policy === 'off' ? 'Not sharing' : sharing ? `Sharing screen · ${preview?.redacted ?? 0} redacted` : 'Asks before sharing'}
+            {policy === 'off' ? 'Not sharing' : sharing ? `Sharing · ${preview?.redacted ?? 0} redacted` : 'Asks before sharing'}
           </span>
           <button className="link" onClick={() => void openPreview()} disabled={!sid}>What will be sent</button>
           <span className="spacer" />
@@ -348,7 +335,9 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
             <div ref={listEnd} />
           </div>
           <Composer value={input} onChange={setInput} files={files} onRemoveFile={id => setFiles(fs => fs.filter(f => f.id !== id))} onAddFiles={list => void addFiles(list)}
-            onSend={() => void send(input, '')} onUseSelection={askSelection} onStop={cancel} busy={busy} ready={!!sid} images={!!current?.supports_images} />
+            onSend={() => void send(input, '')} onUseSelection={askSelection} onStop={cancel} busy={busy} ready={!!sid} images={!!current?.supports_images}
+            leading={<ModelPicker providers={enabled} provider={provider} onProvider={v => { setProvider(v); store.set('vvterm.ai.provider', v); setMsgs([]) }} models={models} model={model}
+              onModel={pickModel} loading={modelsBusy} onRetry={() => void loadModels(true)} disabled={busy} />} />
         </>
       )}
 

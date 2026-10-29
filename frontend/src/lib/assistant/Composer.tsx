@@ -1,4 +1,4 @@
-import {ClipboardEvent, KeyboardEvent, useEffect, useRef} from 'react'
+import {ClipboardEvent, KeyboardEvent, ReactNode, useEffect, useRef} from 'react'
 import {IconClose, IconFile, IconPaperclip, IconSend} from '../ui/Icons'
 import {formatSize, type Attach} from './attachments'
 
@@ -16,6 +16,8 @@ interface Props {
   ready: boolean
   /** the provider can take pictures */
   images: boolean
+  /** what goes in the bar under the box before the buttons (the provider and model chip) */
+  leading?: ReactNode
 }
 
 /** What a file waiting to go with the question looks like: a thumbnail for a picture, an icon for a text file. */
@@ -64,9 +66,9 @@ export function Composer(p: Props) {
         <input ref={picker} type="file" multiple hidden aria-label="Choose files" accept={p.images ? undefined : 'text/*,.log,.conf,.cfg,.ini,.json,.yaml,.yml,.toml,.sh,.py,.js,.ts,.go,.md,.txt,.csv,.xml'}
           onChange={e => { p.onAddFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <button className="ai-tool" onClick={() => picker.current?.click()} disabled={!p.ready || p.busy} title={p.images ? 'Add a file or a screenshot' : 'Add a text file'} aria-label="Attach a file"><IconPaperclip size={17} /></button>
-        <button className="ai-tool text" onClick={p.onUseSelection} disabled={!p.ready || p.busy} title="Send only the text selected in the terminal">Use selection</button>
+        {p.leading}
+        <button className="ai-tool text" onClick={p.onUseSelection} disabled={!p.ready || p.busy} title="Send only the text selected in the terminal">Selection</button>
         <span className="spacer" />
-        <span className="ai-keys muted" aria-hidden="true">Enter to send</span>
         {p.busy ? <button onClick={p.onStop}>Stop</button>
           : <button className="primary ai-send" onClick={p.onSend} disabled={!canSend} aria-label="Send" title="Send (Enter)"><IconSend size={16} /> Send</button>}
       </div>

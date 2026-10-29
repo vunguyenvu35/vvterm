@@ -951,3 +951,27 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .side-resizer:hover::after, .side-resizer:focus-visible::after, .term-side.resizing .side-resizer::after { background: var(--accent); width: 2px; }
 .side-resizer:focus-visible { outline: none; }
 .term-side.resizing { user-select: none; }
+
+/* provider and model chip under the message box, and its menu */
+.ai-chip-picker { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; padding: 4px 8px; background: transparent; color: var(--muted); font-size: 12px; border-radius: 8px; }
+.ai-chip-picker:hover:not(:disabled), .ai-chip-picker.open { background: var(--bg-2); color: var(--text); }
+.ai-chip-picker-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-picker-menu { position: fixed; z-index: 60; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px #00000066; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.ai-picker-group { display: flex; flex-direction: column; gap: 2px; }
+.ai-picker-title { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 8px 2px; }
+.ai-picker-providers { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 6px; }
+.ai-picker-providers button { background: var(--bg-3); font-size: 12px; padding: 4px 10px; border-radius: 14px; border: 1px solid transparent; }
+.ai-picker-providers button.on { border-color: var(--accent); color: var(--accent); }
+.ai-picker-option { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: transparent; border-radius: 8px; padding: 8px 10px; }
+.ai-picker-option:hover, .ai-picker-option:focus-visible { background: var(--bg-3); outline: none; }
+.ai-picker-option[aria-selected='true'] { background: var(--accent-soft); }
+.ai-picker-option-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.ai-picker-option-text .muted { font-size: 12px; line-height: 1.4; white-space: normal; }
+.ai-picker-note { padding: 6px 10px; font-size: 12px; }
+.ai-picker-error { display: flex; gap: 8px; align-items: center; justify-content: space-between; color: var(--danger); }
+
+.ai-composer-bar { flex-wrap: nowrap; min-width: 0; }
+.ai-composer-bar > * { white-space: nowrap; flex: none; }
+.ai-composer-bar .ai-chip-picker { flex: 0 1 auto; min-width: 0; max-width: 130px; }
+.ai-share { flex-wrap: wrap; gap: 4px 10px; }
+.ai-share > * { white-space: nowrap; }
