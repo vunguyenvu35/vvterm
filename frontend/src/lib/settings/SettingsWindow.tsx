@@ -9,6 +9,7 @@ import {resolveTerminalTheme} from '../terminal/themes'
 import {SyncPanel} from '../panels/SyncPanel'
 import {IconArrowUpRight, IconUser} from '../ui/Icons'
 import {ShortcutsEditor} from './ShortcutsEditor'
+import {AssistantSettings} from './AssistantSettings'
 import {capture, formatCombo, matches} from '../shortcuts/shortcuts'
 import type {Appearance} from './appearance'
 import type {CursorStyle, Settings, ThemeMode, VaultStatus} from '../types'
@@ -19,10 +20,10 @@ const keychainName = () => {
   return /mac/i.test(p) ? 'the macOS Keychain' : /windows|win32|win64/i.test(p) ? 'Windows Credential Manager' : 'the system keychain'
 }
 
-type Cat = 'general' | 'account' | 'terminal' | 'security' | 'sync' | 'shortcuts'
+type Cat = 'general' | 'account' | 'terminal' | 'security' | 'assistant' | 'sync' | 'shortcuts'
 const CATS: {id: Cat; label: string}[] = [
   {id: 'general', label: 'General'}, {id: 'account', label: 'Account'}, {id: 'terminal', label: 'Terminal'},
-  {id: 'security', label: 'Security'}, {id: 'sync', label: 'Sync'}, {id: 'shortcuts', label: 'Shortcuts'},
+  {id: 'security', label: 'Security'}, {id: 'assistant', label: 'AI assistant'}, {id: 'sync', label: 'Sync'}, {id: 'shortcuts', label: 'Shortcuts'},
 ]
 
 const FONTS = [
@@ -89,7 +90,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, native])
-  // Mod+1…6 jump to a category, Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous one (not while a shortcut is being recorded)
+  // Mod+1…7 jump to a category, Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous one (not while a shortcut is being recorded)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (capture.active) return
@@ -359,6 +360,8 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                   {err && <div className="error" role="alert">{err}</div>}
                 </>
               )}
+
+              {cat === 'assistant' && <AssistantSettings />}
 
               {cat === 'sync' && <SyncPanel page vault={vault} onClose={() => {}} onChanged={onChanged} />}
 

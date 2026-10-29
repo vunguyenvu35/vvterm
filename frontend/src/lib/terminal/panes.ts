@@ -25,6 +25,25 @@ export function toTerminalInput(script: string, run: boolean): string {
   return run ? body + '\r' : body
 }
 
+/** The session id of each live pane: the AI assistant reads the terminal it belongs to through it. */
+const sessions = new Map<string, string>()
+const selections = new Map<string, () => string>()
+
+export function setPaneSession(id: string, sid: string | null) {
+  if (sid === null) { if (!sessions.delete(id)) return } else if (sessions.get(id) === sid) return
+  else sessions.set(id, sid)
+  version++
+  watchers.forEach(f => f())
+}
+export const sessionOfPane = (id: string): string => sessions.get(id) ?? ''
+
+/** What is selected in a pane, for "Use selection" in the assistant. */
+export function registerSelection(id: string, get: () => string): () => void {
+  selections.set(id, get)
+  return () => { if (selections.get(id) === get) selections.delete(id) }
+}
+export const selectionOfPane = (id: string): string => selections.get(id)?.() ?? ''
+
 /** What each live pane is doing, for the tab that holds it (a spinner while connecting, a red dot once closed). */
 export type PaneStatus = 'connecting' | 'ready' | 'closed'
 const statuses = new Map<string, PaneStatus>()

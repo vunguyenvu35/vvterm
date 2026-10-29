@@ -160,6 +160,6 @@ describe('Logs page', () => {
     expect(formatWhen('2026-03-05T09:08:07Z', now)).not.toMatch(/2026/)
     expect(formatWhen('2025-03-05T09:08:07Z', now)).toMatch(/2025/)
     expect(formatWhen('garbage', now)).toBe('')
-    expect(LOG_GROUPS.map(g => g.id)).toEqual(['all', 'connections', 'files', 'forwards', 'security', 'sync'])
+    expect(LOG_GROUPS.map(g => g.id)).toEqual(['all', 'connections', 'files', 'forwards', 'security', 'sync', 'assistant'])
   })
 })

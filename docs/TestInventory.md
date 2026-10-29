@@ -6,7 +6,7 @@
 
 ## Go (unit + integration)
 
-### `app` (30)
+### `app` (36)
 
 - TestDataDirEnvOverride
 - TestBuildWiresRealAdapters
@@ -14,6 +14,8 @@
 - TestNativeDialogsCanBeDisabledByEnvironment
 - TestClipboardNeedsANativeWindow
 - TestOpenPathRefusesFilesThatRunPrograms
+- TestSettingsExecutableUsesTheDocklessHelperWhenBuilt
+- TestPrepareSettingsHelperLinksThePlistAndRefreshesOnRebuild
 - TestBridgeConnectionFileIsPrivateAndRemovedOnClose
 - TestBridgeCallsSettingsAndNotifiesTheMainWindow
 - TestBridgePassesUseCaseErrorsThrough
@@ -24,12 +26,16 @@
 - TestConnectBridgeExplainsWhenTheMainAppIsNotRunning
 - TestSettingsLauncherOpensOnceAndRaisesAfterwards
 - TestOpenSettingsFallsBackWithoutNativeWindows
+- TestSettingsWindowCanConfigureTheAssistantButNotUseIt
 - TestMenuBarHasTheUsualMenus
 - TestFileMenuAsksTheWindowForTheRightActions
 - TestViewMenuZoomsSplitsAndShowsPages
 - TestHelpMenuOpensOnlyTheProjectPages
 - TestEveryMenuActionIsKnownAndUnique
 - TestAppMenuIsSafeBeforeTheWindowExists
+- TestAcceleratorFromShortcutText
+- TestMenuShowsTheCurrentShortcutsOnMac
+- TestATwoStepShortcutHasNoMenuKey
 - TestWindowLauncherStartsEveryTimeAndClosesAll
 - TestOpenWindowFallsBackWithoutNativeWindows
 - TestBridgeRelaysTheSessionsAWindowOpenedAndEveryOtherEvent
@@ -39,13 +45,32 @@
 - TestAnAppWindowMayCallAnyUseCaseButOnlyThose
 - TestAskingWhereTheEventsAreNowDoesNotWait
 
-### `internal/archtest` (5)
+### `internal/agentx` (13)
+
+- TestClaudeAskIsRunIsolatedAndStreams
+- TestClaudeToolUseIsStopped
+- TestClaudeGatewayIsTheOnlyToolChannel
+- TestClaudeModelsComeFromTheProvider
+- TestClaudeDetect
+- TestCodexToolEventsAreStoppedAndModelsAreRead
+- TestGeminiParsesJSONAndRefusesToolCalls
+- TestVerifyIsolation
+- TestCustomAgentViaStdinAndArg
+- TestBaseEnvDropsSecretLookingNames
+- TestGeminiDetectReadsTheSelectedSignIn
+- TestLiveProviders
+- TestLiveClaudeThroughTheGateway
+
+### `internal/archtest` (8)
 
 - TestDomainDependsOnNothingInternal
 - TestDomainHasNoFrameworkDependencies
 - TestUseCaseDependsOnlyInward
 - TestInfrastructureNeverImportsUseCasesOrDelivery
 - TestOnlyDeliveryLayerTouchesWails
+- TestOnlySecretPolicyConstructsSanitized
+- TestAgentRequestHoldsOnlySanitizedText
+- TestUseCaseDoesNotImportAgentAdaptersOrGateway
 
 ### `internal/domain` (9)
 
@@ -58,6 +83,30 @@
 - TestIsLoopback
 - TestCheckJumpChain
 - TestNormalizeSnippet
+
+### `internal/domain/assistant` (8)
+
+- TestParseReplyEnvelopeAndRiskIsOurs
+- TestParseReplyPlainTextHasNoCommands
+- TestAssess
+- TestDumpWarnings
+- TestReadOnlyAllowList
+- TestEffectivePolicy
+- TestScreenText
+- TestSecretSplitOverTwoScreenRowsStaysOneLine
+
+### `internal/domain/secretpolicy` (10)
+
+- TestBuiltInDetectorsMaskTheSecret
+- TestOnlyTheValueIsMaskedSoTheNameSurvives
+- TestOrdinaryTextIsLeftAlone
+- TestMaskLengthDoesNotDependOnTheSecret
+- TestVaultSecretsAreMatchedExactlyInEveryForm
+- TestMultiLineVaultSecretIsMaskedLineByLine
+- TestCustomPatternsOnlyAdd
+- TestFindingsNeverHoldTheValue
+- TestContainsFlagsMaskAndSecrets
+- TestRedactIsIdempotent
 
 ### `internal/exporter` (8)
 
@@ -101,6 +150,16 @@
 - TestTerminalEnvironmentIsSet
 - TestUserShellFallsBack
 - TestOpenFailsForAMissingProgram
+
+### `internal/mcpgw` (7)
+
+- TestStdioServerToolsAndCall
+- TestStdioServerGetsOnlyTheEnvironmentItWasGiven
+- TestGatewayAuthAndOrigin
+- TestGatewayAppliesTheHooks
+- TestGatewayCapsCalls
+- TestHTTPServerJSONAndSSE
+- TestConnectErrors
 
 ### `internal/serialx` (3)
 
@@ -218,7 +277,7 @@
 - TestServerLogoutIsACleanEndAndCloseIsToo
 - TestConnectionRefusedIsReported
 
-### `internal/usecase` (105)
+### `internal/usecase` (130)
 
 - TestLogRecordsConnectingAndClosingATab
 - TestLogRecordsAFailedConnectionAndALostOne
@@ -230,6 +289,29 @@
 - TestNoActivityStoreMeansNoHistoryAndNoCrash
 - TestKnownHostsListAndForgetThroughTheService
 - TestSummarizeTransferAndByteFormatting
+- TestGatewayEnforcesToolPolicy
+- TestUntrustedServerNeverRunsASideEffectToolUnasked
+- TestTerminalToolsAndAutoRun
+- TestNoGatewayForAProviderThatCannotBeLimitedToIt
+- TestServerScopeLimitsWhereItIsOffered
+- TestMcpSecretsLiveInTheVaultOnly
+- TestMcpValidationAndNames
+- TestNewToolsStayOffUntilReviewed
+- TestImportReadsTheCLIConfigOnlyWhenAskedAndMovesSecretsToTheVault
+- TestCustomProviderMustPassTheTestToo
+- TestProvidersMustBeReadyAndPassTheIsolationTestToBeEnabled
+- TestDisablingTheDefaultPicksAnotherEnabledProvider
+- TestModelsComeFromTheProviderAndNothingIsInvented
+- TestAskNeverSendsASecretAndShowsMasks
+- TestAskFailsClosedWhenRedactionIsBroken
+- TestPolicyOffAskAndProduction
+- TestSwitchingProviderStartsANewConversation
+- TestTheUICanChooseTheRequestIdToListenBeforeItStarts
+- TestAskErrorsAreClassified
+- TestPlainTextReplyHasNoRunnableCommands
+- TestInsertDoesNotPressEnterAndRunNeedsTheTypedWordForRiskyCommands
+- TestSettingsValidatePatternsAndOnlyAdd
+- TestPreviewIsExactlyWhatIsSent
 - TestLocalTerminalSessionEndToEnd
 - TestDeviceSessionFailuresAreReportedInTheTab
 - TestDeviceLostIsAnErrorNotACleanEnd
@@ -243,6 +325,7 @@
 - TestTelnetFailuresAreShownInTheTab
 - TestTelnetHasItsOwnLoginAndSavedPassword
 - TestTelnetLatin1ServersAreConvertedBothWays
+- TestTerminalActivityKeepsTheVaultUnlocked
 - TestAddKeyPairAcceptsAMatchingPublicKeyAndCertificate
 - TestAddKeyPairWithoutThePublicPartsIsAnOrdinaryImport
 - TestAddKeyPairRefusesWhatDoesNotBelong
@@ -310,6 +393,7 @@
 - TestSftpChmodReachesTheServerAndChecksTheBits
 - TestValidateCombo
 - TestValidateShortcuts
+- TestTwoStepShortcuts
 - TestTestConnectionSucceedsWithTypedPasswordAndStoresNothing
 - TestTestConnectionKnownHostSkipsPromptSecondTime
 - TestTestConnectionWithSavedIdentity
@@ -326,7 +410,7 @@
 - TestUploadRefusesFoldersNestedTooDeeply
 - TestDownloadIgnoresNamesThatWouldEscapeTheFolder
 
-### `internal/vault` (19)
+### `internal/vault` (23)
 
 - TestCreateRejectsWeakPassword
 - TestCreateTwiceFails
@@ -340,6 +424,7 @@
 - TestEnableKeychainRequiresUnlock
 - TestAutoLockFiresCallback
 - TestActivityPostponesAutoLock
+- TestTouchPostponesAutoLockButNeverUnlocks
 - TestManualLockFiresCallbackOnce
 - TestBlobSealOpenAndAAD
 - TestAdoptOnNewMachine
@@ -347,8 +432,11 @@
 - TestPasswordBackupRoundTrip
 - TestGenerateAndParseKey
 - TestDestroyWorksWhileLockedAndClearsKeychain
+- TestHintSurvivesLockReopenAndPasswordChange
+- TestHintTooLongIsRejected
+- TestKeychainNeedsTheAuthenticator
 
-**Go test functions: 294** (table-driven cases and sub-tests are extra).
+**Go test functions: 370** (table-driven cases and sub-tests are extra).
 
 ## Frontend (Vitest)
 
@@ -392,9 +480,14 @@
 - src/App.test.tsx › App: panels belong to the page they were opened on › opening a terminal closes the panel instead of leaving it behind
 - src/App.test.tsx › App: panels belong to the page they were opened on › the + tab leaves the Vaults page, so an open panel closes like on any other move
 - src/App.test.tsx › App: the SFTP tab next to Vaults › is there from the start, right after Vaults, with no close button, and starts on "Connect to host"
+- src/App.test.tsx › App: the SFTP tab next to Vaults › Ctrl+Shift+S opens SFTP and Ctrl+Shift+H goes back to Vaults
+- src/App.test.tsx › App: the SFTP tab next to Vaults › the + adds a host as one more tab in the Remote header (the same host again too), each closable
+- src/App.test.tsx › App: the SFTP tab next to Vaults › Ctrl+W on the SFTP screen closes the host tab showing in the Remote pane, never the SFTP tab itself
 - src/App.test.tsx › App: the SFTP tab next to Vaults › connects to a host chosen inside the tab: Select host, then the host (a card has no SFTP button)
 - src/App.test.tsx › App: the SFTP tab next to Vaults › closing the last terminal goes back to Vaults, not to the SFTP tab; Ctrl+W on the SFTP tab does nothing
 - src/App.test.tsx › App: the SFTP tab next to Vaults › snippets still go to the last terminal, never to the SFTP tab
+- src/App.test.tsx › App: full screen › marks the page while the window is in full screen, so the room for the window buttons goes
+- src/App.test.tsx › App: keyboard shortcuts › a two-step shortcut runs on the second key; a wrong key or Esc cancels it
 - src/App.test.tsx › App: keyboard shortcuts › the default combo opens and closes Settings
 - src/App.test.tsx › App: keyboard shortcuts › a customised combo works and the old one no longer does
 - src/App.test.tsx › App: keyboard shortcuts › lock vault returns to the unlock screen
@@ -471,6 +564,37 @@
 - src/lib/util.test.ts › util › parses and de-duplicates tags
 - src/lib/util.test.ts › util › formats addresses
 - src/lib/util.test.ts › util › maps env to colour tokens
+- src/lib/util.test.ts › command line arguments › splitArgs keeps quoted text together
+- src/lib/util.test.ts › command line arguments › joinArgs quotes what needs it and round-trips
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › asks to enable a provider when none is on
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › names a provider that is not signed in and how to fix it
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › listens before it asks, then shows the streamed text and the final answer with its command
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › does not show a half-written JSON answer
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › shows an error with a way to Settings when the provider is not signed in
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › shows what the assistant did with tools and asks before a tool that changes something
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › Stop cancels the running question
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a host that asks first shows the exact preview and only then shares
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › cancelling the preview shares nothing and keeps the question
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › is switched off for a host whose policy is off
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › the badge says how many items were redacted from the screen
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › "What will be sent" shows the redacted text and the vault warning
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › the model list comes from the provider and the choice is sent with the question
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a custom model id is stored with the provider and then used
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a provider that cannot list models says so
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a real host can switch the assistant on or off for itself
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a local terminal has no host switch
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › Enter sends and Shift+Enter makes a new line; an empty question is not sent
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › New chat clears the conversation and tells the backend
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › waits for the terminal before it can be used
+- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › reloads the providers when Settings changed them from its own window
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › Insert puts the command on the prompt without Enter
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › Run asks for a confirmation first, then sends the command
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › a risky command needs the word run typed
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › a command with a hidden value cannot be inserted or run
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › Run is disabled with the reason on a production host, Insert still works
+- src/lib/assistant/CommandCard.test.tsx › CommandCard › shows what a command may print
+- src/lib/hosts/HostForm.test.tsx › HostForm: AI assistant › has a per-host switch that defaults to off on production hosts and is saved with the host
+- src/lib/hosts/HostForm.test.tsx › HostForm: AI assistant › keeps the stored policy when a host is edited
 - src/lib/hosts/HostForm.test.tsx › HostForm › follows the Termius flow: address, general, port, credentials, options
 - src/lib/hosts/HostForm.test.tsx › HostForm › is docked (an aside) rather than a modal dialog backdrop
 - src/lib/hosts/HostForm.test.tsx › HostForm › requires a hostname
@@ -546,53 +670,6 @@
 - src/lib/hosts/tree.test.ts › buildTree › nests groups and places hosts
 - src/lib/hosts/tree.test.ts › buildTree › puts hosts of unknown groups into ungrouped
 - src/lib/hosts/tree.test.ts › buildTree › treats a group with a missing parent as a root
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › fills its own native window: no floating chrome, no dots, no drag
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › Esc closes the window
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › the title is centred between the macOS buttons and the right edge
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › applies the saved theme, zoom and motion to its own page, and saves changes
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › reads the settings again whenever the window is focused (the main window may have changed them)
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › shows a loading state, then nothing breaks when the main window is gone
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp title bar › a double click on the title bar zooms the window, but not on its buttons
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › is a window with a title bar, not a page
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › has categories on the left and theme, help links and version below them (Termius layout)
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › closes with the red dot and with Escape
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › Escape closes an open dropdown first and not the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the window can be dragged by its title bar but not by its buttons
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › changes the app theme to Auto, Light or Dark from the sidebar dropdown and saves immediately
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the theme dropdown opens the custom menu
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › picks a terminal theme, filters by dark/light, and can go back to "match app"
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › "Match app theme" always shows the automatic choice, not the selected theme
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the preview uses the chosen theme colours, font and size
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › font (custom dropdown), size stepper, cursor, blinking and scrollback all persist
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › stepper stops at the limits
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › shows a backend validation error as a toast and keeps the old value
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: auto-lock, keychain switch and password change
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › sync is shown inside the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › help links open only the project pages
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximise fills the screen, restore goes back, and the title bar double-click does the same
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximised, the in-app dots give way to Restore and Close on the right (the native macOS buttons own the top left)
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › minimise rolls the window up to its title bar and unrolls it again, keeping the chosen tab
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › a maximised window cannot be dragged, and maximising resets its position
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › the window is resizable by CSS (corner handle) with sane limits
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › opens on General with zoom, reduce motion and confirm-before-close
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom steps by 10%, stops at 80% and 160%, and resets
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom in is disabled at 160%
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › the switches persist
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › shows a local profile, the free plan and the not-yet features
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › saves the profile only when it changed, and shows the initial as the avatar
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › reports an invalid email from the backend
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › lists every action with its default and the fixed shortcuts
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › records a new shortcut and saves only the difference from the default
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a duplicate and says which action uses it
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a plain key, accepts after a valid one
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › modifier-only presses are ignored; Esc cancels without touching the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › choosing the default again removes the override; reset and reset-all work
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › tells the global handler to stay quiet while recording
-- src/lib/settings/SettingsWindow.test.tsx › Switch › toggles and exposes its state
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Highlight output › is on by default in the Terminal tab and can be switched off
-- src/lib/settings/appearance.test.tsx › useAppearance › an explicit mode ignores the OS
-- src/lib/settings/appearance.test.tsx › useAppearance › auto follows the OS and reacts when it changes
-- src/lib/settings/appearance.test.tsx › useAppearance › switching from auto to explicit stops following the OS
 - src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › lists the trusted hosts with key type and fingerprint
 - src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › says what this page is when nothing is trusted yet
 - src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › searches by host, key type and fingerprint
@@ -671,13 +748,88 @@
 - src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › validates names
 - src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › names the kind of an entry
 - src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host list stays current › uses the hosts the app gives it, so a host added later is offered
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a file has Open, Open with, Copy to target directory, Rename, Delete, Refresh, New Folder and Edit Permissions
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › empty space only offers Refresh and New Folder
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a file has the full list: Open … Select All and Close
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › empty space has the same list, with what needs a file greyed out
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › the Actions button opens the same menu for what is selected; Select All and Close work
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › the + next to the host name opens the host list to switch hosts, and Cancel keeps the current one
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Filter narrows the rows by name
 - src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Open on a folder goes into it, and on a remote file downloads it to a temporary folder and opens that
 - src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a local file is opened in place, and Open with asks which app
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Copy to target directory sends the chosen items to the other pane, one or many
+- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Upload (local pane) and Download (remote pane) in the menu send the chosen items to the other pane
 - src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Rename and New Folder open the name box, Delete asks first
 - src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Edit Permissions changes the mode on the server
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › lists the detected providers with their state and nothing is on by default
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › turning one on runs the isolation test and shows when it fails
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › an enabled provider shows the models loaded from the provider and saves the default one
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › says when a provider cannot list its models
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › names the company that receives the redacted text and can make one the default
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › Refresh runs detection again
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › adds a command of its own: the arguments are split and it still needs the test to be switched on
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › says redaction cannot be turned off and offers no switch for it
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › saves the number of lines and extra patterns
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › auto-run of read-only commands is a separate opt-in
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › adds a server: secrets are sent to be stored and are not shown again
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › replaces or removes a saved value
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › tests the connection; new tools wait for a mode and can be approved with the suggested ones
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › a tool mode is chosen one by one
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › a server that cannot start shows why
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › limits a server to chosen hosts and providers; a provider without MCP is marked
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › trusting a server is an explicit choice
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › imports a server from another tool: names only are listed
+- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › switches a server on or off and deletes it
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › fills its own native window: no floating chrome, no dots, no drag
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › Esc closes the window
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › the title is centred between the macOS buttons and the right edge
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › applies the saved theme, zoom and motion to its own page, and saves changes
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › reads the settings again whenever the window is focused (the main window may have changed them)
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › shows a loading state, then nothing breaks when the main window is gone
+- src/lib/settings/SettingsApp.test.tsx › SettingsApp title bar › a double click on the title bar zooms the window, but not on its buttons
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › is a window with a title bar, not a page
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › has categories on the left and theme, help links and version below them (Termius layout)
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › closes with the red dot and with Escape
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › Escape closes an open dropdown first and not the window
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the window can be dragged by its title bar but not by its buttons
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › changes the app theme to Auto, Light or Dark from the sidebar dropdown and saves immediately
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the theme dropdown opens the custom menu
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › picks a terminal theme, filters by dark/light, and can go back to "match app"
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › "Match app theme" always shows the automatic choice, not the selected theme
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the preview uses the chosen theme colours, font and size
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › font (custom dropdown), size stepper, cursor, blinking and scrollback all persist
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › stepper stops at the limits
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › shows a backend validation error as a toast and keeps the old value
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: "ask on open" shows only with Touch ID turned on, and can be switched off
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: with Touch ID on, "ask on open" is a switch that is saved
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › Ctrl+1…7 jump to a category and Ctrl+Tab goes round them, with the keys shown on the tabs
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: a password hint can be saved
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: auto-lock, keychain switch and password change
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › sync is shown inside the window
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › help links open only the project pages
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximise fills the screen, restore goes back, and the title bar double-click does the same
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximised, the in-app dots give way to Restore and Close on the right (the native macOS buttons own the top left)
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › minimise rolls the window up to its title bar and unrolls it again, keeping the chosen tab
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › a maximised window cannot be dragged, and maximising resets its position
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › the window is resizable by CSS (corner handle) with sane limits
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › opens on General with zoom, reduce motion and confirm-before-close
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom steps by 10%, stops at 80% and 160%, and resets
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom in is disabled at 160%
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › the switches persist
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › shows a local profile, the free plan and the not-yet features
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › saves the profile only when it changed, and shows the initial as the avatar
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › reports an invalid email from the backend
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › a second key right after the first makes a two-step shortcut (Ctrl+K, then M)
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › a one-step shortcut cannot take the first step of a two-step one, and the other way round
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › lists every action with its default and the fixed shortcuts
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › records a new shortcut and saves only the difference from the default
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a duplicate and says which action uses it
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a plain key, accepts after a valid one
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › modifier-only presses are ignored; Esc cancels without touching the window
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › choosing the default again removes the override; reset and reset-all work
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › tells the global handler to stay quiet while recording
+- src/lib/settings/SettingsWindow.test.tsx › Switch › toggles and exposes its state
+- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Highlight output › is on by default in the Terminal tab and can be switched off
+- src/lib/settings/appearance.test.tsx › useAppearance › an explicit mode ignores the OS
+- src/lib/settings/appearance.test.tsx › useAppearance › auto follows the OS and reacts when it changes
+- src/lib/settings/appearance.test.tsx › useAppearance › switching from auto to explicit stops following the OS
 - src/lib/shell/TabStatus.test.tsx › pane status › summarises panes: connecting wins, closed only when all are, nothing when unknown
 - src/lib/shell/TabStatus.test.tsx › TabStatus › shows a spinner while connecting, a green dot when connected and a red dot when disconnected
 - src/lib/shell/TabStatus.test.tsx › TabStatus › a split tab is connecting while one of its panes is
@@ -706,6 +858,10 @@
 - src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › a tab dropped on the right half of another goes after it, on the left half before it
 - src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › the pinned tab and a tab being renamed cannot be dragged; without a handler nothing is draggable
 - src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › is not draggable without a handler
+- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › are one or two steps separated by a space; only the first needs a modifier
+- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › one event never matches a two-step shortcut; each step matches by itself
+- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › conflict with a single shortcut on the same first step, in both directions; chords may share a first step
+- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › are written out step by step, and as separate keys for drawing key caps
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › has unique action ids and unique valid default combos
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › effective() merges overrides over defaults and ignores empty ones
 - src/lib/shortcuts/shortcuts.test.ts › shortcuts › keyOf maps physical keys (so Option/Shift layouts do not matter) and ignores bare modifiers
@@ -734,7 +890,11 @@
 - src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › what is typed in one pane is typed in the others, only while broadcasting
 - src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › zoom shows one pane and hides the others without unmounting any (no session ends)
 - src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › works through a nested split too
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › has the four sections and tells which one is open
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › nests hosts under groups, and a folded group hides its contents
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › a host with an open tab switches to it; Alt-click opens a new one
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › lists the active sessions at the top and switches between them
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › searching unfolds the groups that lead to a match
+- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › has the five sections and tells which one is open
 - src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Hosts: searches and opens a host
 - src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: one line each; a click shows the whole script with Run and Paste
 - src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: no tooltip that explains clicking; New Snippet and search work
@@ -759,6 +919,7 @@
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › copies the selection once it stops changing (copy on select)
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › does nothing when copy on select is off, or the selection was cleared
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy key copies the selection and is not sent to the shell; with nothing selected it passes through
+- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › Next / Previous tab are not sent to the shell: the terminal lets them through to the app
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy and paste combinations can be changed
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the paste key pastes the clipboard into the terminal, only when connected
 - src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › a right click pastes by default, and never shows the browser menu
@@ -912,6 +1073,12 @@
 - src/lib/vault/Keychain.test.tsx › New Key panel: the design › a field name floats onto its border once the field has something in it
 - src/lib/vault/Keychain.test.tsx › New Key panel: the design › sends the public key and the certificate with the private key
 - src/lib/vault/Keychain.test.tsx › New Key panel: the design › asks for a passphrase when the key is encrypted in the OpenSSH way too
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › the hint stays hidden until asked for
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › no hint saved: no hint button
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › creating a vault can save a hint, but not one that contains the password
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › on a Mac with Touch ID the sheet comes up by itself, and the button says Touch ID
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › with "ask on open" off the sheet waits for the button
+- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › without Touch ID the keychain button does not pop up by itself
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › unlocks with the right password
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › shows the backend error for a wrong password and stays locked
 - src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › creation requires 12+ characters and a matching confirmation

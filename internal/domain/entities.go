@@ -91,6 +91,8 @@ type Host struct {
 	TelnetEncoding string `json:"telnet_encoding,omitempty"`
 	// TerminalTheme is this host's own colour theme (an id from the UI catalogue); empty follows Settings.
 	TerminalTheme string `json:"terminal_theme,omitempty"`
+	// AIPolicy is the AI assistant switch for this host: "" (off on prod hosts, ask elsewhere), off, ask or on.
+	AIPolicy string `json:"ai_policy,omitempty"`
 }
 
 type PortForward struct {
@@ -187,6 +189,7 @@ const (
 	ActTransfer   = "transfer"
 	ActVault      = "vault"
 	ActSync       = "sync"
+	ActAssistant  = "assistant"
 )
 
 // ActivityFilter narrows the log. Empty fields match everything.

@@ -1,9 +1,11 @@
 package usecase
 
 import (
+	"context"
 	"time"
 
 	"vvterm/internal/domain"
+	"vvterm/internal/domain/assistant"
 	"vvterm/internal/sshx"
 )
 
@@ -124,4 +126,36 @@ type ActivityLog interface {
 	// List returns the newest lines first.
 	List(domain.ActivityFilter) ([]domain.ActivityEntry, error)
 	Clear() error
+}
+
+// Agent is an AI command-line tool the assistant can ask (Claude Code, Codex, Gemini, a custom command).
+// Implemented by internal/agentx. A Request holds only sanitized text, so a raw terminal string cannot be sent.
+type Agent interface {
+	ID() string
+	Name() string
+	// SupportsMCP is true when the adapter can be limited to the VVTerm gateway as its only tool channel.
+	SupportsMCP() bool
+	Detect(ctx context.Context) assistant.Status
+	// Models loads the models from the provider itself; nil means the provider cannot list them.
+	Models(ctx context.Context) ([]assistant.Model, error)
+	// Verify is the isolation self-test: the agent must not be able to use a tool.
+	Verify(ctx context.Context) error
+	Ask(ctx context.Context, r assistant.Request, emit func(text string)) (string, error)
+}
+
+// ImageAgent is implemented by an agent that can receive pictures. An agent without it is never sent one.
+type ImageAgent interface{ SupportsImages() bool }
+
+// CustomAgentFactory builds the agent of a user-defined provider.
+type CustomAgentFactory func(assistant.CustomProvider) Agent
+
+// ToolGateway is the loopback MCP endpoint that is the only tool channel an agent gets. Implemented by
+// internal/mcpgw.
+type ToolGateway interface {
+	Open(servers map[string]assistant.ToolServer, hooks assistant.GatewayHooks) (assistant.Gateway, func(), error)
+}
+
+// MCPConnector starts or reaches a user's MCP server with already decrypted environment and headers.
+type MCPConnector interface {
+	Connect(s assistant.MCPServer, env, headers map[string]string) (assistant.ToolServer, error)
 }

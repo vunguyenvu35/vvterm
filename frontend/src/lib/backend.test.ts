@@ -55,6 +55,20 @@ describe('Settings window backend (bridge)', () => {
     await expect(be.settings.save({} as never)).rejects.toMatch(/zoom/)
   })
 
+  it('reads the host list through the bridge too, and says in plain words when the backend is not reachable', async () => {
+    const calls = install(c => (c[1] === 'ListHosts' ? '[{"id":"h1","label":"web-1"}]' : 'null'))
+    const be = bridgeBackend()
+    expect(await be.hosts.listHosts({})).toEqual([{id: 'h1', label: 'web-1'}])
+    expect(calls[0][0]).toBe('HostService')
+    expect(JSON.parse(calls[0][2])[0]).toMatchObject({query: '', group_id: '', env: '', tag: ''})
+    // a call that has no binding in this window gets a message a person can act on, not a service name
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const missing = async () => be.hosts.listGroups()
+    await expect(missing()).rejects.toThrow(/cannot reach its backend.*open it again/i)
+    await expect(missing()).rejects.not.toThrow(/usecase\./)
+    expect(warn).toHaveBeenCalled()
+  })
+
   it('keeps the version and help links local, and cannot open another Settings window', async () => {
     install(() => 'null')
     const be = bridgeBackend()

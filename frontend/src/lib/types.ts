@@ -32,6 +32,8 @@ export interface Host {
   telnet_encoding?: string
   /** this host's own terminal colour theme (an id from the catalogue); empty follows Settings */
   terminal_theme?: string
+  /** the AI assistant switch of this host: '' (off on prod hosts, ask elsewhere), off, ask or on */
+  ai_policy?: AiPolicy
 }
 
 export interface Identity {
@@ -213,3 +215,134 @@ export interface TransferProgress {
   done: number
   total: number
 }
+
+// ---- AI assistant ----
+
+export type AiPolicy = '' | 'off' | 'ask' | 'on'
+export type AiState = 'ready' | 'needs_signin' | 'unsupported' | 'not_installed' | ''
+export type AiRisk = 'low' | 'medium' | 'high'
+
+export interface AiStatus {state: AiState; version: string; detail: string; hint: string}
+
+export interface AiProvider {
+  id: string
+  name: string
+  status: AiStatus
+  enabled: boolean
+  default: boolean
+  /** the default model of the provider; '' lets the CLI decide */
+  model: string
+  supports_mcp: boolean
+  /** takes pictures (sent as they are, after the user confirms) */
+  supports_images: boolean
+  custom: boolean
+}
+
+export interface AiModel {id: string; name: string; description?: string}
+export interface AiModelList {models: AiModel[]; error: string; can_list: boolean}
+
+export interface AiSettings {
+  lines: number
+  patterns: string[]
+  auto_run: boolean
+  default_provider: string
+}
+
+export interface AiSessionState {
+  host_id: string
+  label: string
+  /** the effective policy */
+  policy: 'off' | 'ask' | 'on'
+  /** what is saved on the host ('' = default) */
+  stored: AiPolicy
+  production: boolean
+  confirmed: boolean
+  connected: boolean
+}
+
+export interface AiFinding {kind: string; count: number}
+
+export interface AiPreview {
+  text: string
+  findings: AiFinding[]
+  redacted: number
+  lines: number
+  alt_screen: boolean
+  vault_locked: boolean
+  empty: boolean
+  /** pictures that would be sent as they are: nothing can be hidden in a picture */
+  images: number
+}
+
+export interface AiCommand {
+  cmd: string
+  why: string
+  risk: AiRisk
+  reasons: string[]
+  warnings: string[]
+  blocked: boolean
+  block_reason: string
+  /** it only reads: it is run as soon as the answer shows, without asking */
+  auto?: boolean
+}
+
+export interface AiReply {text: string; commands: AiCommand[]; provider: string; model: string; redacted: number}
+
+export interface AiCommandCheck {
+  blocked: boolean
+  block_reason: string
+  risk: AiRisk
+  reasons: string[]
+  warnings: string[]
+  run_allowed: boolean
+  run_reason: string
+  typed_confirm: boolean
+}
+
+export interface AiAttachment {name: string; mime: string; /** the content of a text file */ text?: string; /** the base64 content of an image */ data?: string}
+export interface AiAskOptions {provider: string; model: string; lines: number; selection: string; request_id?: string; attachments?: AiAttachment[]; /** the user agreed to send pictures as they are */ allow_images?: boolean}
+export interface AiCustomProvider {id?: string; name: string; command: string; args?: string[]; prompt_via?: 'stdin' | 'arg'}
+
+export type McpMode = 'allow' | 'ask' | 'off'
+
+export interface McpServer {
+  id: string
+  name: string
+  type: 'stdio' | 'http'
+  command: string
+  args: string[]
+  url: string
+  /** names only: the values are in the vault and are never read back */
+  env: string[]
+  headers: string[]
+  enabled: boolean
+  trusted: boolean
+  host_ids: string[]
+  providers: string[]
+  status: string
+  reviewed: number
+}
+
+export interface McpServerInput {
+  id?: string
+  name: string
+  type: 'stdio' | 'http'
+  command?: string
+  args?: string[]
+  url?: string
+  /** a non-empty value is saved to the vault; an empty one keeps what is stored */
+  env?: Record<string, string>
+  headers?: Record<string, string>
+  remove_env?: string[]
+  remove_headers?: string[]
+  enabled: boolean
+  trusted: boolean
+  host_ids?: string[]
+  providers?: string[]
+}
+
+export interface McpTool {name: string; description: string; read_only: boolean; mode: McpMode; new: boolean}
+export interface McpImportItem {ref: string; source: string; name: string; type: 'stdio' | 'http'; command: string; args: string[]; url: string; env: string[]; headers: string[]}
+
+/** One step of an answer: a tool the assistant used. */
+export interface AiStep {server: string; tool: string; state: string; note: string}

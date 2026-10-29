@@ -93,7 +93,7 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 		app: map[string]any{
 			"HostService": a.Host, "VaultService": a.Vault, "SessionService": a.Session, "ForwardService": a.Forward,
 			"SyncService": a.Sync, "ImportExportService": a.ImportExp, "SettingsService": a.Settings, "SnippetService": a.Snippet,
-			"SftpService": a.Sftp, "LocalService": a.Local, "SerialService": a.Serial, "LogService": a.Log, "KnownHostsService": a.KnownHost,
+			"SftpService": a.Sftp, "LocalService": a.Local, "SerialService": a.Serial, "LogService": a.Log, "KnownHostsService": a.KnownHost, "AssistantService": a.Assistant,
 		},
 		wake: make(chan struct{}),
 		targets: map[string]bridgeTarget{
@@ -103,6 +103,10 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 			// a terminal window drives its own session and reads the hosts for their names and themes
 			"SessionService": {a.Session, allow("Open", "Attach", "Write", "Resize", "Reconnect", "Close", "TrustHostKey")},
 			"HostService":    {a.Host, allow("ListHosts")},
+			// the AI assistant page of Settings: providers, models, redaction options and MCP servers (never a terminal)
+			"AssistantService": {a.Assistant, allow("Providers", "RefreshProviders", "SetProviderEnabled", "SetDefaultProvider", "SetProviderModel",
+				"Models", "Settings", "SaveSettings", "SaveCustomProvider", "DeleteCustomProvider", "McpServers", "SaveMcpServer", "DeleteMcpServer",
+				"TestMcpServer", "SetMcpTool", "ApproveNewTools", "ImportableMcpServers", "ImportMcpServer")},
 		},
 	}
 }

@@ -22,16 +22,21 @@ type Services struct {
 	Log       *LogService
 	KnownHost *KnownHostsService
 	Settings  *SettingsService
+	Assistant *AssistantService
 }
 
 // New builds every use case service.
 func New(core *Core) *Services {
 	fwd := NewForwardService(core)
+	sess := NewSessionService(core, fwd)
+	assist := NewAssistantService(core, sess)
+	sess.OnClose = assist.ForgetSession
 	return &Services{
 		Core:      core,
 		Host:      NewHostService(core),
 		Vault:     NewVaultService(core),
-		Session:   NewSessionService(core, fwd),
+		Session:   sess,
+		Assistant: assist,
 		Forward:   fwd,
 		Sync:      NewSyncService(core),
 		ImportExp: NewImportExportService(core),
@@ -47,6 +52,9 @@ func New(core *Core) *Services {
 
 // Shutdown stops forwards and sessions and locks the vault.
 func (s *Services) Shutdown() {
+	if g, ok := s.Core.ToolGateway.(interface{ Close() }); ok {
+		g.Close()
+	}
 	s.Forward.StopAll()
 	s.Session.CloseAll()
 	s.Sftp.CloseAll()

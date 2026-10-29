@@ -20,11 +20,40 @@ static void setDockIcon(const void *bytes, int length) {
 
 // hideFromDock keeps a helper process (the Settings window, a terminal window) out of the Dock and the app
 // switcher: it is a window of VVTerm, not a second app. The window stays and is brought to the front.
+static void activateSelf(void) {
+    if (@available(macOS 14.0, *)) {
+        [NSApp activate]; // activateIgnoringOtherApps does nothing since macOS 14
+    } else {
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+}
+
 static void hideFromDock(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-        [NSApp activateIgnoringOtherApps:YES];
+        activateSelf();
+        NSWindow *w = [NSApp keyWindow] ?: [[NSApp windows] firstObject];
+        [w makeKeyAndOrderFront:nil];
     });
+}
+
+// raiseProcess brings the window of another process of this app (the Settings window) in front of this one.
+// Since macOS 14 an app cannot take the front by itself while another app is in front: the app that is in front
+// has to hand it over, which is what activateFromApplication does. Returns 0 when that process is not a GUI
+// app yet (it registers a moment after it starts), so the caller may ask again.
+static int raiseProcess(int pid) {
+    __block int ok = 0;
+    void (^work)(void) = ^{
+        NSRunningApplication *target = [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
+        if (target == nil) return;
+        if (@available(macOS 14.0, *)) {
+            ok = [target activateFromApplication:[NSRunningApplication currentApplication] options:NSApplicationActivateAllWindows] ? 1 : 0;
+        } else {
+            ok = [target activateWithOptions:NSApplicationActivateAllWindows | (1 << 1)] ? 1 : 0;
+        }
+    };
+    if ([NSThread isMainThread]) work(); else dispatch_sync(dispatch_get_main_queue(), work);
+    return ok;
 }
 
 // hideFromDockOnLaunch makes this process a Dock-less app from its very first moment. Wails asks for a regular
@@ -42,7 +71,7 @@ static void hideFromDockOnLaunch(void) {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     // an accessory app is not brought to the front by itself
     [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification object:nil queue:nil
-        usingBlock:^(NSNotification *n) { [NSApp activateIgnoringOtherApps:YES]; }];
+        usingBlock:^(NSNotification *n) { activateSelf(); }];
 }
 
 // slimFullScreenBar makes the bar macOS slides over the page in full screen low, with the app's name in it, like
@@ -80,6 +109,9 @@ func slimFullScreenBar() { C.slimFullScreenBar() }
 
 // hideFromDock is for the processes that only show one more window of the app.
 func hideFromDock() { C.hideFromDock() }
+
+// raiseProcess: see the C function.
+func raiseProcess(pid int) bool { return C.raiseProcess(C.int(pid)) != 0 }
 
 // hideFromDockOnLaunch must be called before wails.Run.
 func hideFromDockOnLaunch() { C.hideFromDockOnLaunch() }

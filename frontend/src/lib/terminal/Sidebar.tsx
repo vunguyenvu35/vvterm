@@ -1,13 +1,20 @@
-import {useEffect, useMemo, useState} from 'react'
+import {PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState} from 'react'
 import {clearHistory, getHistory, subscribeHistory} from './history'
 import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
-import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconTrash} from '../ui/Icons'
+import {AssistantTab} from '../assistant/AssistantTab'
+import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconSparkle, IconTrash} from '../ui/Icons'
 import {buildTree, countHosts, countOpen, filterTree, type GroupNode} from '../hosts/tree'
 import {isTerminalTab, leaves, type Tab} from '../layout'
 import type {Group, Host, Settings, Snippet} from '../types'
 import type {Appearance} from '../settings/appearance'
 
-export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes'
+export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes' | 'assistant'
+
+/** The sidebar can be dragged wider or narrower; these keep both the sidebar and the terminal usable. */
+export const SIDE_MIN = 260
+export const SIDE_MAX = 760
+export const SIDE_DEFAULT = 320
+const TERMINAL_MIN = 360
 
 export const FONT_MIN = 8
 export const FONT_MAX = 32
@@ -33,6 +40,14 @@ interface Props {
   onConnect?(h: Host): void
   /** a theme or font was picked: save these settings */
   onSettings?(patch: Partial<Settings>): void
+  /** the focused pane: the AI assistant reads and helps this terminal */
+  paneId?: string
+  /** the assistant asks the user to enable a provider */
+  onOpenSettings?(): void
+  /** the width the user chose (remembered by the caller) */
+  width?: number
+  /** the user finished dragging the edge, or reset it: remember this width */
+  onWidth?(w: number): void
 }
 
 const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
@@ -40,6 +55,7 @@ const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
   {id: 'snippets', label: 'Snippets', icon: <IconBraces size={17} />},
   {id: 'history', label: 'History', icon: <IconClock size={17} />},
   {id: 'themes', label: 'Themes and font', icon: <IconPalette size={17} />},
+  {id: 'assistant', label: 'AI assistant', icon: <IconSparkle size={17} />},
 ]
 
 /** A tiny terminal drawn in a theme's own colours. */
@@ -58,8 +74,33 @@ export function ThemeThumb({colors}: {colors: {bg: string; fg: string; green: st
  * before, and the colours and font of the terminal.
  */
 export function TerminalSidebar(p: Props) {
+  const [width, setWidth] = useState(p.width ?? SIDE_DEFAULT)
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{x: number; w: number} | null>(null)
+  useEffect(() => { setWidth(p.width ?? SIDE_DEFAULT) }, [p.width])
+  const clamp = (v: number) => Math.round(Math.max(SIDE_MIN, Math.min(SIDE_MAX, window.innerWidth - TERMINAL_MIN, v)))
+  const commit = (w: number) => { const c = clamp(w); setWidth(c); p.onWidth?.(c) }
+  const move = (e: ReactPointerEvent<HTMLDivElement>) => { if (drag.current) setWidth(clamp(drag.current.w + (drag.current.x - e.clientX))) }
+  const end = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return
+    const w = clamp(drag.current.w + (drag.current.x - e.clientX))
+    drag.current = null
+    setDragging(false)
+    commit(w)
+  }
   return (
-    <aside className="term-side" aria-label="Terminal sidebar">
+    <aside className={'term-side' + (dragging ? ' resizing' : '')} style={{width}} aria-label="Terminal sidebar">
+      <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX} aria-valuenow={width} tabIndex={0}
+        className="side-resizer" title="Drag to resize; double-click to reset"
+        onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); drag.current = {x: e.clientX, w: width}; setDragging(true) }}
+        onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+        onDoubleClick={() => commit(SIDE_DEFAULT)}
+        onKeyDown={e => {
+          const step = e.shiftKey ? 64 : 16
+          if (e.key === 'ArrowLeft') { e.preventDefault(); commit(width + step) } // the edge moves left: wider
+          else if (e.key === 'ArrowRight') { e.preventDefault(); commit(width - step) }
+          else if (e.key === 'Home') { e.preventDefault(); commit(SIDE_DEFAULT) }
+        }} />
       <div className="side-tabs" role="toolbar" aria-label="Sidebar sections">
         {TABS.map(t => (
           <button key={t.id} aria-pressed={p.tab === t.id} aria-label={t.label} title={t.label}
@@ -71,6 +112,7 @@ export function TerminalSidebar(p: Props) {
         {p.tab === 'snippets' && <SnippetsTab snippets={p.snippets} onInsert={p.onInsert} onNew={p.onNewSnippet} />}
         {p.tab === 'history' && <HistoryTab onInsert={p.onInsert} />}
         {p.tab === 'themes' && <ThemesTab settings={p.settings} appearance={p.appearance} onSettings={p.onSettings} />}
+        {p.tab === 'assistant' && <AssistantTab paneId={p.paneId ?? ''} onOpenSettings={() => p.onOpenSettings?.()} />}
       </div>
     </aside>
   )

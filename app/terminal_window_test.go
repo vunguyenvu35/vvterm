@@ -65,7 +65,7 @@ func TestBridgeRelaysTheSessionsAWindowOpenedAndEveryOtherEvent(t *testing.T) {
 	b.Publish("term:data:other", []any{"x"}) // nobody opened it: not kept
 	b.watch("mine")
 	b.Publish("term:data:mine", []any{"aGk="})
-	b.Publish("hosts:changed", []any{"h1"}) // not about one terminal: every app window gets it
+	b.Publish("hosts:changed", []any{"h1"})     // not about one terminal: every app window gets it
 	b.Publish("sftp:progress:theirs", []any{1}) // an SFTP session of another window: not kept
 	b.Publish("sftp:progress:mine", []any{2})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
