@@ -599,6 +599,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .caps-warning { position: fixed; z-index: 400; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #7a4b00; background: #ffd479; box-shadow: 0 1px 4px #0005; pointer-events: none; }
 
 /* ---- terminal sidebar (hosts, snippets, history, themes) ---- */
+.top-tools .update-chip { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; font-weight: 600; background: var(--accent, #3ecf8e); color: #08130d; align-self: center; margin-right: 4px; }
 .top-tools button.on { background: var(--bg-3); color: var(--accent, #3ecf8e); }
 .term-side { position: relative; width: 320px; flex: none; background: var(--bg-2); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .side-tabs { display: flex; gap: 6px; padding: 12px 12px 8px; }

@@ -900,7 +900,7 @@ func TestSettingsGeneralAccountAndShortcuts(t *testing.T) {
 	h := newHarness(t)
 	s := h.app.Settings
 	d := s.Get()
-	if d.Zoom != 100 || d.ConfirmTabClose || d.ReduceMotion || !d.AskProtocol || !d.BiometricOnOpen || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
+	if d.Zoom != 100 || d.ConfirmTabClose || d.ReduceMotion || !d.AskProtocol || !d.BiometricOnOpen || !d.AutoUpdateCheck || d.Shortcuts == nil || len(d.Shortcuts) != 0 || d.AccountName != "" {
 		t.Fatalf("defaults: %+v", d)
 	}
 	bad := map[string]func(*Settings){

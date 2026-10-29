@@ -202,8 +202,20 @@ The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts
 
 **Updates.** **Check for updates** (under the help links) asks GitHub for the latest release and compares it with your version. If there is a newer one, **Version X is available** appears: click it to open the release page and download the build for your system (macOS `.dmg` or `.zip`, Windows `.exe`, Linux `.tar.gz`). To update, quit VVTerm and replace the old app with the new one; your data is kept outside the app, so nothing is lost. The check only runs when you click it, and only the release information is read: nothing about you is sent. A pre-release is not offered as an update.
 
+When VVTerm opens it also looks by itself, at most once a day (switch it off with **Check for updates automatically** in General). If a newer release exists, an **Update** chip appears in the top right corner; click it to see the news.
+
+![The Update chip in the top right corner](updates/update-chip.png)
+
+![About VVTerm with a newer version available](updates/about-update-available.png)
+
+![The switch in Settings → General](updates/settings-auto-update.png)
+
+**Help → About VVTerm** and **Help → Check for Updates…** open the same window, also while the vault is locked.
+
 - **General:** **Zoom** makes the whole interface larger or smaller (80 % to 160 %, also with the zoom shortcuts), **Reduce motion** turns animations off, and **Confirm before closing a tab** asks before ending a terminal or SFTP connection.
 - **Account:** a local profile (display name and email, stored only in your settings file), your plan, and a disabled **Sign in** for the cloud features planned for later. Nothing is sent anywhere. The **Donate** card lists USDT addresses (Tron and BSC), each with a **Copy** button, if you want to support the project.
+
+![The Donate card](updates/settings-donate.png)
 
 ![Account](screenshots/46-settings-account.png)
 

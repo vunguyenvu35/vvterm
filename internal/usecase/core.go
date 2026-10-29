@@ -40,6 +40,8 @@ type Settings struct {
 	ConfirmTabClose bool `json:"confirm_tab_close"` // ask before closing a terminal tab or pane (off by default)
 	Highlight       bool `json:"highlight"`         // colour URLs, IPs, paths and error/warning/success words in terminal output
 	ReduceMotion    bool `json:"reduce_motion"`     // turn animations off
+	// AutoUpdateCheck: look for a newer release on GitHub when the app opens, at most once a day (on by default)
+	AutoUpdateCheck bool `json:"auto_update_check"`
 	// BiometricOnOpen: the lock screen asks for Touch ID / Windows Hello by itself (on by default)
 	BiometricOnOpen bool `json:"biometric_on_open"`
 
@@ -55,7 +57,7 @@ type Settings struct {
 func defaultSettings() Settings {
 	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace",
 		CursorStyle: "block", CursorBlink: true, CopyOnSelect: true, RightClick: "paste", Scrollback: 10000, AutoLockMinutes: 15,
-		Zoom: 100, Highlight: true, AskProtocol: true, BiometricOnOpen: true, Shortcuts: map[string]string{}}
+		Zoom: 100, Highlight: true, AskProtocol: true, BiometricOnOpen: true, AutoUpdateCheck: true, Shortcuts: map[string]string{}}
 }
 
 // Core wires the packages together; the services below share one instance.

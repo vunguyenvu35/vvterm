@@ -103,6 +103,8 @@ export interface Settings {
   /** colour URLs, IP addresses, paths and error / warning / success words in terminal output */
   highlight: boolean
   reduce_motion: boolean
+  /** look for a newer release when the app opens (at most once a day) */
+  auto_update_check: boolean
   account_name: string
   account_email: string
   shortcuts: Record<string, string> // overrides only: action id -> combo

@@ -15,6 +15,7 @@ import {SnippetsPage} from './lib/snippets/SnippetsPage'
 import {SnippetForm} from './lib/snippets/SnippetForm'
 import {toTerminalInput, writeToPane} from './lib/terminal/panes'
 import {PortForwardsPage} from './lib/panels/PortForwardsPage'
+import {AboutPanel} from './lib/panels/AboutPanel'
 import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
@@ -43,6 +44,7 @@ type Dialog =
   | {k: 'key'; mode: KeyMode}
   | {k: 'serial'}
   | {k: 'data'}
+  | {k: 'about'; check?: boolean}
   | null
 
 
@@ -203,11 +205,30 @@ export default function App({initial}: {/** an app window opened for this place 
   useEffect(() => { if (leftHome) setDialog(null) }, [leftHome])
   useEffect(() => { if (vault?.unlocked) void refreshData() }, [vault?.unlocked, refreshData])
 
+  // a newer release on GitHub: looked for when the app opens, at most once a day, unless switched off in Settings
+  const [newVersion, setNewVersion] = useState('')
+  useEffect(() => {
+    if (!vault?.unlocked) return
+    const KEY = 'vvterm.update.checked'
+    try { if (Date.now() - Number(localStorage.getItem(KEY) || 0) < 24 * 3600 * 1000) return } catch { /* check anyway */ }
+    // the saved setting is read here, not taken from state: the state holds the defaults until the real ones arrive
+    void be.settings.get().then(s => (s.auto_update_check ? be.system.checkUpdate() : null)).then(u => {
+      if (!u) return
+      try { localStorage.setItem(KEY, String(Date.now())) } catch { /* checked again next time */ }
+      if (u.available) setNewVersion(u.latest)
+    }).catch(() => {}) // offline or rate limited: stay quiet, it is only a courtesy
+  }, [be, vault?.unlocked])
+
   act.current = {}
-  menuHandler.current = () => {} // locked or loading: the menu does nothing
-  if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div></div>
+  // locked or loading: only Help → About and Check for Updates work (they need nothing from the vault)
+  menuHandler.current = (action: string) => {
+    if (action === 'about') setDialog({k: 'about'})
+    else if (action === 'check_update') setDialog({k: 'about', check: true})
+  }
+  const aboutOnly = dialog?.k === 'about' ? <AboutPanel onClose={() => setDialog(null)} checkNow={dialog.check} /> : null
+  if (!vault) return <div className="gate"><DragBar /><div className="muted">Loading…</div>{aboutOnly}</div>
   if (!vault.unlocked) {
-    return <UnlockScreen status={vault} autoBiometric={settings.biometric_on_open} onDone={() => { void refreshVault() }} />
+    return <><UnlockScreen status={vault} autoBiometric={settings.biometric_on_open} onDone={() => { void refreshVault() }} />{aboutOnly}</>
   }
 
   // a second tab on the same host is numbered ("web", "web (2)"…); double-click a tab to give it any name
@@ -412,6 +433,8 @@ export default function App({initial}: {/** an app window opened for this place 
     else if (action === 'new_terminal') openDevice('local', 'Local')
     else if (action === 'serial') { goHome('hosts'); setDialog({k: 'serial'}) }
     else if (action === 'import') setDialog({k: 'data'})
+    else if (action === 'about') setDialog({k: 'about'})
+    else if (action === 'check_update') setDialog({k: 'about', check: true})
     else if (action === 'open_settings') openSettings()
     else if (action === 'duplicate_tab') { if (activeTabObj && !onHome) duplicateTab(activeTabObj.id) }
     else if (action === 'page:sftp') setActive(SFTP_TAB_ID)
@@ -424,7 +447,7 @@ export default function App({initial}: {/** an app window opened for this place 
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
         onNew={openBlankTab}
         onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onMoveTab={moveTabTo} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} hosts={hosts} onRunSnippet={runSnippet}
-        sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
+        sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} updateVersion={newVersion} onUpdate={() => setDialog({k: 'about', check: true})} />
       {chordHint && <div className="chord-hint" role="status"><kbd className="keycap">{chordHint}</kbd> was pressed. Waiting for the next key… (Esc to cancel)</div>}
       <div className="body">
         <div className="home" style={{display: onHome ? 'flex' : 'none'}}>
@@ -489,6 +512,7 @@ export default function App({initial}: {/** an app window opened for this place 
           onVault={() => void refreshVault()} onChanged={() => void refreshData()} onClose={() => setSettingsOpen(false)} />
       )}
       {dialog?.k === 'data' && <DataPanel onClose={close} onChanged={() => void refreshData()} />}
+      {dialog?.k === 'about' && <AboutPanel onClose={close} checkNow={dialog.check} />}
     </div>
   )
 }

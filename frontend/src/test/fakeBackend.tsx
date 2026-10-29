@@ -16,6 +16,8 @@ export interface Fake extends Backend {
     snippets: Snippet[]
     running: Record<string, string>
     settings: Settings
+    /** the newest release GitHub reports (a test sets it higher than the running version to get an update) */
+    latest?: string
     /** remote file system for SFTP: path -> entry ("/" is the root) */
     remote: Record<string, {dir: boolean; size: number}>
     /** this computer's files for the Local pane: path -> entry */
@@ -390,7 +392,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       saveFile: async (_t, name) => '/tmp/' + name,
       openUrl: async u => { rec('system.openUrl', u) },
       info: async () => ({version: '1.1.0-test'}),
-      checkUpdate: async () => { rec('system.checkUpdate'); return {current: '1.1.0-test', latest: '1.1.0-test', available: false, url: '', notes: ''} },
+      checkUpdate: async () => { rec('system.checkUpdate'); const latest = state.latest ?? '1.1.0-test'; return {current: '1.1.0-test', latest, available: latest !== '1.1.0-test', url: 'https://github.com/vunguyenvu35/vvterm/releases/tag/v' + latest, notes: ''} },
       toggleMaximise: async () => { rec('system.toggleMaximise') },
       readClipboard: async () => { rec('system.readClipboard'); return state.clipboard },
       writeClipboard: async t => { rec('system.writeClipboard', t); state.clipboard = t },

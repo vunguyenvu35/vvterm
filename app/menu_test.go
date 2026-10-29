@@ -74,7 +74,7 @@ func TestMenuBarHasTheUsualMenus(t *testing.T) {
 	if len(m.Items) != 6 {
 		t.Fatalf("App, File, Edit, View, Window, Help: %v", top)
 	}
-	for _, name := range []string{"File", "View", "Help"} {
+	for _, name := range []string{"File", "View"} {
 		if submenu(m, name) == nil {
 			t.Errorf("no %s menu", name)
 		}
@@ -140,13 +140,31 @@ func TestViewMenuZoomsSplitsAndShowsPages(t *testing.T) {
 func TestHelpMenuOpensOnlyTheProjectPages(t *testing.T) {
 	p := &menuProbe{}
 	help := submenu(BuildMenu(p.hooks()), "Help")
-	if len(help.SubMenu.Items) != len(HelpLinks) || len(HelpLinks) != 5 {
+	// About, Check for Updates and a separator come first, then one item per project link
+	const lead = 3
+	if len(help.SubMenu.Items) != lead+len(HelpLinks) || len(HelpLinks) != 5 {
 		t.Fatalf("%v", labels(help))
 	}
 	for i, l := range HelpLinks {
-		click(t, help.SubMenu.Items[i])
+		click(t, help.SubMenu.Items[lead+i])
 		if p.urls[i] != l.URL || !urlAllowed(l.URL) {
 			t.Errorf("%s: %q must be one of the allowed project links", l.Label, l.URL)
+		}
+	}
+}
+
+func TestHelpMenuHasAboutAndCheckForUpdates(t *testing.T) {
+	p := &menuProbe{}
+	help := submenu(BuildMenu(p.hooks()), "Help")
+	for label, want := range map[string]string{"About VVTerm": ActAbout, "Check for Updates…": ActCheckUpdate} {
+		it := find(help, label)
+		if it == nil {
+			t.Fatalf("Help has no %q: %v", label, labels(help))
+		}
+		p.actions = nil
+		click(t, it)
+		if len(p.actions) != 1 || p.actions[0] != want {
+			t.Errorf("%s → %v, want %s", label, p.actions, want)
 		}
 	}
 }

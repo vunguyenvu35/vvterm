@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +28,11 @@ type UpdateInfo struct {
 func (s *SystemService) CheckUpdate() (UpdateInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return checkUpdate(ctx, http.DefaultClient, latestReleaseURL, Version)
+	url := latestReleaseURL
+	if u := os.Getenv("VVTERM_UPDATE_URL"); u != "" {
+		url = u // tests and screenshots point this at a local stand-in for GitHub
+	}
+	return checkUpdate(ctx, http.DefaultClient, url, Version)
 }
 
 func checkUpdate(ctx context.Context, c *http.Client, url, current string) (UpdateInfo, error) {

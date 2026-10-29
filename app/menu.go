@@ -34,13 +34,15 @@ const (
 	ActNextTab      = "next_tab"
 	ActPrevTab      = "prev_tab"
 	ActVaults       = "go_vaults"
+	ActAbout        = "about"
+	ActCheckUpdate  = "check_update"
 )
 
 // MenuActions lists every action name, for tests and for the frontend to stay in step.
 var MenuActions = []string{
 	ActNewHost, ActNewGroup, ActNewTerminal, ActSerial, ActImport, ActSettings, ActCloseTab, ActClosePane, ActLock,
 	ActZoomIn, ActZoomOut, ActZoomReset, ActBroadcast, ActSplitRight, ActSplitDown, ActDuplicateTab,
-	ActNewTab, ActNextTab, ActPrevTab, ActVaults,
+	ActNewTab, ActNextTab, ActPrevTab, ActVaults, ActAbout, ActCheckUpdate,
 	ActPagePrefix + "hosts", ActPagePrefix + "keychain", ActPagePrefix + "forwards", ActPagePrefix + "snippets",
 	ActPagePrefix + "sftp", ActPagePrefix + "knownhosts", ActPagePrefix + "logs",
 }
@@ -165,6 +167,9 @@ func BuildMenu(h MenuHooks) *menu.Menu {
 	view.Append(menu.Text("Enter Full Screen", keys.Combo("f", keys.ControlKey, keys.CmdOrCtrlKey), func(*menu.CallbackData) { h.ToggleFullScreen() }))
 
 	help := menu.NewMenu()
+	help.Append(act("About VVTerm", ActAbout, nil))
+	help.Append(act("Check for Updates…", ActCheckUpdate, nil))
+	help.Append(menu.Separator())
 	for _, l := range HelpLinks {
 		url := l.URL
 		help.Append(menu.Text(l.Label, nil, func(*menu.CallbackData) { h.OpenURL(url) }))

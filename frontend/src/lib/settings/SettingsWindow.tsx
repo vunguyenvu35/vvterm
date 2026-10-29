@@ -224,6 +224,10 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                       <Switch label="Confirm before closing a tab" checked={s.confirm_tab_close} onChange={v => update({confirm_tab_close: v})} />
                     </div>
                     <div className="setting-row">
+                      <div><b>Check for updates automatically</b><div className="muted">When VVTerm opens, ask GitHub (at most once a day) whether a newer release exists. Only the release information is read; nothing about you is sent.</div></div>
+                      <Switch label="Check for updates automatically" checked={s.auto_update_check} onChange={v => update({auto_update_check: v})} />
+                    </div>
+                    <div className="setting-row">
                       <div><b>Ask which protocol to use</b><div className="muted">Opening a host first shows SSH, Mosh and Telnet to choose from, like Termius. Turn it off to connect with SSH straight away (hosts that have Telnet still ask).</div></div>
                       <Switch label="Ask which protocol to use" checked={s.ask_protocol} onChange={v => update({ask_protocol: v})} />
                     </div>

@@ -35,6 +35,9 @@ interface Props {
   /** the panel on the right of a terminal (hosts, snippets, history, themes) */
   sidebarOpen?: boolean
   onToggleSidebar?(): void
+  /** a newer release exists (version number): shows an Update chip in the corner */
+  updateVersion?: string
+  onUpdate?(): void
 }
 
 /** Title bar with the Vaults (home) tab, one tab per terminal, and split controls. */
@@ -131,6 +134,7 @@ export function TopBar(p: Props) {
       <button className="tab add" aria-label="New connection" title="New connection" onClick={p.onNew}><IconPlus size={16} /></button>
       <div className="spacer" />
       <div className="top-tools">
+        {p.updateVersion && <button className="update-chip" title={`Version ${p.updateVersion} is available`} aria-label={`Update available: version ${p.updateVersion}`} onClick={p.onUpdate}>Update</button>}
         <SnippetPicker snippets={p.snippets} disabled={!inTerminal} onRun={p.onRunSnippet} />
         <button className="icon" title="Settings (⌘/Ctrl + ,)" aria-label="Open settings" onClick={p.onSettings}><IconGear /></button>
         <button className="icon" disabled={!inTerminal} title="Split right" aria-label="Split right" onClick={() => p.onSplit('row')}><IconSplitH /></button>

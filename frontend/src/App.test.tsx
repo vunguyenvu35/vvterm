@@ -1,4 +1,4 @@
-import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {host, makeFake, Providers} from './test/fakeBackend'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
@@ -1007,7 +1007,7 @@ describe('App: tab menu, broadcast and maximise', () => {
 
 describe('App: the application menu bar', () => {
   // the actions of app/menu.go (MenuActions): the Go test keeps that list in step with the menu itself
-  const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
+  const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'about', 'check_update', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
     'broadcast_input', 'split_right', 'split_down', 'duplicate_tab', 'page:hosts', 'page:keychain', 'page:forwards', 'page:snippets', 'page:sftp', 'page:knownhosts', 'page:logs']
   const menu = (be: ReturnType<typeof makeFake>, action: string) => act(() => be.emit('menu:action', action))
 
@@ -1022,6 +1022,68 @@ describe('App: the application menu bar', () => {
     expect(await screen.findByRole('dialog', {name: 'Serial'})).toBeInTheDocument()
     menu(be, 'import')
     expect(await screen.findByRole('dialog', {name: /Import/})).toBeInTheDocument()
+  })
+
+  it('Help → About opens the About dialog, and Check for Updates runs the check', async () => {
+    const be = setup()
+    await unlock(be)
+    menu(be, 'about')
+    expect(await screen.findByRole('dialog', {name: 'About VVTerm'})).toBeInTheDocument()
+    expect(await screen.findByTestId('about-version')).toHaveTextContent('1.1.0-test')
+    await userEvent.click(screen.getAllByRole('button', {name: 'Close'})[0])
+    menu(be, 'check_update')
+    expect(await screen.findByText('You are on the latest version.')).toBeInTheDocument()
+    expect(be.state.calls.some(c => c[0] === 'system.checkUpdate')).toBe(true)
+  })
+
+  it('shows an Update chip in the corner when a newer release exists, and opens the About dialog from it', async () => {
+    localStorage.removeItem('vvterm.update.checked')
+    const be = setup()
+    be.state.latest = '9.9.9'
+    await unlock(be)
+    const chip = await screen.findByRole('button', {name: /Update available: version 9\.9\.9/})
+    await userEvent.click(chip)
+    expect(await screen.findByRole('dialog', {name: 'About VVTerm'})).toBeInTheDocument()
+    expect(await screen.findByText(/is available/)).toBeInTheDocument()
+  })
+
+  it('no Update chip when up to date, when switched off, or when checked within the day', async () => {
+    localStorage.removeItem('vvterm.update.checked')
+    let be = setup()
+    await unlock(be)
+    await waitFor(() => expect(be.state.calls.some(c => c[0] === 'system.checkUpdate')).toBe(true))
+    expect(screen.queryByRole('button', {name: /Update available/})).toBeNull()
+    cleanup()
+
+    localStorage.removeItem('vvterm.update.checked')
+    be = setup()
+    be.state.latest = '9.9.9'
+    be.state.settings = {...be.state.settings, auto_update_check: false}
+    await unlock(be)
+    await screen.findByRole('button', {name: 'Open settings'})
+    expect(be.state.calls.some(c => c[0] === 'system.checkUpdate')).toBe(false)
+    cleanup()
+
+    localStorage.setItem('vvterm.update.checked', String(Date.now()))
+    be = setup()
+    be.state.latest = '9.9.9'
+    await unlock(be)
+    await screen.findByRole('button', {name: 'Open settings'})
+    expect(be.state.calls.some(c => c[0] === 'system.checkUpdate')).toBe(false)
+    localStorage.removeItem('vvterm.update.checked')
+  })
+
+  it('Help → About and Check for Updates still work while the vault is locked', async () => {
+    const be = setup()
+    await screen.findByLabelText('Master password') // the lock screen
+    menu(be, 'about')
+    expect(await screen.findByRole('dialog', {name: 'About VVTerm'})).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('button', {name: 'Close'})[0])
+    expect(screen.queryByRole('dialog', {name: 'About VVTerm'})).toBeNull()
+    menu(be, 'check_update')
+    expect(await screen.findByText('You are on the latest version.')).toBeInTheDocument()
+    menu(be, 'new_host') // everything else stays shut
+    expect(screen.queryByRole('dialog', {name: 'New host'})).toBeNull()
   })
 
   it('New Terminal opens a local terminal; Duplicate, Close Tab and Close Pane act on the open tab', async () => {
@@ -1078,7 +1140,7 @@ describe('App: the application menu bar', () => {
     const be = setup()
     await unlock(be)
     for (const a of GO_ACTIONS) menu(be, a) // none of them may throw
-    expect(GO_ACTIONS).toHaveLength(23)
+    expect(GO_ACTIONS).toHaveLength(25)
   })
 })
 
