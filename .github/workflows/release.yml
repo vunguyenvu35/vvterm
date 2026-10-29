@@ -90,4 +90,9 @@ jobs:
         run: |
           VERSION="$(cat VERSION)"
           awk -v h="# VVTerm $VERSION" '$0==h{f=1;next} /^# VVTerm /{f=0} f' RELEASE_NOTES.md > notes.md
-          gh release create "$GITHUB_REF_NAME" dist/* --title "VVTerm $VERSION" --notes-file notes.md --prerelease
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # a release made by hand for this tag: add (or replace) the files
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "VVTerm $VERSION" --notes-file notes.md --prerelease
+          fi
