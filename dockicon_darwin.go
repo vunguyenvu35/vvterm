@@ -49,7 +49,7 @@ static int raiseProcess(int pid) {
         if (@available(macOS 14.0, *)) {
             ok = [target activateFromApplication:[NSRunningApplication currentApplication] options:NSApplicationActivateAllWindows] ? 1 : 0;
         } else {
-            ok = [target activateWithOptions:NSApplicationActivateAllWindows | (1 << 1) /* ignoring other apps: the only way before macOS 14 */] ? 1 : 0;
+            ok = [target activateWithOptions:NSApplicationActivateAllWindows | (1 << 1)] ? 1 : 0;
         }
     };
     if ([NSThread isMainThread]) work(); else dispatch_sync(dispatch_get_main_queue(), work);
