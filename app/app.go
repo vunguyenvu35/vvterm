@@ -11,7 +11,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"vvterm/internal/agentx"
+	"vvterm/internal/domain/assistant"
 	"vvterm/internal/localtty"
+	"vvterm/internal/mcpgw"
 	"vvterm/internal/serialx"
 	"vvterm/internal/sftpx"
 	"vvterm/internal/sqlitedb"
@@ -91,7 +94,13 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 		OpenTelnet: func(addr string, cols, rows int, user, pass string, onData func([]byte)) (usecase.Shell, error) {
 			return telnetx.Open(addr, 10*time.Second, cols, rows, user, pass, onData)
 		},
-		ListSerial: serialx.Ports, Activity: db.ActivityLog()})
+		ListSerial: serialx.Ports, Activity: db.ActivityLog(),
+		// AI assistant: the provider adapters, the MCP gateway and the connector for users' MCP servers
+		Agents: []usecase.Agent{&agentx.Claude{}, &agentx.Codex{}, &agentx.Gemini{}},
+		NewCustomAgent: func(p assistant.CustomProvider) usecase.Agent {
+			return &agentx.Custom{Cfg: agentx.CustomConfig{ID: p.ID, Name: p.Name, Command: p.Command, Args: p.Args, PromptVia: p.PromptVia}}
+		},
+		ToolGateway: mcpgw.New(), MCP: mcpgw.Connector{}})
 	if err != nil {
 		db.Close()
 		return nil, err

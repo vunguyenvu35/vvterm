@@ -66,6 +66,8 @@ type SessionService struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session
+	// OnClose is told when a tab is closed (the assistant forgets its conversation).
+	OnClose func(sid string)
 }
 
 func NewSessionService(c *Core, f *ForwardService) *SessionService {
@@ -297,6 +299,9 @@ func (s *SessionService) Close(sid string) error {
 	s.mu.Unlock()
 	if !ok {
 		return errors.New("unknown session")
+	}
+	if s.OnClose != nil {
+		defer s.OnClose(sid)
 	}
 	sess.mu.Lock()
 	sess.closed = true

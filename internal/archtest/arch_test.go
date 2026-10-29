@@ -14,9 +14,17 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"os"
+	"reflect"
+
+	"vvterm/internal/domain/assistant"
+	"vvterm/internal/domain/secretpolicy"
 )
 
 const mod = "vvterm"
+
+// (imports for the assistant checks)
 
 // imports returns the import paths used by non-test files of a package directory (relative to the repo root).
 func imports(t *testing.T, dir string) map[string]bool {
@@ -106,7 +114,7 @@ func TestUseCaseDependsOnlyInward(t *testing.T) {
 }
 
 func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
-	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "fsutil", "testssh", "sqlitedb", "sftpx"} {
+	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "fsutil", "testssh", "sqlitedb", "sftpx", "agentx", "mcpgw"} {
 		for _, d := range internalDeps(imports(t, "internal/"+pkg)) {
 			if d == "app" || d == "internal/usecase" {
 				t.Errorf("infrastructure package %s imports %s (dependency points outward)", pkg, d)
@@ -117,11 +125,67 @@ func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
 
 func TestOnlyDeliveryLayerTouchesWails(t *testing.T) {
 	for _, pkg := range []string{"internal/usecase", "internal/domain", "internal/store", "internal/vault", "internal/sshx",
-		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/sqlitedb", "internal/sftpx"} {
+		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/sqlitedb", "internal/sftpx", "internal/agentx", "internal/mcpgw"} {
 		for p := range imports(t, pkg) {
 			if strings.Contains(p, "wailsapp") {
 				t.Errorf("%s imports Wails (%s)", pkg, p)
 			}
+		}
+	}
+}
+
+// The secret policy is enforced by types: only the guard can make a Sanitized value, and an agent request
+// holds nothing but Sanitized text (the model id is a flag value that the use case validates).
+func TestOnlySecretPolicyConstructsSanitized(t *testing.T) {
+	root := filepath.Join("..", "..")
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && (d.Name() == "node_modules" || d.Name() == ".git" || d.Name() == "frontend" || d.Name() == "e2e") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") || strings.Contains(filepath.ToSlash(p), "internal/domain/secretpolicy/") {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(b), "Sanitized{") {
+			t.Errorf("%s builds a Sanitized value; only secretpolicy.Guard may", p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAgentRequestHoldsOnlySanitizedText(t *testing.T) {
+	rt := reflect.TypeOf(assistant.Request{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		switch {
+		case f.Name == "Model" || f.Name == "Gateway":
+		case f.Type == reflect.TypeOf(secretpolicy.Sanitized{}):
+		case f.Name == "History" && f.Type.Elem() == reflect.TypeOf(assistant.Turn{}):
+		default:
+			t.Errorf("assistant.Request.%s is %s: an agent may only receive Sanitized text", f.Name, f.Type)
+		}
+	}
+	tt := reflect.TypeOf(assistant.Turn{})
+	for i := 0; i < tt.NumField(); i++ {
+		if f := tt.Field(i); f.Name == "Text" && f.Type != reflect.TypeOf(secretpolicy.Sanitized{}) {
+			t.Errorf("assistant.Turn.Text must be Sanitized")
+		}
+	}
+}
+
+func TestUseCaseDoesNotImportAgentAdaptersOrGateway(t *testing.T) {
+	for _, d := range internalDeps(imports(t, "internal/usecase")) {
+		if d == "internal/agentx" || d == "internal/mcpgw" {
+			t.Errorf("usecase imports %s: depend on the Agent, ToolGateway and MCPConnector ports instead", d)
 		}
 	}
 }
