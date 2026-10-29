@@ -12,7 +12,10 @@ help:
 	@echo "make package    build and create dist/*.dmg and *.zip (macOS)"
 	@echo "make release    test, build and print checksums"
 
+# The Settings window and "Duplicate in new window" are other processes that show the frontend embedded in the
+# binary (frontend/dist), not the Vite dev server, so build it first: otherwise they show the last build.
 dev:
+	cd frontend && npm run build
 	$(WAILS) dev
 
 build:

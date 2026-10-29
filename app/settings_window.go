@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -194,9 +195,15 @@ func menuViaMain(c *BridgeClient, ctx func() context.Context) *menu.Menu {
 // no Dock icon, so the window opens without the Dock reacting: the one a build made (Contents/Helpers, see
 // scripts/macos-settings-helper.sh), or else one made on the fly in the cache folder, which is what happens
 // under `make dev`. Anywhere else, and when no helper can be made, it is the app itself.
+//
+// The helper must be the very program that is running. A build's helper is a hard link to the executable of
+// that build: when the executable is built again (`make dev`) or the app is replaced by a newer one, the old
+// link keeps running the old program, and the Settings window would show an old version of everything. So a
+// bundled helper is used only when it is the same program as exe; otherwise the one in the cache is used, which
+// is made again whenever exe differs.
 func settingsExecutable(exe string) string {
 	helper := filepath.Join(filepath.Dir(exe), "..", "Helpers", "VVTerm Settings.app", "Contents", "MacOS", "vvterm-settings")
-	if st, err := os.Stat(helper); err == nil && st.Mode().IsRegular() {
+	if st, err := os.Stat(helper); err == nil && st.Mode().IsRegular() && sameProgram(exe, helper) {
 		return helper
 	}
 	if goruntime.GOOS == "darwin" {
@@ -207,6 +214,45 @@ func settingsExecutable(exe string) string {
 		}
 	}
 	return exe
+}
+
+// sameProgram reports whether a and b are the same program: one file (a hard link), or two files with the same bytes.
+func sameProgram(a, b string) bool {
+	sa, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	sb, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	if os.SameFile(sa, sb) {
+		return true
+	}
+	if sa.Size() != sb.Size() {
+		return false
+	}
+	fa, err := os.Open(a)
+	if err != nil {
+		return false
+	}
+	defer fa.Close()
+	fb, err := os.Open(b)
+	if err != nil {
+		return false
+	}
+	defer fb.Close()
+	bufA, bufB := make([]byte, 1<<20), make([]byte, 1<<20)
+	for {
+		na, ea := io.ReadFull(fa, bufA)
+		nb, eb := io.ReadFull(fb, bufB)
+		if na != nb || !bytes.Equal(bufA[:na], bufB[:nb]) {
+			return false
+		}
+		if ea != nil || eb != nil {
+			return ea == eb || (ea == io.ErrUnexpectedEOF && eb == io.ErrUnexpectedEOF) || (ea == io.EOF && eb == io.EOF)
+		}
+	}
 }
 
 const settingsHelperPlist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -230,12 +276,11 @@ const settingsHelperPlist = `<?xml version="1.0" encoding="UTF-8"?>
 func prepareSettingsHelper(exe, root string) (string, error) {
 	bundle := filepath.Join(root, "VVTerm Settings.app")
 	bin := filepath.Join(bundle, "Contents", "MacOS", "vvterm-settings")
-	src, err := os.Stat(exe)
-	if err != nil {
+	if _, err := os.Stat(exe); err != nil {
 		return "", err
 	}
-	if dst, err := os.Stat(bin); err == nil && (os.SameFile(src, dst) || (dst.Size() == src.Size() && !dst.ModTime().Before(src.ModTime()))) {
-		return bin, nil // already up to date
+	if sameProgram(exe, bin) {
+		return bin, nil // already up to date (a size and a date are not enough: a downgrade or a copy keeps an old date)
 	}
 	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
 		return "", err

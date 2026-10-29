@@ -50,6 +50,20 @@ func TestBridgeConnectionFileIsPrivateAndRemovedOnClose(t *testing.T) {
 	}
 }
 
+func TestBridgeRefusesAWindowOfAnotherVersion(t *testing.T) {
+	_, _, _, dir := newBridgeApp(t)
+	c, err := ConnectBridge(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := Version
+	defer func() { Version = old }()
+	Version = "0.0.1-left-open" // this process is an older window; the main process answers with its own version
+	if err := c.Ping(); err == nil || !strings.Contains(err.Error(), "close it and open it again") {
+		t.Fatalf("a window of another version must be refused: %v", err)
+	}
+}
+
 func TestBridgeCallsSettingsAndNotifiesTheMainWindow(t *testing.T) {
 	_, _, changed, dir := newBridgeApp(t)
 	c, err := ConnectBridge(dir)

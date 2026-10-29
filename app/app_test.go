@@ -132,21 +132,62 @@ func TestOpenPathRefusesFilesThatRunPrograms(t *testing.T) {
 }
 
 func TestSettingsExecutableUsesTheDocklessHelperWhenBuilt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // the cache helper of a stale one is made here, not in the real cache
 	root := t.TempDir()
 	exe := filepath.Join(root, "vvterm.app", "Contents", "MacOS", "vvterm")
 	if got := settingsExecutable(exe); got != exe {
 		t.Fatalf("no helper: got %q, want the app itself", got)
 	}
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, []byte("build 2"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	helper := filepath.Join(root, "vvterm.app", "Contents", "Helpers", "VVTerm Settings.app", "Contents", "MacOS", "vvterm-settings")
 	if err := os.MkdirAll(filepath.Dir(helper), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(helper, []byte("x"), 0o755); err != nil {
+	// a helper left by an older build is not the running program: it must not be used (it would show the old version)
+	if err := os.WriteFile(helper, []byte("build 1"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := filepath.Abs(settingsExecutable(exe))
-	if got != helper {
+	if got, _ := filepath.Abs(settingsExecutable(exe)); got == helper {
+		t.Fatalf("a stale helper was used: %q", got)
+	}
+	// the helper of this build (a hard link, or a copy with the same bytes) is used
+	if err := os.Remove(helper); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(exe, helper); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Abs(settingsExecutable(exe)); got != helper {
 		t.Fatalf("got %q, want the helper %q", got, helper)
+	}
+	if err := os.Remove(helper); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(helper, []byte("build 2"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Abs(settingsExecutable(exe)); got != helper {
+		t.Fatalf("a copy with the same bytes: got %q, want %q", got, helper)
+	}
+}
+
+func TestSameProgram(t *testing.T) {
+	d := t.TempDir()
+	w := func(name, body string) string {
+		p := filepath.Join(d, name)
+		if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	a, b, c := w("a", strings.Repeat("x", 3<<20)), w("b", strings.Repeat("x", 3<<20)), w("c", strings.Repeat("x", 3<<20-1)+"y")
+	if !sameProgram(a, b) || sameProgram(a, c) || sameProgram(a, filepath.Join(d, "missing")) {
+		t.Fatal("same bytes are the same program; one different byte, or a missing file, is not")
 	}
 }
 

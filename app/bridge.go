@@ -294,7 +294,11 @@ func (b *Bridge) handler() http.Handler {
 			h(w, r)
 		}
 	}
-	mux.HandleFunc("/ping", guard(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	version := Version // the version this main process started as
+	mux.HandleFunc("/ping", guard(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(versionHeader, version)
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	mux.HandleFunc("/call", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -478,7 +482,10 @@ func (c *BridgeClient) Call(service, method, argsJSON string) (string, error) {
 	return string(out.Result), nil
 }
 
-// Ping reports whether the main process still answers.
+// versionHeader carries the app's version on /ping, so a window of another version can tell.
+const versionHeader = "X-VVTerm-Version"
+
+// Ping reports whether the main process still answers, and that it is the same version as this process.
 func (c *BridgeClient) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -489,6 +496,11 @@ func (c *BridgeClient) Ping() error {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		return errors.New(resp.Status)
+	}
+	// A window left over from another version of the app (the app was updated while it was open) must not keep
+	// talking to the new main process: it would show, and ask for, things the two versions do not agree on.
+	if v := resp.Header.Get(versionHeader); v != Version {
+		return fmt.Errorf("this window is VVTerm %s but the app is %s: close it and open it again", Version, v)
 	}
 	return nil
 }
