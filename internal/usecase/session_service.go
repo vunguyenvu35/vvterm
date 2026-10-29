@@ -208,6 +208,13 @@ func (s *SessionService) Attach(sid string) error {
 	return nil
 }
 
+// touchVault tells the vault that a terminal is in use, so the auto-lock timer measures real inactivity.
+func (s *SessionService) touchVault() {
+	if s.c.Vault != nil {
+		s.c.Vault.Touch()
+	}
+}
+
 // Write sends keystrokes to the remote stdin.
 func (s *SessionService) Write(sid, data string) error {
 	sess, err := s.get(sid)
@@ -220,6 +227,7 @@ func (s *SessionService) Write(sid, data string) error {
 	if sh == nil {
 		return errors.New("session is not connected")
 	}
+	s.touchVault()
 	_, err = sh.Write([]byte(data))
 	return err
 }
@@ -329,6 +337,7 @@ func (s *SessionService) CloseAll() {
 // frontend attached, it is kept (up to maxPending) and replayed by Attach.
 func (s *SessionService) batcher(sess *session) *sshx.Batcher {
 	return sshx.NewBatcher(outputBatchInterval, outputBatchMax, func(p []byte) {
+		s.touchVault()
 		sess.mu.Lock()
 		defer sess.mu.Unlock()
 		if !sess.attached {

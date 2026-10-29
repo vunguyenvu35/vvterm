@@ -57,6 +57,8 @@ type SecretVault interface {
 	Destroy() error
 	ChangePassword(oldPW, newPW string) error
 	SetAutoLock(d time.Duration)
+	// Touch counts terminal activity as use, postponing the auto-lock; it never unlocks.
+	Touch()
 	SetHint(hint string) error
 	OnLock(func())
 
