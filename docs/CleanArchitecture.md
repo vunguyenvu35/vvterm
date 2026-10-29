@@ -41,7 +41,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | Domain | `internal/domain` | standard library | any project package, Wails, `x/crypto/ssh` |
 | Application | `internal/usecase` | domain, ports it declares, `fsutil`, the infrastructure libraries listed below | Wails, `app`, `store` |
-| Infrastructure | `sqlitedb`, `store`, `vault`, `sshx`, `forward`, `importer`, `exporter`, `syncgit`, `fsutil`, `testssh` | domain, each other | `usecase`, `app`, Wails |
+| Infrastructure | `sqlitedb`, `store`, `vault`, `sshx`, `forward`, `importer`, `exporter`, `syncgit`, `syncfolder`, `fsutil`, `testssh` | domain, each other | `usecase`, `app`, Wails |
 | Delivery / composition root | `app` | everything | — |
 
 ### What lives where
@@ -65,6 +65,7 @@ Implement `store.Persister` and `vault.Persister`, then pass them to `store.Open
 | `forward` | forwarding engine uses the SSH connection | folds into `Connector` |
 | `importer`, `exporter` | ssh config parsing/writing, backup envelope | `ConfigCodec` |
 | `syncgit` | git CLI transport | `SyncTransport` |
+| `syncfolder` | synced-folder (Drive, iCloud, Dropbox) transport | `SyncTransport` |
 | `vault` | key parsing helpers (`ParsePrivateKey`, `GenerateEd25519`), keychain types | move key helpers behind `SecretVault`/`KeyTools` |
 
 `internal/archtest` holds this list as an allow-list: it may shrink but adding a new infrastructure import to `usecase` fails the test.

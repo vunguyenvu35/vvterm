@@ -32,6 +32,7 @@ type Settings struct {
 	Scrollback      int    `json:"scrollback"`
 	AutoLockMinutes int    `json:"auto_lock_minutes"`
 	SyncURL         string `json:"sync_url"`
+	SyncFolder      string `json:"sync_folder"` // synced-folder mode (Drive / iCloud / Dropbox); replaces SyncURL
 
 	// General
 	Zoom            int  `json:"zoom"`              // interface scale in percent (80..160)

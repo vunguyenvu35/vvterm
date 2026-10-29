@@ -200,9 +200,10 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     },
     sync: {
       configure: async u => { rec('sync.configure', u) },
+      configureFolder: async d => { rec('sync.configureFolder', d) },
       syncNow: async () => { rec('sync.syncNow') },
       join: async pw => { rec('sync.join', pw) },
-      status: async () => ({configured: true, repo_url: 'git@example.com:me/sync.git', last_sync: '0001-01-01T00:00:00Z', syncing: false}),
+      status: async () => ({configured: true, repo_url: 'git@example.com:me/sync.git', folder: '', last_sync: '0001-01-01T00:00:00Z', syncing: false}),
     },
     data: {
       importSSHConfig: async (p, c) => { rec('data.import', p, c); return {hosts_added: 2, groups_added: 1, forwards_added: 0, keys_imported: 1, skipped: ['dup'], warnings: ['ProxyCommand ignored']} },

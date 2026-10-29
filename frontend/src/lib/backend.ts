@@ -61,6 +61,7 @@ export interface Backend {
   }
   sync: {
     configure(url: string): Promise<void>
+    configureFolder(dir: string): Promise<void>
     syncNow(): Promise<void>
     join(masterPassword: string): Promise<void>
     status(): Promise<SyncStatus>
@@ -264,6 +265,7 @@ export function wailsBackend(): Backend {
     },
     sync: {
       configure: url => u('SyncService', 'Configure', url),
+      configureFolder: dir => u('SyncService', 'ConfigureFolder', dir),
       syncNow: () => u('SyncService', 'SyncNow'),
       join: pw => u('SyncService', 'JoinExisting', pw),
       status: () => u('SyncService', 'Status'),
@@ -419,6 +421,7 @@ export function bridgeBackend(): Backend {
     hosts: {...base.hosts, listHosts: async f => (await rpc<Host[]>('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f})) ?? []},
     sync: {
       configure: url => rpc('SyncService', 'Configure', url),
+      configureFolder: dir => rpc('SyncService', 'ConfigureFolder', dir),
       syncNow: () => rpc('SyncService', 'SyncNow'),
       join: pw => rpc('SyncService', 'JoinExisting', pw),
       status: () => rpc('SyncService', 'Status'),

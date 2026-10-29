@@ -119,6 +119,7 @@ export interface ConnectionTest {
 export interface SyncStatus {
   configured: boolean
   repo_url: string
+  folder: string
   last_sync: string
   last_error?: string
   syncing: boolean

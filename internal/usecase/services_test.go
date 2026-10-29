@@ -1116,3 +1116,32 @@ func TestTerminalMouseSettingsDefaultsAndValidation(t *testing.T) {
 		t.Fatalf("persisted: %+v", g)
 	}
 }
+
+func TestSyncThroughAFolderEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	a := newHarness(t).unlocked(t)
+	srv := startServer(t)
+	host := a.sshHost(t, "drive-host", srv, "")
+	if err := a.app.Sync.ConfigureFolder("relative/dir"); err == nil {
+		t.Fatal("a relative folder was accepted")
+	}
+	if err := a.app.Sync.ConfigureFolder(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.app.Sync.SyncNow(); err != nil {
+		t.Fatal(err)
+	}
+	if st := a.app.Sync.Status(); st.Folder != dir || st.RepoURL != "" || st.LastSync.IsZero() {
+		t.Fatalf("%+v", st)
+	}
+	b := newHarness(t)
+	if err := b.app.Sync.ConfigureFolder(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.app.Sync.JoinExisting(masterPW); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := b.app.Host.GetHost(host.ID); err != nil || got.Label != "drive-host" {
+		t.Fatalf("%v %+v", err, got)
+	}
+}
