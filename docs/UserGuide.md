@@ -27,7 +27,8 @@ Every screenshot here comes from the automated end-to-end walkthrough (`make e2e
 19. [The terminal sidebar](#19-the-terminal-sidebar)
 20. [This computer, Telnet and serial ports](#20-this-computer-telnet-and-serial-ports)
 21. [Known Hosts and Logs](#21-known-hosts-and-logs)
-22. [Shortcuts at a glance](#22-shortcuts-at-a-glance)
+22. [AI assistant](#22-ai-assistant)
+23. [Shortcuts at a glance](#23-shortcuts-at-a-glance)
 
 ## 1. Create and unlock the vault
 
@@ -334,7 +335,24 @@ The panel on the right of every terminal (the last button of the title bar shows
 
 ![Logs](screenshots/57-logs.png)
 
-## 22. Shortcuts at a glance
+## 22. AI assistant
+
+Ask an AI about what is on a terminal. VVTerm uses the AI command-line tool you already have and are signed in to (Claude Code, Codex CLI, Gemini CLI, or a command you add), so your own subscription is used and no key is stored.
+
+1. **Settings → AI assistant** lists the tools VVTerm found. Switch one on. It stays off until you do, and it must pass a short isolation test (the tool is asked to run a command and must be unable to). If a tool says *Needs sign-in*, run the command shown next to it in a terminal first.
+2. Pick the model for each tool. The list is read from the tool itself; a tool that cannot list its models offers *Default* and a custom id.
+3. Open a terminal, then the sparkle icon in the sidebar. Choose the provider and model, type a question, press Enter. **Ask about selection** sends only the text you selected.
+4. The assistant only *suggests* commands. **Insert** puts one on the prompt without pressing Enter. **Run…** asks for a confirmation (and the word `run` for a risky command). A command that contains a hidden value cannot be run from the panel.
+
+**Your secrets.** Before anything is sent, keys, tokens, passwords and anything saved in your vault are replaced by `*******`; the same happens to every answer before you see it. **What will be sent** shows the exact text first. This cannot be switched off, and it is best-effort: a password written in an ordinary sentence cannot always be recognised.
+
+**Per host.** On a host's form, *AI assistant* is Off, Ask before sharing, or On. The default is Ask, and Off on a production host, where the assistant also never runs commands.
+
+**MCP servers** (Settings → AI assistant) give the assistant extra tools. Add a server (a command or an HTTP address), test it, then choose a mode for each tool: Allow, Ask each time or Off. New tools stay off until you review them, a secret in a tool's arguments blocks the call, and results are redacted. Environment values and headers are kept in the vault and are never shown again.
+
+**Optional:** *Run read-only commands by itself* lets the assistant run a short list of commands that only read (`ls`, `df`, `uptime`, `journalctl -n`…), never on production hosts.
+
+## 23. Shortcuts at a glance
 
 All of them can be changed in **Settings → Shortcuts**. ⌘ on a Mac is Ctrl elsewhere.
 

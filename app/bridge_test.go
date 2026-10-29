@@ -210,3 +210,33 @@ func TestOpenSettingsFallsBackWithoutNativeWindows(t *testing.T) {
 		t.Fatal("the e2e switch must keep the in-app window")
 	}
 }
+
+// The Settings window can configure the assistant but never drive a terminal with it: asking, running or
+// inserting commands, confirming a tool and sharing the screen stay with the main window.
+func TestSettingsWindowCanConfigureTheAssistantButNotUseIt(t *testing.T) {
+	a, _, _, dir := newBridgeApp(t)
+	if err := a.Vault.Create("a long master password"); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := ConnectBridge(dir)
+	out, err := c.Call("AssistantService", "Providers", "[]")
+	if err != nil {
+		t.Fatalf("Providers must be reachable: %v", err)
+	}
+	for _, id := range []string{`"claude"`, `"codex"`, `"gemini"`} {
+		if !strings.Contains(out, id) {
+			t.Errorf("the real app must offer %s: %s", id, out)
+		}
+	}
+	if !strings.Contains(out, `"enabled":false`) || strings.Contains(out, `"enabled":true`) {
+		t.Fatalf("every provider starts off: %s", out)
+	}
+	if _, err := c.Call("AssistantService", "Settings", "[]"); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []string{"Ask", "Run", "Insert", "ConfirmTool", "ConfirmShare", "Preview", "SessionInfo", "SetHostPolicy", "CheckCommand", "Cancel", "ForgetSession"} {
+		if _, err := c.Call("AssistantService", m, "[]"); err == nil || !strings.Contains(err.Error(), "not available") {
+			t.Errorf("AssistantService.%s must be refused from the Settings window, got %v", m, err)
+		}
+	}
+}

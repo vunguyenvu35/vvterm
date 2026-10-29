@@ -1,6 +1,6 @@
 # VVTerm — AI terminal assistant design document
 
-> Status: **Draft for review** · Updated: 2026-10-29 · Author: Vũ Nguyễn Vũ
+> Status: **Implemented** on branch `feature/add-assistant-ai` (see [section 13](#13-implementation-status)) · Updated: 2026-10-29 · Author: Vũ Nguyễn Vũ
 
 ## Contents
 
@@ -16,6 +16,7 @@
 10. [Testing](#10-testing)
 11. [Roadmap](#11-roadmap)
 12. [Risks and open questions](#12-risks-and-open-questions)
+13. [Implementation status](#13-implementation-status)
 
 ---
 
@@ -402,3 +403,44 @@ Phases 1 and 2 are the commitment of this document; 3, 3b, and 4 are decided aft
 5. Does each CLI allow its own MCP configuration to be disabled while one gateway entry is added? This decides per provider whether MCP is supported ([5.7](#57-mcp-servers-and-the-gateway)).
 6. Should the first release include HTTP servers, or only stdio servers? OAuth remote servers are excluded either way.
 7. Which CLI versions are the minimum supported for each adapter? Decided when the adapters are written.
+
+---
+
+## 13. Implementation status
+
+Everything in sections 1 to 11 is implemented except the items listed under *Not done*. The design above is kept as written; this section records what differs and what was actually verified.
+
+### Verified against the real tools (this computer, 2026-10-29)
+
+| Check | Result |
+|---|---|
+| Claude Code 2.1.312: detection (`--version`, required flags, `claude auth status`), models from the `initialize` control response (13 models), isolation self-test, a real question | Pass |
+| Codex CLI 0.153.4: detection, models from its fetched catalogue (`visibility == "list"`), isolation self-test (`--disable shell_tool`), a real question | Pass |
+| Claude Code through the gateway: the agent called a tool of a fake MCP server through the VVTerm gateway only; a `password=...` in the tool result was masked before the agent saw it | Pass |
+| Gemini CLI 0.44.1 | Detected, but **not signed in with a usable method** on this computer (its settings select `gateway`), so the isolation self-test and a question could not run. The adapter is covered by fake-CLI tests only. |
+
+Run the live checks yourself with `VVTERM_LIVE=1 go test ./internal/agentx -run Live -v` (a few tiny requests).
+
+### Differences from the design
+
+- **Package layout.** The pure rules live in `internal/domain/secretpolicy` and `internal/domain/assistant` (types, risk, reply parsing, screen text, MCP configuration types), so `usecase` and the adapters can share them without importing each other. `archtest` enforces: only `secretpolicy` builds `Sanitized`; `assistant.Request` holds only `Sanitized` text; `usecase` does not import `agentx` or `mcpgw`.
+- **Isolation self-test on enable (new).** Turning a provider on asks it to run `hostname`; the provider is enabled only if it uses no tool and does not know the answer. It is repeated when the CLI version changes. This is what makes an adapter whose isolation cannot be checked in advance (Gemini, custom commands) safe to offer.
+- **Claude isolation** uses `--tools ""`, `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence` and `--restricted` (which also ignores the user's settings files and hooks). `--bare` is not used: it cannot use the subscription login.
+- **Models are read from the provider** as described in 5.4: Claude through its control protocol, Codex through its cached catalogue, Gemini cannot list. Codex's `app-server` is not used.
+- **Gemini sign-in** is decided from the selected auth type in its settings (only "Login with Google" works, because the other methods need an API key or gateway from the environment, which VVTerm does not pass on) plus the existence of its sign-in file.
+- **MCP through the gateway works for Claude Code only.** Codex and Gemini report `SupportsMCP() == false` because disabling their own MCP configuration while adding one gateway entry was not verified; they get the terminal text but no tools, as the design requires.
+- **The UI chooses the request id** of a question, so it can listen for events before the question starts (the answer can begin before `Ask` returns).
+- **Streaming** sends the whole text so far, cleaned again each time, so a secret split over two chunks is still masked; text that looks like the start of the JSON envelope is not shown.
+- **Auto-run (phase 4)** is the `terminal_run` tool of the gateway, offered only when the user turned it on, never on production hosts, only for commands on the allow-list (`assistant.ReadOnlyAllowed`: no shell syntax, fixed programs, no follow or watch modes, nothing that looks like a secret path).
+- **Activity log** has a new kind, `assistant`, with an *Assistant* filter on the Logs page.
+
+### Not done
+
+- **Skills** (user playbooks added to the prompt) were discussed but are not part of this document and are not implemented.
+- **Chat history is kept in memory only.** The design allowed an option to keep it redacted in the database; there is no such option yet.
+- **Windows and Linux** were not run. The process-group handling has a Windows stub.
+- **The native app** was not launched: the interface is covered by Vitest tests on a fake backend and the Go side by unit and integration tests; the Playwright walkthrough was not extended.
+
+### Defects the tests found while building it
+
+A deadlock in `SetProviderModel` and another in the provider list when a custom provider exists (both took the configuration lock twice); activity entries of the new kind were silently dropped by the activity validator; deleted vault secrets stay as tombstones, so tests count live secrets; and the UI had no filter of its own for a half-written JSON answer.
