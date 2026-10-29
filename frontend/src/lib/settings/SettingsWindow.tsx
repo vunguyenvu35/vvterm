@@ -1,5 +1,5 @@
 import {PointerEvent as ReactPointerEvent, useEffect, useRef, useState} from 'react'
-import {useBackend} from '../backend'
+import {useBackend, type UpdateInfo} from '../backend'
 import {useToast} from '../ui/Toast'
 import {Switch} from '../ui/Switch'
 import {Select} from '../ui/Select'
@@ -87,6 +87,16 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   const [rolledUp, setRolledUp] = useState(false)
   const drag = useRef<{sx: number; sy: number; ox: number; oy: number} | null>(null)
 
+  const [newer, setNewer] = useState<UpdateInfo | null>(null)
+  const [checking, setChecking] = useState(false)
+  const checkUpdate = async () => {
+    setChecking(true)
+    try {
+      const u = await be.system.checkUpdate()
+      setNewer(u)
+      toast.info(u.available ? `Version ${u.latest} is available` : 'You are on the latest version')
+    } catch (e) { toast.error(errMsg(e)) } finally { setChecking(false) }
+  }
   useEffect(() => { void be.system.info().then(i => setVersion(i.version)).catch(() => {}) }, [be])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -181,6 +191,10 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                 <button key={label} className="win-link" onClick={() => be.system.openUrl(url)}>{label}<IconArrowUpRight size={15} /></button>
               ))}
               <div className="spacer" />
+              {newer?.available && (
+                <button className="win-link" onClick={() => be.system.openUrl(newer.url)}>Version {newer.latest} is available<IconArrowUpRight size={15} /></button>
+              )}
+              <button className="win-link" disabled={checking} onClick={() => void checkUpdate()}>{checking ? 'Checking…' : 'Check for updates'}</button>
               <div className="win-row version"><span>Version</span><b data-testid="app-version">{version || '…'}</b></div>
             </nav>
 
@@ -235,6 +249,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                   <section className="card-section">
                     <h4>Donate</h4>
                     <div className="muted">VVTerm is free and open source. If it saves you time, you can send USDT. Check the network before you send.</div>
+                    <div className="muted">☕ $3 – a cup of coffee · 🍜 $10 – a lunch · 🚀 $25 – fuel new features</div>
                     {DONATE.map(([label, addr]) => (
                       <div className="setting-row" key={addr}>
                         <div><b>{label}</b><div className="muted" style={{wordBreak: 'break-all', userSelect: 'text'}}>{addr}</div></div>

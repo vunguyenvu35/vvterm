@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support VVTerm on Ko-fi"></a>
+  <a href="#support-vvterm"><img src="https://img.shields.io/badge/Donate-USDT-26A17B?logo=tether&logoColor=white&style=for-the-badge" alt="Donate USDT to VVTerm"></a>
 </p>
 
 <p align="center">
@@ -110,6 +111,8 @@ VVTerm is free and open source, built and maintained in spare time. If it saves 
 <p align="center">
   <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/%E2%98%95%20Buy%20me%20a%20coffee-ko--fi.com%2Fvunguyenvu-FF5E5B?style=for-the-badge" alt="Buy me a coffee on Ko-fi"></a>
 </p>
+
+☕ $3 – a cup of coffee · 🍜 $10 – a lunch · 🚀 $25 – fuel new features
 
 Or send USDT (check the network before you send):
 
