@@ -975,3 +975,12 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .ai-composer-bar .ai-chip-picker { flex: 0 1 auto; min-width: 0; max-width: 130px; }
 .ai-share { flex-wrap: wrap; gap: 4px 10px; }
 .ai-share > * { white-space: nowrap; }
+
+/* the send button: round, the same height as the other buttons of the bar, and plainly on or off */
+.ai-composer-bar { align-items: center; }
+.ai-composer-bar .ai-tool, .ai-composer-bar .ai-chip-picker { height: 32px; }
+.ai-send { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; margin-left: auto; background: var(--accent); color: #fff; border: none; }
+.ai-send:hover:not(:disabled) { background: var(--accent-2); }
+.ai-send:disabled { background: var(--bg-2); color: var(--muted); opacity: 1; cursor: default; }
+.ai-send.stop { background: var(--bg-2); color: var(--text); border: 1px solid var(--line); }
+.ai-send.stop:hover { border-color: var(--danger); color: var(--danger); background: var(--bg-2); }

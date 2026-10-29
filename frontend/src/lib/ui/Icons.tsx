@@ -71,3 +71,4 @@ export const IconPaperclip = (p: P) => <Icon {...p}><path d="m21 11-8.5 8.5a5 5 
 export const IconSend = (p: P) => <Icon {...p}><path d="M5 12h14m-6-6 6 6-6 6" /></Icon>
 export const IconCheck = (p: P) => <Icon {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></Icon>
 export const IconChevronUp = (p: P) => <Icon {...p}><path d="m6 15 6-6 6 6" /></Icon>
+export const IconStop = (p: P) => <Icon {...p}><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" /></Icon>

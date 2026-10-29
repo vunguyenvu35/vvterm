@@ -1,5 +1,5 @@
 import {ClipboardEvent, KeyboardEvent, ReactNode, useEffect, useRef} from 'react'
-import {IconClose, IconFile, IconPaperclip, IconSend} from '../ui/Icons'
+import {IconArrowUp, IconClose, IconFile, IconPaperclip, IconStop} from '../ui/Icons'
 import {formatSize, type Attach} from './attachments'
 
 interface Props {
@@ -69,8 +69,8 @@ export function Composer(p: Props) {
         {p.leading}
         <button className="ai-tool text" onClick={p.onUseSelection} disabled={!p.ready || p.busy} title="Send only the text selected in the terminal">Selection</button>
         <span className="spacer" />
-        {p.busy ? <button onClick={p.onStop}>Stop</button>
-          : <button className="primary ai-send" onClick={p.onSend} disabled={!canSend} aria-label="Send" title="Send (Enter)"><IconSend size={16} /> Send</button>}
+        {p.busy ? <button className="ai-send stop" onClick={p.onStop} aria-label="Stop" title="Stop"><IconStop size={16} /></button>
+          : <button className="ai-send" onClick={p.onSend} disabled={!canSend} aria-label="Send" title="Send (Enter)"><IconArrowUp size={17} /></button>}
       </div>
     </div>
   )
