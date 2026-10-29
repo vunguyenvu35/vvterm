@@ -10,6 +10,7 @@ Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: be
 - **Settings → AI assistant**: providers found on this computer (off until you switch them on, after an isolation self-test), models read from the provider itself, privacy options, and **MCP servers** through a VVTerm gateway (arguments are checked for secrets, results are redacted, new tools stay off until reviewed).
 - Chat box that takes **files and screenshots** (drag and drop, paste, paperclip): text files are redacted, pictures are sent only after you confirm, because secrets in a picture cannot be hidden. Code in answers has a Copy button.
 - **Antigravity CLI (`agy`)** is a provider too (its own allow-rules are overridden for every call, so commands and MCP tools are refused). Confirmations are cards in the chat, never popups, and only for what could change something; reading the screen needs none.
+- Commands that only read (`which`, `pgrep`, `brew list`, `systemctl status`, chains and pipes of them…) now run without asking, and the assistant reads their output; only changes ask. Setting **Run read-only commands by itself**, on by default.
 - Text composed with an input method (Vietnamese Telex, pinyin…) is shown at the cursor, highlighted, until committed.
 - **Per-host switch** (Off / Ask first / On; On by default, off on production hosts).
 - **Fix:** locking the vault now closes the Settings window; it no longer opens with a white flash.

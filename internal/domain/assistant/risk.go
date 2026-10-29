@@ -88,9 +88,9 @@ var (
 	autoShell = regexp.MustCompile("[;&|<>$`()\\\\{}*?!\"'~#\\n\\r]")
 )
 
-// ReadOnlyAllowed reports whether cmd is on the short allow-list of commands that only read: no shell
-// syntax at all, a fixed set of programs, no follow or watch modes, nothing that looks like a secret path.
-func ReadOnlyAllowed(cmd string) bool {
+// readOnlyOne judges one plain command (already split from any chain): a fixed set of programs, no follow or watch
+// modes, nothing that looks like a secret path.
+func readOnlyOne(cmd string) bool {
 	cmd = strings.TrimSpace(cmd)
 	if cmd == "" || len(cmd) > 200 || autoShell.MatchString(cmd) || autoDeny.MatchString(cmd) {
 		return false

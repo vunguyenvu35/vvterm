@@ -4,6 +4,9 @@ import {useToast} from '../ui/Toast'
 import {errMsg} from '../util'
 import type {AiCommand, AiCommandCheck} from '../types'
 
+/** what happened to the commands that ran by themselves, so a card that is drawn again does not run its command again */
+const autoResults = new Map<string, 'done' | string>()
+
 const RISK: Record<string, string> = {low: 'Low risk', medium: 'Changes things', high: 'High risk'}
 
 /**
@@ -12,19 +15,32 @@ const RISK: Record<string, string> = {low: 'Low risk', medium: 'Changes things',
  * change something (and the typed word "run" for a risky one). The risk is
  * judged by VVTerm, never by the assistant, and a command with a hidden value cannot be run from here.
  */
-export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
+export function CommandCard({sid, cmd, autoKey}: {sid: string; cmd: AiCommand; /** identifies this card, for the command that runs by itself */ autoKey?: string}) {
   const be = useBackend()
   const toast = useToast()
   const [check, setCheck] = useState<AiCommandCheck | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [typed, setTyped] = useState('')
   const [done, setDone] = useState('')
+  const key = autoKey ? `${sid}|${autoKey}|${cmd.cmd}` : ''
+  const [auto, setAuto] = useState<'' | 'running' | 'done' | 'failed'>(() => (key && autoResults.get(key) === 'done' ? 'done' : ''))
+  const [autoError, setAutoError] = useState('')
 
   useEffect(() => {
     let live = true
     if (!cmd.blocked) void be.assistant.checkCommand(sid, cmd.cmd).then(c => { if (live) setCheck(c) }).catch(() => {})
     return () => { live = false }
   }, [be, sid, cmd.cmd, cmd.blocked])
+
+  // A command that only reads is run as soon as it is shown: nothing is asked, because nothing can change.
+  useEffect(() => {
+    if (!cmd.auto || !key || cmd.blocked || autoResults.has(key)) return
+    autoResults.set(key, 'running')
+    setAuto('running')
+    be.assistant.runReadOnly(sid, cmd.cmd)
+      .then(() => { autoResults.set(key, 'done'); setAuto('done') })
+      .catch(e => { autoResults.set(key, 'failed'); setAuto('failed'); setAutoError(errMsg(e)) })
+  }, [be, sid, key, cmd.auto, cmd.cmd, cmd.blocked])
 
   const insert = async () => {
     try { await be.assistant.insert(sid, cmd.cmd); setDone('Inserted: press Enter in the terminal to run it'); setConfirming(false) } catch (e) { toast.error(errMsg(e)) }
@@ -45,7 +61,9 @@ export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
       <code className="ai-cmd-text">{cmd.cmd}</code>
       {cmd.reasons.length > 0 && <ul className="ai-cmd-notes">{cmd.reasons.map(r => <li key={r}>{r}</li>)}</ul>}
       {cmd.warnings.length > 0 && <ul className="ai-cmd-notes warn">{cmd.warnings.map(r => <li key={r}>{r}</li>)}</ul>}
-      {cmd.blocked ? <div className="ai-cmd-block" role="note">{cmd.block_reason || 'This command cannot be run from here.'}</div> : (
+      {cmd.blocked ? <div className="ai-cmd-block" role="note">{cmd.block_reason || 'This command cannot be run from here.'}</div> : auto === 'running' || auto === 'done' ? (
+        <div className="ai-cmd-done" role="status">{auto === 'running' ? 'Running in the terminal…' : 'Ran in the terminal (it only reads)'}</div>
+      ) : (
         <>
           {!confirming && !done && (
             <div className="ai-cmd-actions">
@@ -62,6 +80,7 @@ export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
             </div>
           )}
           {done && <div className="ai-cmd-done" role="status">{done}</div>}
+          {autoError && <div className="ai-cmd-block" role="alert">Could not run it by itself: {autoError}</div>}
         </>
       )}
     </div>

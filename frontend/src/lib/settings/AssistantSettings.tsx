@@ -157,7 +157,7 @@ export function AssistantSettings() {
             onBlur={() => { const list = patterns.split('\n').map(s => s.trim()).filter(Boolean); if (list.join('\n') !== settings!.patterns.join('\n')) void saveSettings({patterns: list}) }} />
         </label>
         <div className="setting-row">
-          <div><b>Run read-only commands by itself</b><div className="muted">The assistant may run a short list of commands that only read (ls, df, uptime, journalctl -n…) and read their output. Never on production hosts, never anything else.</div></div>
+          <div><b>Run read-only commands by itself</b><div className="muted">The assistant runs commands that only look (ls, df, which, pgrep, brew list, systemctl status, …, joined by ; && || or a pipe) without asking, and reads their output. Anything that could change something still asks first, in the chat. Never on production hosts.</div></div>
           <Switch label="Run read-only commands by itself" checked={settings!.auto_run} onChange={v => void saveSettings({auto_run: v})} />
         </div>
       </section>}

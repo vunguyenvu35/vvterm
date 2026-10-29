@@ -352,7 +352,7 @@ Ask an AI about what is on a terminal. VVTerm uses the AI command-line tool you 
 
 **MCP servers** (Settings → AI assistant) give the assistant extra tools. Add a server (a command or an HTTP address), test it, then choose a mode for each tool: Allow, Ask each time or Off. New tools stay off until you review them, a secret in a tool's arguments blocks the call, and results are redacted. Environment values and headers are kept in the vault and are never shown again.
 
-**Optional:** *Run read-only commands by itself* lets the assistant run a short list of commands that only read (`ls`, `df`, `uptime`, `journalctl -n`…), never on production hosts.
+**Reading needs no confirmation.** The assistant runs commands that only look (`ls`, `df`, `which`, `pgrep`, `brew list`, `systemctl status`, `git status`… also joined with `;`, `&&`, `||` or a pipe) by itself and reads the output; anything that could change something asks first, in the chat. This is **Settings → AI assistant → Run read-only commands by itself** (on by default; never on production hosts).
 
 ## 23. Shortcuts at a glance
 

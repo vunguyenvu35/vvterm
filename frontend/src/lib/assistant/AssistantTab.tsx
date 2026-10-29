@@ -322,7 +322,7 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
                     )}
                   </div>
                 ))}
-                {m.commands.map((c, k) => <CommandCard key={k} sid={sid} cmd={c} />)}
+                {m.commands.map((c, k) => <CommandCard key={k} sid={sid} cmd={c} autoKey={`${m.rid}:${k}`} />)}
                 {m.error && (
                   <div className="ai-error" role="alert">
                     {m.error.message}

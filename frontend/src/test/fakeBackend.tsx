@@ -301,6 +301,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       checkCommand: async (sid, cmd) => { rec('assistant.checkCommand', sid, cmd); return state.ai.check(cmd) },
       insert: async (sid, cmd) => { rec('assistant.insert', sid, cmd) },
       run: async (sid, cmd, t) => { rec('assistant.run', sid, cmd, t) },
+      runReadOnly: async (sid, cmd) => { rec('assistant.runReadOnly', sid, cmd) },
       mcp: {
         list: async () => state.ai.mcp.map(s => ({...s})),
         save: async s => {

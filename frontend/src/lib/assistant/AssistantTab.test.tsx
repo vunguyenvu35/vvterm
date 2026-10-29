@@ -411,6 +411,20 @@ describe('AssistantTab', () => {
       expect((call[4] as unknown[]).length).toBe(2)
     })
 
+    it('the commands in an answer that only read run at once, and the ones that change something wait', async () => {
+      const {be} = setup()
+      await ask('is nginx installed?')
+      await waitFor(() => expect(asks(be)).toHaveLength(1))
+      const rid = (asks(be)[0][3] as {request_id: string}).request_id
+      const c = (cmd: string, auto: boolean, risk: 'low' | 'medium' = 'low') => ({cmd, why: '', risk, reasons: [], warnings: [], blocked: false, block_reason: '', auto})
+      act(() => be.emit(`assistant:done:${rid}`, reply({commands: [c('which nginx', true), c('pgrep -fl nginx || echo none', true), c('systemctl restart nginx', false, 'medium')]})))
+      await waitFor(() => expect(be.state.calls.filter(x => x[0] === 'assistant.runReadOnly')).toHaveLength(2))
+      expect(be.state.calls.filter(x => x[0] === 'assistant.runReadOnly').map(x => x[2])).toEqual(['which nginx', 'pgrep -fl nginx || echo none'])
+      expect(screen.getAllByText('Ran in the terminal (it only reads)')).toHaveLength(2)
+      expect(screen.getByRole('button', {name: 'Run…'})).toBeInTheDocument() // the one that changes something asks, in its card
+      expect(be.state.calls.some(x => x[0] === 'assistant.run')).toBe(false)
+    })
+
     it('suggestions in an empty chat ask at once', async () => {
       const {be} = setup()
       await userEvent.click(await screen.findByRole('button', {name: 'Explain the last error'}))

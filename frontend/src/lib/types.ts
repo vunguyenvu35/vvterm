@@ -282,6 +282,8 @@ export interface AiCommand {
   warnings: string[]
   blocked: boolean
   block_reason: string
+  /** it only reads: it is run as soon as the answer shows, without asking */
+  auto?: boolean
 }
 
 export interface AiReply {text: string; commands: AiCommand[]; provider: string; model: string; redacted: number}

@@ -277,7 +277,7 @@ func TestSettingsWindowCanConfigureTheAssistantButNotUseIt(t *testing.T) {
 	if _, err := c.Call("AssistantService", "Settings", "[]"); err != nil {
 		t.Fatal(err)
 	}
-	for _, m := range []string{"Ask", "Run", "Insert", "ConfirmTool", "ConfirmShare", "Preview", "SessionInfo", "SetHostPolicy", "CheckCommand", "Cancel", "ForgetSession"} {
+	for _, m := range []string{"Ask", "Run", "RunReadOnly", "Insert", "ConfirmTool", "ConfirmShare", "Preview", "SessionInfo", "SetHostPolicy", "CheckCommand", "Cancel", "ForgetSession"} {
 		if _, err := c.Call("AssistantService", m, "[]"); err == nil || !strings.Contains(err.Error(), "not available") {
 			t.Errorf("AssistantService.%s must be refused from the Settings window, got %v", m, err)
 		}

@@ -776,3 +776,41 @@ func (s *slowDetectAgent) Detect(ctx context.Context) assistant.Status {
 	<-s.gate
 	return s.fakeAgent.Detect(ctx)
 }
+
+func TestReadOnlyCommandsRunWithoutAskingAndOnlyThose(t *testing.T) {
+	x := newAH(t)
+	sid := x.session(t)
+	if !x.app.Assistant.Settings().AutoRun {
+		t.Fatal("reading is on by default: asking before every look makes the assistant useless")
+	}
+	x.ag.reply = `{"explanation":"checking","commands":[{"cmd":"which nginx; nginx -v 2>&1 || echo 'no nginx'","why":"installed?"},{"cmd":"systemctl restart nginx","why":"restart"},{"cmd":"cat .env","why":"x"}]}`
+	ev, _ := x.ask(t, sid, "is nginx here?")
+	got := map[string]bool{}
+	for _, c := range ev.reply.Commands {
+		got[c.Cmd] = c.Auto
+	}
+	if !got["which nginx; nginx -v 2>&1 || echo 'no nginx'"] || got["systemctl restart nginx"] || got["cat .env"] {
+		t.Fatalf("only the command that reads is marked to run by itself: %v", got)
+	}
+	if err := x.app.Assistant.RunReadOnly(sid, "which nginx; nginx -v 2>&1 || echo 'no nginx'"); err != nil {
+		t.Fatal(err)
+	}
+	x.rec.waitOutput(t, sid, "echo:which nginx")
+	for _, bad := range []string{"systemctl restart nginx", "rm -rf /tmp/x", "ls; rm x", "cat .env", "echo $(id)", "ls > f"} {
+		if err := x.app.Assistant.RunReadOnly(sid, bad); err == nil {
+			t.Errorf("RunReadOnly(%q) must be refused", bad)
+		}
+	}
+	if _, err := x.app.Assistant.SaveSettings(AssistantSettings{Lines: 200, AutoRun: false}); err != nil {
+		t.Fatal(err)
+	}
+	if err := x.app.Assistant.RunReadOnly(sid, "df -h"); err == nil {
+		t.Fatal("when the user turned it off, nothing runs by itself")
+	}
+	ev, _ = x.ask(t, sid, "again")
+	for _, c := range ev.reply.Commands {
+		if c.Auto {
+			t.Fatalf("nothing is marked to run by itself when it is off: %+v", c)
+		}
+	}
+}

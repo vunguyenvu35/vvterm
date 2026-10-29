@@ -88,4 +88,33 @@ describe('CommandCard', () => {
     setup(cmd({cmd: 'cat .env', warnings: ['reads a file that usually holds secrets']}))
     expect(screen.getByText('reads a file that usually holds secrets')).toBeInTheDocument()
   })
+
+  describe('a command that only reads', () => {
+    it('runs as soon as it is shown, once, and says so', async () => {
+      const be = makeFake()
+      const c = cmd({cmd: 'which nginx; nginx -v 2>&1', auto: true})
+      const {rerender} = render(<Providers be={be}><CommandCard sid="s1" cmd={c} autoKey="r1:0" /></Providers>)
+      expect(await screen.findByText('Ran in the terminal (it only reads)')).toBeInTheDocument()
+      expect(be.state.calls.filter(x => x[0] === 'assistant.runReadOnly')).toEqual([['assistant.runReadOnly', 's1', 'which nginx; nginx -v 2>&1']])
+      expect(screen.queryByRole('button', {name: 'Insert'})).toBeNull() // nothing left to decide
+      // drawn again (another sidebar tab and back): it must not run a second time
+      rerender(<Providers be={be}><CommandCard sid="s1" cmd={{...c}} autoKey="r1:0" /></Providers>)
+      expect(be.state.calls.filter(x => x[0] === 'assistant.runReadOnly')).toHaveLength(1)
+    })
+
+    it('does not run by itself when it is not marked, or has no key', async () => {
+      const be = makeFake()
+      render(<Providers be={be}><CommandCard sid="s1" cmd={cmd({auto: false})} autoKey="r2:0" /><CommandCard sid="s1" cmd={cmd({auto: true})} /></Providers>)
+      await screen.findAllByRole('button', {name: 'Insert'})
+      expect(be.state.calls.some(x => x[0] === 'assistant.runReadOnly')).toBe(false)
+    })
+
+    it('falls back to the buttons, with the reason, when it could not run by itself', async () => {
+      const be = makeFake()
+      be.assistant.runReadOnly = async () => { throw new Error('The terminal is not connected.') }
+      render(<Providers be={be}><CommandCard sid="s1" cmd={cmd({auto: true})} autoKey="r3:0" /></Providers>)
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not run it by itself: The terminal is not connected.')
+      expect(await screen.findByRole('button', {name: 'Insert'})).toBeInTheDocument()
+    })
+  })
 })

@@ -133,6 +133,8 @@ export interface Backend {
     insert(sid: string, cmd: string): Promise<void>
     /** presses Enter too; `typed` must be "run" for a risky command */
     run(sid: string, cmd: string, typed: string): Promise<void>
+    /** runs a command that only reads, without asking; refused for anything else */
+    runReadOnly(sid: string, cmd: string): Promise<void>
     mcp: {
       list(): Promise<McpServer[]>
       save(s: McpServerInput): Promise<McpServer>
@@ -320,6 +322,7 @@ export function wailsBackend(): Backend {
       checkCommand: (sid, cmd) => u('AssistantService', 'CheckCommand', sid, cmd),
       insert: (sid, cmd) => u('AssistantService', 'Insert', sid, cmd),
       run: (sid, cmd, t) => u('AssistantService', 'Run', sid, cmd, t),
+      runReadOnly: (sid, cmd) => u('AssistantService', 'RunReadOnly', sid, cmd),
       mcp: {
         list: async () => (await u<McpServer[]>('AssistantService', 'McpServers')) ?? [],
         save: s => u('AssistantService', 'SaveMcpServer', s),

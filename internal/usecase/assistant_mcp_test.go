@@ -67,6 +67,9 @@ func (x *ah) confirmer(answers ...bool) *sync.WaitGroup {
 func TestGatewayEnforcesToolPolicy(t *testing.T) {
 	x := newAH(t)
 	x.ag.mcp = true
+	if _, err := x.app.Assistant.SaveSettings(AssistantSettings{Lines: 200, AutoRun: false}); err != nil { // on by default: this test is about the case where it is off
+		t.Fatal(err)
+	}
 	x.mc.srv.tools = docsTools()
 	x.mc.srv.out = "page body with token=abcdef123456"
 	v := x.mcpServer(t, McpServerInput{Name: "Docs", Type: "stdio", Command: "docs-mcp", Enabled: true, Env: map[string]string{"API_KEY": "sk-live-very-secret-value"}})

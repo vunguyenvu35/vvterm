@@ -131,14 +131,15 @@ type Config struct {
 	Lines int `json:"lines"`
 	// Patterns are extra redaction regular expressions (they only add to the built-in detectors).
 	Patterns []string `json:"patterns,omitempty"`
-	// AutoRun lets the assistant run commands from the read-only allow-list by itself (off by default).
+	// AutoRun lets the assistant run commands that only read (see ReadOnlyAllowed) by itself. It is on by default: asking
+	// before every look at a machine makes the assistant useless. Never on production hosts.
 	AutoRun bool        `json:"auto_run"`
 	MCP     []MCPServer `json:"mcp,omitempty"`
 }
 
 // DefaultConfig is the first-run configuration: every provider off.
 func DefaultConfig() Config {
-	return Config{Providers: map[string]ProviderConfig{}, Lines: 200}
+	return Config{Providers: map[string]ProviderConfig{}, Lines: 200, AutoRun: true}
 }
 
 // Normalize clamps values and drops what cannot be valid.
