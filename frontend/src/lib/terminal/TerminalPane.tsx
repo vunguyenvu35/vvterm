@@ -54,6 +54,15 @@ interface Props {
 type State = 'connecting' | 'ready' | 'closed'
 
 /**
+ * What is typed or pasted goes to the shell composed (NFC). On macOS the input methods of a web view can give a letter in
+ * pieces, such as the Vietnamese ệ as e + dot below + circumflex; zsh cannot edit a line with such pieces and shows them
+ * as <0087>. Composed text is what every other terminal sends. Control sequences are plain ASCII and are not changed.
+ */
+export function composedInput(d: string): string {
+  return /[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff]/.test(d) ? d.normalize('NFC') : d
+}
+
+/**
  * Text being composed with an input method (Vietnamese Telex, Chinese pinyin, Japanese…) is shown at the cursor, highlighted,
  * until it is committed, like in other terminals. xterm.js draws it in a small element; the colours (the theme's own, inverted)
  * are handed to the stylesheet through two custom properties.
@@ -184,7 +193,8 @@ export function TerminalPane(p: Props) {
       })
     }
     const track = createLineTracker()
-    t.onData(d => {
+    t.onData(raw => {
+      const d = composedInput(raw)
       if (stateRef.current === 'ready') {
         sendKeys(d)
         onTyped.current?.(d)
