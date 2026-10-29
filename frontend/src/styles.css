@@ -1000,3 +1000,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .cards:not(.as-list) .card.snippet .meta { flex: 1 1 0; }
 .cards:not(.as-list) .card.snippet .actions { flex: 1 0 100%; margin-left: 50px; background: transparent; justify-content: flex-start; }
 .card.snippet .label { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* on a list page the search box takes all the room, so Sort and the view switch end up at the right edge */
+.list-toolbar .search-box.grow { flex: 1 1 auto; max-width: none; min-width: 160px; }
+.list-toolbar .search-box.grow input { width: 100%; }
+.list-toolbar .view-menu { margin-right: 0; }
