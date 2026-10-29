@@ -200,8 +200,10 @@ Open **Settings** from the navigation, the gear in the title bar, or **⌘/Ctrl 
 
 The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts**, then **Theme**, help links (documentation, feature requests, bug reports, release notes, Ko-fi) and the **version**. Changes apply immediately.
 
+**Updates.** **Check for updates** (under the help links) asks GitHub for the latest release and compares it with your version. If there is a newer one, **Version X is available** appears: click it to open the release page and download the build for your system (macOS `.dmg` or `.zip`, Windows `.exe`, Linux `.tar.gz`). To update, quit VVTerm and replace the old app with the new one; your data is kept outside the app, so nothing is lost. The check only runs when you click it, and only the release information is read: nothing about you is sent. A pre-release is not offered as an update.
+
 - **General:** **Zoom** makes the whole interface larger or smaller (80 % to 160 %, also with the zoom shortcuts), **Reduce motion** turns animations off, and **Confirm before closing a tab** asks before ending a terminal or SFTP connection.
-- **Account:** a local profile (display name and email, stored only in your settings file), your plan, and a disabled **Sign in** for the cloud features planned for later. Nothing is sent anywhere.
+- **Account:** a local profile (display name and email, stored only in your settings file), your plan, and a disabled **Sign in** for the cloud features planned for later. Nothing is sent anywhere. The **Donate** card lists USDT addresses (Tron and BSC), each with a **Copy** button, if you want to support the project.
 
 ![Account](screenshots/46-settings-account.png)
 
@@ -345,7 +347,7 @@ Ask an AI about what is on a terminal. VVTerm uses the AI command-line tool you 
 
 1. **Settings → AI assistant** lists the tools VVTerm found. Switch one on. It stays off until you do, and it must pass a short isolation test (the tool is asked to run a command and must be unable to). If a tool says *Needs sign-in*, run the command shown next to it in a terminal first.
 2. Pick the model for each tool. The list is read from the tool itself; you choose from that list. A tool that cannot list its models uses its default one.
-3. Open a terminal, then the sparkle icon in the sidebar. Choose the provider and model from the chip under the message box, type a question, press Enter. **Ask about selection** sends only the text you selected.
+3. Open a terminal, then the sparkle icon in the sidebar. Choose the provider and model from the chip under the message box, type a question, press Enter. **Ask about selection** sends only the text you selected. To change the model without the mouse, press **⌘ ⇧ M** (Ctrl Shift M elsewhere): it moves to the next model of the provider, wrapping round at the end, and shows the name in a short message.
 4. The assistant only *suggests* commands. **Insert** puts one on the prompt without pressing Enter. **Run** sends a command that only reads at once; a command that can change something shows **Run…** and asks in its card first (and the word `run` for a risky one). A command that contains a hidden value cannot be run from the panel.
 
 ![The assistant answers about the terminal: a command that only reads ran by itself, a risky one asks first](assistant/assistant-chat.png)
@@ -384,6 +386,7 @@ All of them can be changed in **Settings → Shortcuts**. ⌘ on a Mac is Ctrl e
 | ⌘ D / ⌘ Shift D | Split right / down |
 | ⌘ B | Broadcast input to every pane of the tab |
 | ⌘ F | Search the terminal's scrollback |
+| ⌘ ⇧ M | Switch the AI assistant to its next model |
 
 The SFTP file lists have a **right-click menu**: Open, Open with…, Copy to target directory, Rename, Delete, Refresh, New Folder and **Edit Permissions** (a grid of read / write / execute, or the octal number).
 

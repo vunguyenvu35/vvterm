@@ -97,6 +97,27 @@ Nothing leaves your machine by default. `--tag` creates a local annotated tag; `
 3. Run the manual checklist in [TestPlan.md](TestPlan.md) on a real Mac.
 4. `scripts/deploy.sh prod --e2e --tag --publish`.
 
+## Releasing with GitHub Actions (macOS, Windows, Linux)
+
+`.github/workflows/release.yml` builds the three platforms in parallel and attaches the files to a GitHub release. It is the normal way to publish; `scripts/deploy.sh prod` above stays for a signed and notarized macOS build.
+
+1. Bump `VERSION` and write the `# VVTerm X.Y.Z` section in `RELEASE_NOTES.md` (it becomes the release description). Commit and push to `main`.
+2. Tag the same version and push the tag:
+   ```
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+3. About three minutes later the release has: `vvterm-X.Y.Z-macos.dmg` and `.zip`, `vvterm-X.Y.Z-windows-amd64.exe`, `vvterm-X.Y.Z-linux-amd64.tar.gz` and `SHA256SUMS`.
+
+Notes:
+
+- The tag must match `VERSION`; the build reads the version from the file. Do not reuse a tag.
+- The release is created as a **pre-release**. The in-app *Check for updates* reads GitHub's `releases/latest`, which ignores pre-releases, so untick *Set as a pre-release* on the release page (or drop `--prerelease` in the workflow) for users to be offered it.
+- If a release for the tag already exists (made by hand), the workflow adds the files to it (`--clobber`) instead of failing.
+- Run it by hand from **Actions → release → Run workflow** to test the three builds: it only builds and keeps the files as artifacts; no release is made.
+- `package-macos.sh` (or `make package`) makes the same `.dmg` and `.zip` on a Mac. Builds are not signed with a developer certificate, so macOS and Windows warn on first launch.
+- Windows builds have no terminal on this computer yet (the pty library does not support Windows); SSH, SFTP and the rest work. Linux needs `libgtk-3-dev` and `libwebkit2gtk-4.0-dev` to build.
+
 ## Windows, bridge and screenshots
 
 - **Second processes.** Wails v2 has one window per process, so the Settings window (`vvterm --settings`) and an app window (`vvterm --window <host id> <title>`, Duplicate in new window) are other processes of the same binary. They hold no data: `app/bridge.go` (loopback HTTP, random token in `settings-ipc.json`, mode 0600) serves `/call` (a short allow-list for Settings) and `/appcall` (every use case service, for an app window), `/events` (what the main process emits, kept only for terminal and SFTP sessions a window opened) and `/menu`. In an app window the frontend gets a `window.go.usecase` proxy (`installWindowBridge`), so the whole UI runs unchanged.
