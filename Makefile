@@ -1,4 +1,4 @@
-.PHONY: help dev build test test-go test-web e2e inventory lint release clean-cache deploy-dev deploy-prod
+.PHONY: package help dev build test test-go test-web e2e inventory lint release clean-cache deploy-dev deploy-prod
 
 VERSION ?= $(shell cat VERSION)
 WAILS   ?= $(shell go env GOPATH)/bin/wails
@@ -9,6 +9,7 @@ help:
 	@echo "make test       run Go + frontend tests"
 	@echo "make e2e        run the Playwright walkthrough (real backend) and refresh docs/screenshots"
 	@echo "make inventory  regenerate docs/TestInventory.md"
+	@echo "make package    build and create dist/*.dmg and *.zip (macOS)"
 	@echo "make release    test, build and print checksums"
 
 dev:
@@ -32,6 +33,9 @@ e2e:
 
 inventory:
 	./scripts/test-inventory.sh
+
+package:
+	./scripts/package-macos.sh --build
 
 release: test build
 	@shasum -a 256 build/bin/vvterm.app/Contents/MacOS/vvterm
