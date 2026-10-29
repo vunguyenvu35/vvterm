@@ -13,6 +13,27 @@ function setup(h?: ReturnType<typeof host>, over: Partial<React.ComponentProps<t
 
 const savedPayload = (be: ReturnType<typeof makeFake>) => be.state.calls.find(c => c[0] === 'hosts.saveHost')![1] as Record<string, unknown>
 
+describe('HostForm: AI assistant', () => {
+  it('has a per-host switch that defaults to off on production hosts and is saved with the host', async () => {
+    const {be} = setup()
+    await userEvent.type(screen.getByLabelText('Hostname'), 'db.example.com')
+    expect(screen.getByRole('combobox', {name: /^AI assistant on this host, Default \(on\)/})).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Environment'), 'prod')
+    await userEvent.click(screen.getByRole('combobox', {name: /^AI assistant on this host/}))
+    expect(screen.getByRole('option', {name: /Default \(off\)/})).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('option', {name: 'On'}))
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({ai_policy: 'on', env: 'prod'}))
+  })
+
+  it('keeps the stored policy when a host is edited', async () => {
+    const {be} = setup(host({id: 'h9', hostname: 'a.example.com', ai_policy: 'off'}))
+    expect(screen.getByRole('combobox', {name: /^AI assistant on this host, Off/})).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}))
+    await waitFor(() => expect(savedPayload(be)).toMatchObject({ai_policy: 'off'}))
+  })
+})
+
 describe('HostForm', () => {
   it('follows the Termius flow: address, general, port, credentials, options', () => {
     setup()

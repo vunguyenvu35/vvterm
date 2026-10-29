@@ -35,12 +35,28 @@ type session struct {
 	// so nothing emitted between Open returning and the listeners existing is lost.
 	attached bool
 	pend     []byte
-	state    string // connecting | ready | closed
-	closedEv any
-	ready    any
+	// screen is the tail of the raw terminal output (what the AI assistant may read) and screenSeq counts every
+	// byte ever appended, so a reader can ask for "what came after".
+	screen    []byte
+	screenSeq int64
+	state     string // connecting | ready | closed
+	closedEv  any
+	ready     any
 }
 
 const maxPending = 1 << 20
+
+// maxScreen bounds the output kept for the assistant.
+const maxScreen = 256 << 10
+
+// appendScreen keeps the tail of the output; the caller holds sess.mu.
+func (x *session) appendScreen(p []byte) {
+	x.screen = append(x.screen, p...)
+	x.screenSeq += int64(len(p))
+	if len(x.screen) > maxScreen {
+		x.screen = append([]byte(nil), x.screen[len(x.screen)-maxScreen:]...)
+	}
+}
 
 // SessionService owns terminal tabs. Output flows to the frontend via events and keystrokes
 // come back through Write; the frontend never holds a socket or a secret.
@@ -50,6 +66,8 @@ type SessionService struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session
+	// OnClose is told when a tab is closed (the assistant forgets its conversation).
+	OnClose func(sid string)
 }
 
 func NewSessionService(c *Core, f *ForwardService) *SessionService {
@@ -208,6 +226,13 @@ func (s *SessionService) Attach(sid string) error {
 	return nil
 }
 
+// touchVault tells the vault that a terminal is in use, so the auto-lock timer measures real inactivity.
+func (s *SessionService) touchVault() {
+	if s.c.Vault != nil {
+		s.c.Vault.Touch()
+	}
+}
+
 // Write sends keystrokes to the remote stdin.
 func (s *SessionService) Write(sid, data string) error {
 	sess, err := s.get(sid)
@@ -220,6 +245,7 @@ func (s *SessionService) Write(sid, data string) error {
 	if sh == nil {
 		return errors.New("session is not connected")
 	}
+	s.touchVault()
 	_, err = sh.Write([]byte(data))
 	return err
 }
@@ -273,6 +299,9 @@ func (s *SessionService) Close(sid string) error {
 	s.mu.Unlock()
 	if !ok {
 		return errors.New("unknown session")
+	}
+	if s.OnClose != nil {
+		defer s.OnClose(sid)
 	}
 	sess.mu.Lock()
 	sess.closed = true
@@ -329,8 +358,10 @@ func (s *SessionService) CloseAll() {
 // frontend attached, it is kept (up to maxPending) and replayed by Attach.
 func (s *SessionService) batcher(sess *session) *sshx.Batcher {
 	return sshx.NewBatcher(outputBatchInterval, outputBatchMax, func(p []byte) {
+		s.touchVault()
 		sess.mu.Lock()
 		defer sess.mu.Unlock()
+		sess.appendScreen(p)
 		if !sess.attached {
 			if len(sess.pend)+len(p) <= maxPending {
 				sess.pend = append(sess.pend, p...)
@@ -484,4 +515,40 @@ func (l latin1Shell) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+// screenState is what the assistant sees of a session.
+type screenState struct {
+	hostID string
+	raw    []byte
+	seq    int64
+	state  string
+}
+
+func (s *SessionService) screen(sid string) (screenState, error) {
+	sess, err := s.get(sid)
+	if err != nil {
+		return screenState{}, err
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return screenState{hostID: sess.hostID, raw: append([]byte(nil), sess.screen...), seq: sess.screenSeq, state: sess.state}, nil
+}
+
+// screenSince returns the output that arrived after seq.
+func (s *SessionService) screenSince(sid string, seq int64) ([]byte, int64, error) {
+	sess, err := s.get(sid)
+	if err != nil {
+		return nil, 0, err
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	n := int(sess.screenSeq - seq)
+	if n > len(sess.screen) {
+		n = len(sess.screen)
+	}
+	if n < 0 {
+		n = 0
+	}
+	return append([]byte(nil), sess.screen[len(sess.screen)-n:]...), sess.screenSeq, nil
 }

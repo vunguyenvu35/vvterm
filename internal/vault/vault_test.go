@@ -233,6 +233,27 @@ func TestActivityPostponesAutoLock(t *testing.T) {
 	}
 }
 
+func TestTouchPostponesAutoLockButNeverUnlocks(t *testing.T) {
+	v, _, _ := newVault(t)
+	v.Touch() // locked: must be a no-op, not a panic or an unlock
+	if v.Status().Unlocked {
+		t.Fatal("Touch unlocked the vault")
+	}
+	_ = v.Create(pw)
+	v.SetAutoLock(300 * time.Millisecond)
+	for i := 0; i < 6; i++ {
+		time.Sleep(120 * time.Millisecond)
+		v.Touch()
+		if !v.Status().Unlocked {
+			t.Fatalf("locked despite terminal activity at iter %d", i)
+		}
+	}
+	time.Sleep(600 * time.Millisecond)
+	if v.Status().Unlocked {
+		t.Fatal("vault stayed unlocked without activity")
+	}
+}
+
 func TestManualLockFiresCallbackOnce(t *testing.T) {
 	v, _, _ := newVault(t)
 	_ = v.Create(pw)

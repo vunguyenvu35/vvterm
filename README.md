@@ -20,6 +20,7 @@
 - **A sidebar beside every terminal**: hosts, snippets (run or paste), command history, and terminal themes and font.
 - **More than SSH**: a shell on this computer, serial ports and Telnet (with its own login), a Termius-style *Choose protocol* and connecting screen, Known Hosts and Logs pages.
 - **Browse and transfer files with SFTP** in a tab of its own: two panes, several files and folders at once, drag and drop, right-click menu with permissions, with confirmation before anything is replaced.
+- **Ask an AI about your terminal** with the tool you already use (Claude Code, Codex CLI, Gemini CLI): the screen is sent with every secret replaced by `*******`, the assistant only suggests commands, and you decide what runs. Add MCP servers for extra tools. See the [user guide](docs/UserGuide.md#22-ai-assistant) and the [design](docs/AIAssistant.md).
 - **Save snippets** of commands you run often and type them into any terminal with a click.
 - **Make it yours**: 26 terminal colour themes, light / dark / auto appearance, font, cursor and scrollback, interface zoom, your own keyboard shortcuts, all in a Settings window of its own.
 - **Forward ports**: local, remote and SOCKS5 proxy.

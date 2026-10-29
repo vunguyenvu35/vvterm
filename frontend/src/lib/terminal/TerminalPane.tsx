@@ -8,7 +8,7 @@ import {WebLinksAddon} from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import {useBackend} from '../backend'
 import {b64ToBytes, errMsg} from '../util'
-import {registerPane, setPaneStatus} from './panes'
+import {registerPane, registerSelection, setPaneSession, setPaneStatus} from './panes'
 import {createHighlighter, HighlightTerm} from './highlight'
 import {matches} from '../shortcuts/shortcuts'
 import {IconArrowDown, IconArrowUp} from '../ui/Icons'
@@ -52,6 +52,16 @@ interface Props {
 }
 
 type State = 'connecting' | 'ready' | 'closed'
+
+/**
+ * Text being composed with an input method (Vietnamese Telex, Chinese pinyin, Japanese…) is shown at the cursor, highlighted,
+ * until it is committed, like in other terminals. xterm.js draws it in a small element; the colours (the theme's own, inverted)
+ * are handed to the stylesheet through two custom properties.
+ */
+export function imeColours(el: HTMLElement | null, theme: {foreground?: string; background?: string}) {
+  el?.style.setProperty('--ime-bg', theme.foreground || '#ffffff')
+  el?.style.setProperty('--ime-fg', theme.background || '#000000')
+}
 
 /** One SSH session rendered with xterm.js. Keystrokes go to Go, output arrives as batched events. */
 export function TerminalPane(p: Props) {
@@ -129,6 +139,7 @@ export function TerminalPane(p: Props) {
     fit.current = f
     search.current = s
     t.open(host.current!)
+    imeColours(host.current, p.termTheme)
     try { f.fit() } catch { /* hidden */ }
 
     // Termius-style colouring of finished lines, a moment after output stops arriving
@@ -193,6 +204,7 @@ export function TerminalPane(p: Props) {
         retry.current()
       }
     })
+    const unregSelection = p.paneId ? registerSelection(p.paneId, () => t.getSelection()) : () => {}
     const unregister = p.paneId ? registerPane(p.paneId, text => {
       if (stateRef.current !== 'ready') return false
       sendKeys(text)
@@ -235,6 +247,7 @@ export function TerminalPane(p: Props) {
         const id = await be.session.open(p.hostId, t.cols || 80, t.rows || 24)
         if (disposed) { void be.session.close(id).catch(() => {}); return }
         sid.current = id
+        if (p.paneId) setPaneSession(p.paneId, id)
         offs.push(be.on(`term:data:${id}`, (b64: string) => {
           t.write(b64ToBytes(b64))
           // output can only come from a live shell: do not keep the connecting screen up until the ready event
@@ -267,6 +280,8 @@ export function TerminalPane(p: Props) {
       selSub?.dispose()
       hl.dispose()
       unregister()
+      unregSelection()
+      if (p.paneId) setPaneSession(p.paneId, null)
       ro.disconnect()
       offs.forEach(o => o())
       if (sid.current) void be.session.close(sid.current).catch(() => {})
@@ -282,6 +297,7 @@ export function TerminalPane(p: Props) {
     t.options.fontSize = p.fontSize
     t.options.fontFamily = p.fontFamily
     t.options.theme = p.termTheme
+    imeColours(host.current, p.termTheme)
     t.options.cursorStyle = p.cursorStyle
     t.options.cursorBlink = p.cursorBlink
     t.options.scrollback = p.scrollback

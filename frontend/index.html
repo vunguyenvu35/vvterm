@@ -6,6 +6,9 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*"/>
   <title>VVTerm</title>
+  <!-- paint the background before any script or stylesheet loads: a window that opens white for a moment and then turns dark is jarring -->
+  <style>html,body{background:#1b1e2d;margin:0}html[data-theme='light'],html[data-theme='light'] body{background:#f3f5fa}</style>
+  <script src="/boot.js"></script>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 </head>
 <body>

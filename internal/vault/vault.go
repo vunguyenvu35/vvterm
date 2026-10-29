@@ -66,6 +66,7 @@ type Vault struct {
 	dek      []byte
 	autoLock time.Duration
 	timer    *time.Timer
+	armedAt  time.Time // when the inactivity timer was last (re)started
 	onLock   func()
 	// auth, when set, must succeed (Touch ID) before the keychain key is stored or used
 	auth func(reason string) error
@@ -371,7 +372,27 @@ func (v *Vault) SetAutoLock(d time.Duration) {
 	}
 }
 
+// Touch counts outside activity (typing in or output of an open terminal) as use of the vault, so the
+// inactivity timer does not lock it under someone who is working. It never unlocks, and calls arriving
+// faster than a tenth of the timeout (at most one second) do not restart the timer again.
+func (v *Vault) Touch() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.dek == nil || v.autoLock <= 0 {
+		return
+	}
+	step := v.autoLock / 10
+	if step > time.Second {
+		step = time.Second
+	}
+	if time.Since(v.armedAt) < step {
+		return
+	}
+	v.armTimer()
+}
+
 func (v *Vault) armTimer() {
+	v.armedAt = time.Now()
 	if v.timer != nil {
 		v.timer.Stop()
 		v.timer = nil

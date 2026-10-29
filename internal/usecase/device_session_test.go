@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"vvterm/internal/domain"
 )
@@ -402,5 +403,31 @@ func TestTelnetLatin1ServersAreConvertedBothWays(t *testing.T) {
 	}
 	if _, err := h.app.Host.SaveHost(domain.Host{Meta: host.Meta, Label: "x", Hostname: "y", Port: 22, TelnetEncoding: "koi8-r"}); err == nil {
 		t.Fatal("unknown encoding")
+	}
+}
+
+// Typing in an open terminal is use of the app: the vault must not auto-lock under someone who is working.
+func TestTerminalActivityKeepsTheVaultUnlocked(t *testing.T) {
+	h := newHarness(t).unlocked(t)
+	var fk deviceFakes
+	fk.install(h)
+	sid, err := h.open(LocalHostID, 100, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.rec.wait(t, "term:ready:"+sid)
+	h.core.Vault.SetAutoLock(300 * time.Millisecond)
+	for i := 0; i < 6; i++ {
+		time.Sleep(120 * time.Millisecond)
+		if err := h.app.Session.Write(sid, "x"); err != nil {
+			t.Fatal(err)
+		}
+		if !h.core.Vault.Status().Unlocked {
+			t.Fatalf("vault locked while typing, iteration %d", i)
+		}
+	}
+	time.Sleep(600 * time.Millisecond)
+	if h.core.Vault.Status().Unlocked {
+		t.Fatal("vault must still lock once the terminal is idle")
 	}
 }

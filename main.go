@@ -25,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("data dir: %v", err)
 	}
+	app.RaiseProcess = raiseProcess // the Settings window is brought in front of the main one (macOS)
 	if len(os.Args) > 1 && os.Args[1] == app.SettingsFlag {
 		runSettings(dir)
 		return
@@ -57,7 +58,7 @@ func main() {
 			About:    &mac.AboutInfo{Title: "VVTerm", Message: "SSH client with an encrypted vault.\nVersion " + app.Version, Icon: appIcon},
 		},
 		Bind: []interface{}{
-			a.Host, a.Vault, a.Session, a.Forward, a.Sync, a.ImportExp, a.Settings, a.Snippet, a.Sftp, a.Local, a.Serial, a.Log, a.KnownHost, a.System,
+			a.Host, a.Vault, a.Session, a.Forward, a.Sync, a.ImportExp, a.Settings, a.Snippet, a.Sftp, a.Local, a.Serial, a.Log, a.KnownHost, a.Assistant, a.System,
 		},
 	})
 	if err != nil {
@@ -83,7 +84,7 @@ func runSettings(dir string) {
 		BackgroundColour: &options.RGBA{R: 17, G: 19, B: 24, A: 1},
 		OnStartup:        func(ctx context.Context) { w.Startup(ctx); hideFromDock() },
 		Menu:             w.Menu(),
-		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
+		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset(), WebviewIsTransparent: true},
 		Bind:             []interface{}{w.Bridge, w.System},
 	})
 	if err != nil {

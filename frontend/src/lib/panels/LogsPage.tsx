@@ -14,6 +14,7 @@ export const LOG_GROUPS: {id: string; label: string; kinds: string[]}[] = [
   {id: 'forwards', label: 'Forwards', kinds: ['forward']},
   {id: 'security', label: 'Security', kinds: ['hostkey', 'vault']},
   {id: 'sync', label: 'Sync', kinds: ['sync']},
+  {id: 'assistant', label: 'Assistant', kinds: ['assistant']},
 ]
 
 /** "28 Oct 14:32:10" in the user's locale, with the year only when it is not this one. */

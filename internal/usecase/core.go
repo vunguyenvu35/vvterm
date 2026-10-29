@@ -74,9 +74,14 @@ type Core struct {
 	ListSerial     SerialLister
 	// Activity is the log shown on the Logs page; nil keeps no history.
 	Activity ActivityLog
-	emit     Emitter
-	setMu    sync.Mutex
-	settings Settings
+	// AI assistant adapters.
+	Agents         []Agent
+	NewCustomAgent CustomAgentFactory
+	ToolGateway    ToolGateway
+	MCP            MCPConnector
+	emit           Emitter
+	setMu          sync.Mutex
+	settings       Settings
 
 	prompts *prompter
 }
@@ -96,6 +101,11 @@ type Options struct {
 	ListSerial     SerialLister
 	// Activity stores the activity log (optional).
 	Activity ActivityLog
+	// AI assistant adapters (all optional: without Agents the assistant lists no providers).
+	Agents         []Agent
+	NewCustomAgent CustomAgentFactory
+	ToolGateway    ToolGateway
+	MCP            MCPConnector
 }
 
 // NewCore wires the use cases around the given ports. dir is the root of user data.
@@ -105,7 +115,8 @@ func NewCore(dir string, opt Options) (*Core, error) {
 	}
 	c := &Core{Dir: dir, DataDir: filepath.Join(dir, "data"), SyncDir: filepath.Join(dir, "sync"), emit: opt.Emit,
 		Store: opt.Store, Vault: opt.Vault, prompts: newPrompter(), OpenRemoteFS: opt.OpenRemoteFS,
-		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, OpenTelnet: opt.OpenTelnet, ListSerial: opt.ListSerial, Activity: opt.Activity}
+		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, OpenTelnet: opt.OpenTelnet, ListSerial: opt.ListSerial, Activity: opt.Activity,
+		Agents: opt.Agents, NewCustomAgent: opt.NewCustomAgent, ToolGateway: opt.ToolGateway, MCP: opt.MCP}
 	if c.emit == nil {
 		c.emit = func(string, ...any) {}
 	}

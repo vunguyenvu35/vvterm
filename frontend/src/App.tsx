@@ -19,7 +19,7 @@ import {DataPanel} from './lib/panels/DataPanel'
 import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
 import {CLOSE_HOST_TAB} from './lib/sftp/SftpBrowser'
-import {SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
+import {SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
@@ -69,9 +69,11 @@ export default function App({initial}: {/** an app window opened for this place 
   // the panel on the right of a terminal (hosts, snippets, history, themes): open or closed is remembered
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('vvterm.sidebar') !== 'closed' } catch { return true } })
   const [sidebarTab, setSidebarTabState] = useState<SidebarTab>(() => {
-    try { const t = localStorage.getItem('vvterm.sidebar.tab'); if (t === 'hosts' || t === 'snippets' || t === 'history' || t === 'themes') return t } catch { /* default */ }
+    try { const t = localStorage.getItem('vvterm.sidebar.tab'); if (t === 'hosts' || t === 'snippets' || t === 'history' || t === 'themes' || t === 'assistant') return t } catch { /* default */ }
     return 'hosts'
   })
+  const [sideWidth, setSideWidthState] = useState<number>(() => { try { const n = Number(localStorage.getItem('vvterm.sidebar.width')); return n >= SIDE_MIN && n <= SIDE_MAX ? n : SIDE_DEFAULT } catch { return SIDE_DEFAULT } })
+  const setSideWidth = (w: number) => { setSideWidthState(w); try { localStorage.setItem('vvterm.sidebar.width', String(w)) } catch { /* not remembered */ } }
   const setSidebarTab = (t: SidebarTab) => { setSidebarTabState(t); try { localStorage.setItem('vvterm.sidebar.tab', t) } catch { /* not remembered */ } }
   const toggleSidebar = () => setSidebarOpen(o => { try { localStorage.setItem('vvterm.sidebar', o ? 'closed' : 'open') } catch { /* not remembered */ } return !o })
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -119,7 +121,10 @@ export default function App({initial}: {/** an app window opened for this place 
     return () => { offLocked(); offBridge(); offHosts(); offMenu() }
   }, [be, refreshVault])
 
-  useEffect(() => { document.documentElement.dataset.theme = appearance }, [appearance])
+  useEffect(() => {
+    document.documentElement.dataset.theme = appearance
+    try { localStorage.setItem('vvterm.appearance', appearance) } catch { /* not remembered */ }
+  }, [appearance])
 
   // Configurable shortcuts (Settings → Shortcuts). The handlers are re-assigned on every render once the
   // vault is unlocked, so the listener below never sees stale state.
@@ -472,7 +477,8 @@ export default function App({initial}: {/** an app window opened for this place 
         <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onDropTab={dropTab} onPopPane={popPaneOut} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
         {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
           <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} groups={groups} tabs={tabs} activeTab={termActive} onSelectTab={id => setActive(id)} onCloseTab={closeTab} snippets={snippets} settings={settings} appearance={appearance}
-            onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings} />
+            onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings}
+            paneId={activeTabObj.activePane} onOpenSettings={() => openSettings()} width={sideWidth} onWidth={setSideWidth} />
         )}
       </div>
 
