@@ -390,6 +390,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       saveFile: async (_t, name) => '/tmp/' + name,
       openUrl: async u => { rec('system.openUrl', u) },
       info: async () => ({version: '1.1.0-test'}),
+      checkUpdate: async () => { rec('system.checkUpdate'); return {current: '1.1.0-test', latest: '1.1.0-test', available: false, url: '', notes: ''} },
       toggleMaximise: async () => { rec('system.toggleMaximise') },
       readClipboard: async () => { rec('system.readClipboard'); return state.clipboard },
       writeClipboard: async t => { rec('system.writeClipboard', t); state.clipboard = t },

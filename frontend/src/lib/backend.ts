@@ -10,6 +10,8 @@ import type {
  * Everything the UI needs from the Go backend. The real implementation talks to the
  * Wails bindings; tests provide a fake. No method ever returns a secret.
  */
+export interface UpdateInfo {current: string; latest: string; available: boolean; url: string; notes: string}
+
 export interface Backend {
   vault: {
     status(): Promise<VaultStatus>
@@ -169,6 +171,8 @@ export interface Backend {
     saveFile(title: string, name: string): Promise<string>
     openUrl(url: string): Promise<void>
     info(): Promise<{version: string}>
+    /** Asks GitHub for the latest release and compares it with this build. */
+    checkUpdate(): Promise<UpdateInfo>
     /** Opens the Settings window (a second native window). Rejects where none exists: the UI then shows its in-app window. */
     openSettings(): Promise<void>
     /** the window is in full screen (the macOS window buttons are gone then) */
@@ -366,6 +370,7 @@ export function wailsBackend(): Backend {
         }
       },
       info: () => call('app', 'SystemService', 'Info'),
+      checkUpdate: () => call('app', 'SystemService', 'CheckUpdate'),
       openSettings: () => call('app', 'SystemService', 'OpenSettings'),
       openWindow: (h, t) => call('app', 'SystemService', 'OpenWindow', h, t),
       openPath: p => call('app', 'SystemService', 'OpenPath', p),
