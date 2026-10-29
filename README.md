@@ -40,14 +40,24 @@
 
 ## Try it
 
-**Requirements:** a Mac. VVTerm is currently a beta for macOS only.
+**Requirements:** macOS, Windows (64-bit) or Linux (64-bit). VVTerm is currently a beta; macOS is the most tested, Windows and Linux builds are new.
 
 ### 1. Install
 
-- **From a release (recommended):** download `VVTerm-<version>-macos-<arch>.zip` from the [Releases](../../releases) page, unzip it and drag **VVTerm.app** to *Applications*.
+- **From a release (recommended):** download the file for your system from the [Releases](../../releases) page:
+
+  | System | File | How to install |
+  | --- | --- | --- |
+  | macOS | `vvterm-<version>-macos.dmg` (or `.zip`) | open the DMG and drag **vvterm.app** to *Applications* |
+  | Windows | `vvterm-<version>-windows-amd64.exe` | run it, no installer needed |
+  | Linux | `vvterm-<version>-linux-amd64.tar.gz` | `tar xzf` it and run `./vvterm` (needs GTK 3 and WebKitGTK 4.0, for example `libgtk-3-0` and `libwebkit2gtk-4.0-37` on Ubuntu 22.04) |
+
+  Each release also lists `SHA256SUMS` so you can check your download.
 - **From source:** see the [Development guide](docs/Development.md) (three commands).
 
-> **First launch.** Beta builds are not notarized by Apple yet, so macOS may say the app *"can't be opened"*. Right-click **VVTerm.app → Open → Open** once. This is only needed the first time.
+> **First launch.** Beta builds are not signed with a developer certificate yet. On macOS, right-click **vvterm.app → Open → Open** once (or run `xattr -dr com.apple.quarantine /Applications/vvterm.app`). On Windows, SmartScreen may warn: choose **More info → Run anyway**.
+
+**Updates:** **Settings → Check for updates** tells you when a newer release is out and opens its page; replace the old app with the new one and your data is kept.
 
 ### 2. First five minutes
 
@@ -86,7 +96,7 @@ Back up regularly with **Import / Export → Encrypted backup**.
 
 ## Known limitations of this beta
 
-- macOS only; Windows and Linux are not built or tested yet.
+- Windows and Linux builds are new and less tested than macOS. On Windows the **terminal on this computer** is not available yet (SSH, SFTP and the rest work). Touch ID and the macOS-specific window features exist only on a Mac.
 - "Keychain unlock" stores the vault key in the macOS Keychain; it does **not** require Touch ID yet.
 - The vault does not lock when the Mac sleeps (only on idle).
 - Settings opens as a second window of the app (a second process): it shows a second Dock icon while open and needs the main app running.
