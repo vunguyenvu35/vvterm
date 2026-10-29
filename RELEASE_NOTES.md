@@ -6,16 +6,49 @@ Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: be
 
 ## Unreleased: AI terminal assistant
 
-- **AI assistant** in the terminal sidebar, using the command-line AI you are signed in to (Claude Code, Codex CLI, Gemini CLI or a command of your own): no key to store. Secrets are masked as `*******` before anything is sent and in every answer; **What will be sent** shows the exact text. It suggests commands: **Insert** (no Enter) or **Run…** after a confirmation.
-- **Settings → AI assistant**: providers found on this computer (off until you switch them on, after an isolation self-test), models read from the provider itself, privacy options, and **MCP servers** through a VVTerm gateway (arguments are checked for secrets, results are redacted, new tools stay off until reviewed).
-- Chat box that takes **files and screenshots** (drag and drop, paste, paperclip): text files are redacted, pictures are sent only after you confirm, because secrets in a picture cannot be hidden. Code in answers has a Copy button.
-- **Antigravity CLI (`agy`)** is a provider too (its own allow-rules are overridden for every call, so commands and MCP tools are refused). Confirmations are cards in the chat, never popups, and only for what could change something; reading the screen needs none.
-- Commands that only read (`which`, `pgrep`, `brew list`, `systemctl status`, chains and pipes of them…) now run without asking, and the assistant reads their output; only changes ask. Setting **Run read-only commands by itself**, on by default.
-- Text composed with an input method (Vietnamese Telex, pinyin…) is shown at the cursor, highlighted, until committed.
-- **Per-host switch** (Off / Ask first / On; On by default, off on production hosts).
-- **Fix:** locking the vault now closes the Settings window; it no longer opens with a white flash.
-- **Fix:** the vault no longer auto-locks while you are typing in a terminal; terminal activity now counts as use.
-- Design and verification notes: [docs/AIAssistant.md](docs/AIAssistant.md).
+Ask an AI about what is on your terminal, without leaving VVTerm and without handing it your secrets. VVTerm runs the AI command-line tool you already use and are signed in to, so your own subscription is used and **no API key is stored**.
+
+### Get started
+
+1. **Settings → AI assistant**: switch on a tool VVTerm found (Claude Code, Codex CLI, Antigravity CLI, Gemini CLI, or a command of your own). It stays off until you do, after a short isolation test.
+2. Open a terminal, then the ✨ icon in the sidebar. Pick the provider and model from the chip under the message box, and ask.
+3. Drop a log or a screenshot on the panel, or paste one, to add it to your question.
+
+### What you get
+
+- **A chat beside every terminal.** It reads the screen (or only the text you selected), explains errors, and suggests commands. Answers show code as blocks with a Copy button; an empty chat offers a few starting questions. The sidebar can be dragged wider or narrower (double-click the edge to reset).
+- **It looks at your machine for you.** Commands that only read (`which`, `pgrep`, `ls`, `df`, `brew list`, `systemctl status`, `git status`… also chained with `;`, `&&`, `||` or a pipe) run **without asking**, and the assistant reads their output before it answers. This is on by default (**Settings → AI assistant → Run read-only commands by itself**) and never applies to production hosts.
+- **Anything that could change something asks first, in the chat.** A command that edits, installs, restarts or deletes shows **Run…** and a confirmation in its own card; a risky one needs you to type `run`. **Insert** puts a command on the prompt without pressing Enter. Risk is judged by VVTerm, never by the AI. Nothing opens as a popup.
+- **Files and screenshots.** Text files (up to 5, 100 KB each) are added to the question and redacted like the screen. Pictures (up to 3, 5 MB each) work with Claude Code and Codex CLI.
+- **Several providers, real model lists.** Models are read from each provider itself (nothing is hard-coded) and chosen from a menu with full descriptions. A provider that cannot list its models uses its default one.
+- **MCP servers.** Add MCP servers (a command or an HTTP address), test them, and choose a mode per tool: *Allow*, *Ask each time* or *Off*. New tools of a server stay off until you review them. Import servers from Claude Code or Gemini CLI. Currently used through Claude Code.
+- **Per-host switch.** On a host's form: *Off*, *Ask first (in the chat)* or *On*. Hosts are **On** by default and **Off** on production hosts.
+- **Typing Vietnamese (and other input methods)** in the terminal now shows the text you are composing at the cursor, highlighted, until you commit it.
+
+### Your secrets stay yours
+
+- Before anything is sent, keys, tokens, passwords, URLs with credentials, `NAME=value` secrets and **everything saved in your vault** are replaced by `*******`. The same is done to every answer before you see it, and to commands before they can run. You can add your own patterns; you cannot turn redaction off.
+- **What will be sent** shows the exact redacted text, inside the chat, before or after you ask. Every use is written to the activity log (Logs → Assistant).
+- A command with a hidden value cannot be run from the panel. A secret in a tool's arguments blocks the call; tool results are redacted.
+- **Pictures are the exception**: a secret inside a picture cannot be found, so VVTerm asks you to confirm each time (in the chat) and says so plainly.
+- The AI tool runs in an empty temporary folder with a cleaned environment and no tools of its own. A provider can only be switched on after a self-test in which it is asked to run a command and must fail. For Antigravity, whose own allow-rules would let a command run, every call overrides them with deny rules.
+- Redaction is best effort. A password written in an ordinary sentence cannot always be recognised.
+
+### Also fixed in this release
+
+- **The vault no longer auto-locks while you are working in a terminal**: typing and output now count as activity.
+- **Locking the vault closes the Settings window.** The Settings window also opens in front of the main window (macOS 14+), without a white flash, and its AI page appears at once.
+- **A host list that cannot be reached** from the Settings window now shows a message you can act on instead of an internal service name.
+
+### Limits you should know about
+
+- Gemini CLI shares `~/.gemini` with Antigravity, which sets a sign-in the Gemini CLI does not support. Use the Antigravity CLI provider, or sign in again with `gemini`.
+- The Gemini CLI adapter could not be tested against a signed-in account; its isolation is checked by the self-test when you switch it on.
+- MCP tools work through Claude Code only. Pictures work with Claude Code and Codex CLI only.
+- The assistant is not run on Windows or Linux yet, and chat history is kept in memory only (a new chat starts empty after a restart).
+- If you saved the AI settings before this release, your saved value of *Run read-only commands by itself* is kept; switch it on in Settings if you want the new default.
+
+Design, verification notes and the live checks that were run: [docs/AIAssistant.md](docs/AIAssistant.md). How to use it: [user guide](docs/UserGuide.md#22-ai-assistant).
 
 ## Highlights
 
