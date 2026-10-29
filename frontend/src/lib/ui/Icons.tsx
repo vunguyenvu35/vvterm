@@ -72,3 +72,4 @@ export const IconSend = (p: P) => <Icon {...p}><path d="M5 12h14m-6-6 6 6-6 6" /
 export const IconCheck = (p: P) => <Icon {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></Icon>
 export const IconChevronUp = (p: P) => <Icon {...p}><path d="m6 15 6-6 6 6" /></Icon>
 export const IconStop = (p: P) => <Icon {...p}><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" /></Icon>
+export const IconSort = (p: P) => <Icon {...p}><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" /></Icon>

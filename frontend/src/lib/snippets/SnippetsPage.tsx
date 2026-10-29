@@ -1,5 +1,7 @@
+import {useMemo, useState} from 'react'
 import {Snippet} from '../types'
 import {IconBraces, IconCopy, IconEdit, IconPlay, IconPlus, IconTrash} from '../ui/Icons'
+import {byName, ListToolbar, usePref, VIEWS, type SortOption} from '../ui/ListTools'
 
 interface Props {
   snippets: Snippet[]
@@ -11,10 +13,22 @@ interface Props {
   onDelete(s: Snippet): void
 }
 
+type Sort = 'name' | 'name-desc' | 'recent'
+const SORTS: SortOption<Sort>[] = [{value: 'name', label: 'Name A–Z'}, {value: 'name-desc', label: 'Name Z–A'}, {value: 'recent', label: 'Recently changed'}]
+
 const firstLine = (s: string) => s.split(/\r?\n/).find(l => l.trim()) ?? ''
 
 /** Reusable scripts. Run types the script into the focused terminal pane and presses Enter. */
 export function SnippetsPage(p: Props) {
+  const [q, setQ] = useState('')
+  const [sort, setSort] = usePref<Sort>('vvterm.snippets.sort', SORTS.map(o => o.value), 'name')
+  const [view, setView] = usePref('vvterm.snippets.view', VIEWS, 'grid')
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const list = p.snippets.filter(s => !needle || (s.label + '\n' + (s.description ?? '') + '\n' + s.script).toLowerCase().includes(needle))
+    const when = (s: Snippet) => (s.updated_at ? Date.parse(s.updated_at) || 0 : 0)
+    return [...list].sort((a, b) => (sort === 'name' ? byName(a.label, b.label) : sort === 'name-desc' ? byName(b.label, a.label) : when(b) - when(a) || byName(a.label, b.label)))
+  }, [p.snippets, q, sort])
   return (
     <div className="hosts-page">
       <div className="page-head">
@@ -24,8 +38,9 @@ export function SnippetsPage(p: Props) {
       {!p.canRun && p.snippets.length > 0 && (
         <div className="notice">Open a terminal to run a snippet: it is typed into the focused pane.</div>
       )}
-      <div className="cards" role="list" aria-label="Snippets">
-        {p.snippets.map(s => (
+      {p.snippets.length > 0 && <ListToolbar what="snippets" query={q} onQuery={setQ} sort={sort} sortOptions={SORTS} onSort={setSort} view={view} onView={setView} />}
+      <div className={'cards' + (view === 'list' ? ' as-list' : '')} role="list" aria-label="Snippets" data-view={view}>
+        {shown.map(s => (
           <div key={s.id} className="card snippet" role="listitem" onDoubleClick={() => p.onEdit(s)}>
             <span className="tile"><IconBraces size={20} /></span>
             <div className="meta">
@@ -41,6 +56,7 @@ export function SnippetsPage(p: Props) {
           </div>
         ))}
       </div>
+      {p.snippets.length > 0 && shown.length === 0 && <div className="empty-hint">No snippet matches “{q.trim()}”.</div>}
       {p.snippets.length === 0 && (
         <div className="empty-hint">No snippets yet. Save commands you run often, then run them in any terminal with one click.</div>
       )}

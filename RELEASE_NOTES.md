@@ -35,6 +35,10 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 - The AI tool runs in an empty temporary folder with a cleaned environment and no tools of its own. A provider can only be switched on after a self-test in which it is asked to run a command and to search the web, and must fail at both. Codex CLI is started with its shell tool, its apps connector and its web search turned off.
 - Redaction is best effort. A password written in an ordinary sentence cannot always be recognised.
 
+### Also new: find things in every list
+
+- **Snippets, Port Forwarding, Known Hosts and Keychain** now have what the host list has: a search box, filter chips (state and type of a forward, key type of a known host, key / password / ssh-agent in the Keychain), a **Sort** menu (name, host, type, status, port, recently changed…) and a **Grid / List** switch. The sort and the view are remembered for each page. Names sort the way people read them (case and accents ignored, `web-2` before `web-10`).
+
 ### Also fixed in this release
 
 - **The vault no longer auto-locks while you are working in a terminal**: typing and output now count as activity.

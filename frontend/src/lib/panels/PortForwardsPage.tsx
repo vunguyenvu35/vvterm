@@ -1,10 +1,11 @@
-import {useCallback, useEffect, useState} from 'react'
+import {useCallback, useEffect, useMemo, useState} from 'react'
 import {useBackend} from '../backend'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {errMsg} from '../util'
 import {IconEdit, IconPlus, IconTrash} from '../ui/Icons'
 import {TYPE_LABEL} from './ForwardPanel'
+import {byName, FilterChip, ListToolbar, usePref, VIEWS, type SortOption} from '../ui/ListTools'
 import type {ForwardStatus, ForwardType, Host, HostKeyPrompt, PortForward} from '../types'
 
 export function describeForward(f: PortForward): string {
@@ -15,6 +16,10 @@ export function describeForward(f: PortForward): string {
 
 /** The name on a card: the label, or "Local Rule" style when there is none. */
 export const forwardTitle = (f: PortForward) => f.label || `${TYPE_LABEL[f.type]} Rule`
+
+type Sort = 'name' | 'host' | 'type' | 'status' | 'port'
+const SORTS: SortOption<Sort>[] = [{value: 'name', label: 'Name'}, {value: 'host', label: 'Host'}, {value: 'type', label: 'Type'}, {value: 'status', label: 'Status (running first)'}, {value: 'port', label: 'Port'}]
+const STATE_ORDER: Record<string, number> = {running: 0, error: 1, stopped: 2}
 
 interface Props {
   hosts: Host[]
@@ -33,6 +38,11 @@ export function PortForwardsPage({hosts, draft, reloadKey = 0, onNew, onEdit}: P
   const confirm = useConfirm()
   const [items, setItems] = useState<ForwardStatus[]>([])
   const [prompt, setPrompt] = useState<{id: string; p: HostKeyPrompt} | null>(null)
+  const [q, setQ] = useState('')
+  const [states, setStates] = useState<string[]>([])
+  const [types, setTypes] = useState<ForwardType[]>([])
+  const [sort, setSort] = usePref<Sort>('vvterm.forwards.sort', SORTS.map(o => o.value), 'name')
+  const [view, setView] = usePref('vvterm.forwards.view', VIEWS, 'grid')
 
   const reload = useCallback(async () => setItems((await be.forwards.list()) ?? []), [be])
   useEffect(() => {
@@ -60,6 +70,28 @@ export function PortForwardsPage({hosts, draft, reloadKey = 0, onNew, onEdit}: P
     try { await be.forwards.remove(s.forward.id); await reload() } catch (e) { toast.error(errMsg(e)) }
   }
 
+  const presentStates = Array.from(new Set(items.map(s => s.state))).sort((a, b) => STATE_ORDER[a] - STATE_ORDER[b])
+  const presentTypes = Array.from(new Set(items.map(s => s.forward.type)))
+  const activeStates = states.filter(s => presentStates.includes(s as ForwardStatus['state']))
+  const activeTypes = types.filter(t => presentTypes.includes(t))
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const hostLabel = (s: ForwardStatus) => hosts.find(h => h.id === s.forward.host_id)?.label ?? ''
+    const list = items.filter(s => (activeStates.length === 0 || activeStates.includes(s.state)) && (activeTypes.length === 0 || activeTypes.includes(s.forward.type)) &&
+      (!needle || [forwardTitle(s.forward), hostLabel(s), describeForward(s.forward), TYPE_LABEL[s.forward.type], s.state].join(' ').toLowerCase().includes(needle)))
+    const by = (a: ForwardStatus, b: ForwardStatus) => {
+      switch (sort) {
+        case 'host': return byName(hostLabel(a), hostLabel(b))
+        case 'type': return byName(TYPE_LABEL[a.forward.type], TYPE_LABEL[b.forward.type])
+        case 'status': return STATE_ORDER[a.state] - STATE_ORDER[b.state]
+        case 'port': return (a.forward.bind_port || 1e9) - (b.forward.bind_port || 1e9)
+        default: return 0
+      }
+    }
+    return [...list].sort((a, b) => by(a, b) || byName(forwardTitle(a.forward), forwardTitle(b.forward)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, hosts, q, sort, activeStates.join(','), activeTypes.join(',')])
+
   const tileClass = (s: ForwardStatus) => (s.state === 'running' ? 'env-dev' : s.state === 'error' ? 'env-prod' : 'env-none')
 
   return (
@@ -67,16 +99,24 @@ export function PortForwardsPage({hosts, draft, reloadKey = 0, onNew, onEdit}: P
       <div className="toolbar">
         <button className="split-btn" aria-label="New forwarding" onClick={onNew}><IconPlus size={14} /> New forwarding</button>
       </div>
+      {items.length > 0 && (
+        <ListToolbar what="port forwards" query={q} onQuery={setQ} sort={sort} sortOptions={SORTS} onSort={setSort} view={view} onView={setView}>
+          <div className="chips">
+            {presentStates.length > 1 && presentStates.map(s => <FilterChip key={s} label={s[0].toUpperCase() + s.slice(1)} dot={s === 'running' ? 'env-dev' : s === 'error' ? 'env-prod' : 'env-none'} on={activeStates.includes(s)} onToggle={() => setStates(activeStates.includes(s) ? activeStates.filter(x => x !== s) : [...activeStates, s])} />)}
+            {presentTypes.length > 1 && presentTypes.map(t => <FilterChip key={t} label={TYPE_LABEL[t]} on={activeTypes.includes(t)} onToggle={() => setTypes(activeTypes.includes(t) ? activeTypes.filter(x => x !== t) : [...activeTypes, t])} />)}
+          </div>
+        </ListToolbar>
+      )}
 
       <h3 className="sec-title">Port Forwarding</h3>
-      <div className="cards" role="list" aria-label="Port forwards">
+      <div className={'cards' + (view === 'list' ? ' as-list' : '')} role="list" aria-label="Port forwards" data-view={view}>
         {draft && (
           <div className="card draft" aria-label="New forwarding draft" data-testid="draft-card">
             <span className="tile env-none fw-tile">{TYPE_LABEL[draft.type][0]}</span>
             <div className="meta"><div className="label">{draft.label || `${TYPE_LABEL[draft.type]} Rule`}</div><div className="addr">{TYPE_LABEL[draft.type]} forwarding</div></div>
           </div>
         )}
-        {items.map(s => {
+        {shown.map(s => {
           const f = s.forward
           const h = hostOf(f.host_id)
           return (
@@ -98,6 +138,7 @@ export function PortForwardsPage({hosts, draft, reloadKey = 0, onNew, onEdit}: P
           )
         })}
       </div>
+      {items.length > 0 && shown.length === 0 && <div className="empty-hint">No port forward matches.</div>}
       {items.length === 0 && !draft && <div className="empty-hint">No port forwards yet. Choose “New forwarding” to add one.</div>}
 
       {prompt && (

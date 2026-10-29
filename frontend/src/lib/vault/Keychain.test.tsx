@@ -39,8 +39,8 @@ describe('Keychain page', () => {
     setup()
     expect(screen.getByRole('button', {name: 'New key'})).toBeInTheDocument()
     const cards = within(screen.getByRole('list', {name: 'Identities'})).getAllByRole('listitem')
-    expect(cards.map(c => c.querySelector('.label')?.textContent)).toEqual(['deploy', 'legacy', 'db', 'agent'])
-    expect(cards.map(c => c.querySelector('.addr')?.textContent)).toEqual(['Type ED25519', 'Type RSA', 'Type Password · root', 'Type ssh-agent'])
+    expect(cards.map(c => c.querySelector('.label')?.textContent)).toEqual(['agent', 'db', 'deploy', 'legacy']) // by name
+    expect(cards.map(c => c.querySelector('.addr')?.textContent)).toEqual(['Type ssh-agent', 'Type Password · root', 'Type ED25519', 'Type RSA'])
     expect(document.body.textContent).not.toMatch(/PRIVATE KEY|secret_ref/)
   })
 
@@ -221,5 +221,67 @@ describe('New Key panel: the design', () => {
     expect(screen.getByLabelText('Passphrase')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Private key'), {target: {value: PEM}})
     expect(screen.queryByLabelText('Passphrase')).toBeNull()
+  })
+})
+
+describe('Keychain page: filter, sort and view', () => {
+  // the shared fixture is changed by the tests above, so these start from their own copies
+  const base = (): Identity[] => [
+    {id: 'i1', name: 'deploy', auth_type: 'key', public_key: 'ssh-ed25519 AAAAB3Nza'} as Identity,
+    {id: 'i2', name: 'legacy', auth_type: 'key', public_key: 'ssh-rsa AAAAB3'} as Identity,
+    {id: 'i3', name: 'db', auth_type: 'password', username: 'root'} as Identity,
+    {id: 'i4', name: 'agent', auth_type: 'agent'} as Identity,
+  ]
+  const names = () => within(screen.getByRole('list', {name: 'Identities'})).getAllByRole('listitem').map(c => c.querySelector('.label')?.textContent)
+  beforeEach(() => localStorage.clear())
+
+  it('searches the name, the user and the type', async () => {
+    setup(base())
+    await userEvent.type(screen.getByLabelText('Search keys'), 'root')
+    expect(names()).toEqual(['db'])
+    await userEvent.clear(screen.getByLabelText('Search keys'))
+    await userEvent.type(screen.getByLabelText('Search keys'), 'rsa')
+    expect(names()).toEqual(['legacy'])
+    await userEvent.clear(screen.getByLabelText('Search keys'))
+    await userEvent.type(screen.getByLabelText('Search keys'), 'nothing')
+    expect(screen.getByText('No key matches.')).toBeInTheDocument()
+  })
+
+  it('filters by kind: keys, passwords, ssh-agent', async () => {
+    setup(base())
+    await userEvent.click(screen.getByRole('button', {name: 'Keys'}))
+    expect(names()).toEqual(['deploy', 'legacy'])
+    await userEvent.click(screen.getByRole('button', {name: 'ssh-agent'}))
+    expect(names()).toEqual(['agent', 'deploy', 'legacy'])
+    await userEvent.click(screen.getByRole('button', {name: 'Keys'}))
+    await userEvent.click(screen.getByRole('button', {name: 'ssh-agent'}))
+    expect(names()).toEqual(['agent', 'db', 'deploy', 'legacy'])
+  })
+
+  it('sorts by name, reversed, or by type; and switches between grid and list', async () => {
+    setup(base())
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /Name Z–A/}))
+    expect(names()).toEqual(['legacy', 'deploy', 'db', 'agent'])
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /^Type/}))
+    expect(names()).toEqual(['deploy', 'db', 'legacy', 'agent']) // ED25519, Password, RSA, ssh-agent
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(screen.getByRole('list', {name: 'Identities'})).toHaveClass('as-list')
+  })
+
+  it('offers kind chips only when there is more than one kind, and no toolbar when there are no keys', () => {
+    setup(base().slice(0, 2))
+    expect(screen.queryByRole('button', {name: 'Keys'})).toBeNull()
+    expect(screen.getByLabelText('Search keys')).toBeInTheDocument()
+  })
+
+  it('keeps the draft card of a key being added, whatever the filter', async () => {
+    const list = base()
+    const be = makeFake({identities: list})
+    render(<Providers be={be}><KeychainPage identities={list} draft="new key" onNew={vi.fn()} onChanged={vi.fn()} /></Providers>)
+    await userEvent.type(screen.getByLabelText('Search keys'), 'zzz')
+    expect(screen.getByTestId('draft-card')).toBeInTheDocument()
   })
 })

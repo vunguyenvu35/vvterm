@@ -162,6 +162,8 @@ export interface Snippet {
   label: string
   description?: string
   script: string
+  /** when it was last changed (RFC 3339) */
+  updated_at?: string
 }
 
 export interface RemoteEntry {

@@ -1,9 +1,15 @@
+import {useMemo, useState} from 'react'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {useBackend} from '../backend'
 import {errMsg} from '../util'
 import {IconCopy, IconKey, IconLock, IconPlus, IconTrash, IconUser} from '../ui/Icons'
-import type {Identity} from '../types'
+import {byName, FilterChip, ListToolbar, usePref, VIEWS, type SortOption} from '../ui/ListTools'
+import type {AuthType, Identity} from '../types'
+
+type Sort = 'name' | 'name-desc' | 'type'
+const SORTS: SortOption<Sort>[] = [{value: 'name', label: 'Name A–Z'}, {value: 'name-desc', label: 'Name Z–A'}, {value: 'type', label: 'Type'}]
+const KINDS: {id: AuthType; label: string}[] = [{id: 'key', label: 'Keys'}, {id: 'password', label: 'Passwords'}, {id: 'agent', label: 'ssh-agent'}]
 
 export type KeyMode = 'key' | 'generate' | 'password' | 'agent'
 
@@ -30,6 +36,19 @@ export function KeychainPage({identities, draft, onNew, onChanged}: Props) {
   const be = useBackend()
   const toast = useToast()
   const confirm = useConfirm()
+  const [q, setQ] = useState('')
+  const [kinds, setKinds] = useState<AuthType[]>([])
+  const [sort, setSort] = usePref<Sort>('vvterm.keychain.sort', SORTS.map(o => o.value), 'name')
+  const [view, setView] = usePref('vvterm.keychain.view', VIEWS, 'grid')
+  const present = KINDS.filter(k => identities.some(i => i.auth_type === k.id))
+  const activeKinds = kinds.filter(k => present.some(x => x.id === k))
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const list = identities.filter(i => (activeKinds.length === 0 || activeKinds.includes(i.auth_type)) &&
+      (!needle || (i.name + ' ' + (i.username ?? '') + ' ' + keyType(i)).toLowerCase().includes(needle)))
+    return [...list].sort((a, b) => (sort === 'type' ? byName(keyType(a), keyType(b)) || byName(a.name, b.name) : sort === 'name' ? byName(a.name, b.name) : byName(b.name, a.name)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identities, q, sort, activeKinds.join(',')])
 
   const remove = async (i: Identity) => {
     if (!(await confirm(`Delete identity "${i.name}"? Its secret is removed from the vault.`, {confirmLabel: 'Delete', danger: true}))) return
@@ -59,15 +78,20 @@ export function KeychainPage({identities, draft, onNew, onChanged}: Props) {
         <button className="ghost-btn" aria-label="New ssh-agent identity" onClick={() => onNew('agent')}><IconUser size={14} /> ssh-agent</button>
       </div>
 
+      {identities.length > 0 && (
+        <ListToolbar what="keys" query={q} onQuery={setQ} sort={sort} sortOptions={SORTS} onSort={setSort} view={view} onView={setView}>
+          {present.length > 1 && <div className="chips">{present.map(k => <FilterChip key={k.id} label={k.label} on={activeKinds.includes(k.id)} onToggle={() => setKinds(activeKinds.includes(k.id) ? activeKinds.filter(x => x !== k.id) : [...activeKinds, k.id])} />)}</div>}
+        </ListToolbar>
+      )}
       <h3 className="sec-title">Keys</h3>
-      <div className="cards" role="list" aria-label="Identities">
+      <div className={'cards' + (view === 'list' ? ' as-list' : '')} role="list" aria-label="Identities" data-view={view}>
         {draft !== undefined && (
           <div className="card draft" aria-label="New key draft" data-testid="draft-card">
             <span className="tile key-tile"><IconKey size={20} /></span>
             <div className="meta"><div className="label">{draft || 'Add a label…'}</div><div className="addr">Type unknown</div></div>
           </div>
         )}
-        {identities.map(i => (
+        {shown.map(i => (
           <div key={i.id} className="card" role="listitem">
             <span className="tile key-tile">{icon(i)}</span>
             <div className="meta">
@@ -81,6 +105,7 @@ export function KeychainPage({identities, draft, onNew, onChanged}: Props) {
           </div>
         ))}
       </div>
+      {identities.length > 0 && shown.length === 0 && <div className="empty-hint">No key matches.</div>}
       {identities.length === 0 && draft === undefined && <div className="empty-hint">No keys yet. Import a private key, generate one, or save a password.</div>}
     </div>
   )

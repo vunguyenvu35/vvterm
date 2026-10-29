@@ -18,8 +18,8 @@ describe('Known Hosts page', () => {
   it('lists the trusted hosts with key type and fingerprint', async () => {
     mount([kh('web.example.com'), kh('[10.0.0.5]:2222')])
     const cards = await screen.findAllByRole('listitem')
-    expect(cards.map(c => c.querySelector('.label')?.textContent)).toEqual(['web.example.com', '[10.0.0.5]:2222'])
-    expect(cards[0].querySelector('.addr')).toHaveTextContent('ssh-ed25519 · SHA256:web.example.com')
+    expect(cards.map(c => c.querySelector('.label')?.textContent)).toEqual(['[10.0.0.5]:2222', 'web.example.com']) // sorted by host
+    expect(cards[1].querySelector('.addr')).toHaveTextContent('ssh-ed25519 · SHA256:web.example.com')
   })
 
   it('says what this page is when nothing is trusted yet', async () => {
@@ -161,5 +161,44 @@ describe('Logs page', () => {
     expect(formatWhen('2025-03-05T09:08:07Z', now)).toMatch(/2025/)
     expect(formatWhen('garbage', now)).toBe('')
     expect(LOG_GROUPS.map(g => g.id)).toEqual(['all', 'connections', 'files', 'forwards', 'security', 'sync', 'assistant'])
+  })
+})
+
+describe('Known Hosts page: sort, filter and view', () => {
+  const k = (host: string, key_type: string): KnownHost => ({host, key_type, fingerprint: 'SHA256:' + host})
+  const hosts = [k('web-10.example.com', 'ssh-ed25519'), k('db.example.com', 'ssh-rsa'), k('web-2.example.com', 'ecdsa-sha2-nistp256')]
+  const names = () => within(screen.getByRole('list', {name: 'Known hosts'})).getAllByRole('listitem').map(c => c.querySelector('.label')?.textContent)
+  const mount = () => render(<Providers be={makeFake({knownHosts: hosts})}><KnownHostsPage /></Providers>)
+  beforeEach(() => localStorage.clear())
+
+  it('is sorted by host with numbers as numbers, and can be reversed or sorted by key type', async () => {
+    mount()
+    await screen.findByText('db.example.com')
+    expect(names()).toEqual(['db.example.com', 'web-2.example.com', 'web-10.example.com'])
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /Host Z–A/}))
+    expect(names()).toEqual(['web-10.example.com', 'web-2.example.com', 'db.example.com'])
+    await userEvent.click(screen.getByRole('button', {name: 'Sort'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /Key type/}))
+    expect(names()).toEqual(['web-2.example.com', 'web-10.example.com', 'db.example.com']) // ecdsa, ed25519, rsa
+  })
+
+  it('filters by key type with chips, together with the search', async () => {
+    mount()
+    await screen.findByText('db.example.com')
+    await userEvent.click(screen.getByRole('button', {name: 'ssh-rsa'}))
+    expect(names()).toEqual(['db.example.com'])
+    await userEvent.click(screen.getByRole('button', {name: 'ssh-ed25519'}))
+    expect(names()).toEqual(['db.example.com', 'web-10.example.com'])
+    await userEvent.type(screen.getByLabelText('Search known hosts'), 'web')
+    expect(names()).toEqual(['web-10.example.com'])
+  })
+
+  it('switches between grid and list', async () => {
+    mount()
+    await screen.findByText('db.example.com')
+    await userEvent.click(screen.getByRole('button', {name: 'View'}))
+    await userEvent.click(screen.getByRole('menuitemradio', {name: /List/}))
+    expect(screen.getByRole('list', {name: 'Known hosts'})).toHaveClass('as-list')
   })
 })
