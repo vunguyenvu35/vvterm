@@ -8,7 +8,8 @@ const RISK: Record<string, string> = {low: 'Low risk', medium: 'Changes things',
 
 /**
  * A command the assistant suggests. Insert puts it on the prompt without pressing Enter, so the user reads it in
- * place. Run presses Enter too, after a confirmation (and the typed word "run" for a risky command). The risk is
+ * place. Run presses Enter too: at once for a command that only reads, after a confirmation in the card for one that can
+ * change something (and the typed word "run" for a risky one). The risk is
  * judged by VVTerm, never by the assistant, and a command with a hidden value cannot be run from here.
  */
 export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
@@ -33,6 +34,8 @@ export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
   }
   const needsWord = !!check?.typed_confirm
   const runDisabled = !check || !check.run_allowed
+  // A command that only reads runs at once. One that can change something, or that may print secrets, asks first, here in the chat.
+  const asks = cmd.risk !== 'low' || cmd.warnings.length > 0 || needsWord
   return (
     <div className={'ai-cmd risk-' + cmd.risk + (cmd.blocked ? ' blocked' : '')} data-testid="ai-command">
       <div className="ai-cmd-head">
@@ -47,7 +50,7 @@ export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
           {!confirming && !done && (
             <div className="ai-cmd-actions">
               <button className="primary" onClick={insert} title="Put it on the prompt; you press Enter">Insert</button>
-              <button onClick={() => setConfirming(true)} disabled={runDisabled} title={check && !check.run_allowed ? check.run_reason : 'Insert and press Enter'}>Run…</button>
+              <button onClick={() => (asks ? setConfirming(true) : void run())} disabled={runDisabled} title={check && !check.run_allowed ? check.run_reason : 'Insert and press Enter'}>{asks ? 'Run…' : 'Run'}</button>
               {check && !check.run_allowed && <span className="muted ai-cmd-why">{check.run_reason}</span>}
             </div>
           )}

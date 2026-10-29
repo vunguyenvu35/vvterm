@@ -53,6 +53,16 @@ interface Props {
 
 type State = 'connecting' | 'ready' | 'closed'
 
+/**
+ * Text being composed with an input method (Vietnamese Telex, Chinese pinyin, Japanese…) is shown at the cursor, highlighted,
+ * until it is committed, like in other terminals. xterm.js draws it in a small element; the colours (the theme's own, inverted)
+ * are handed to the stylesheet through two custom properties.
+ */
+export function imeColours(el: HTMLElement | null, theme: {foreground?: string; background?: string}) {
+  el?.style.setProperty('--ime-bg', theme.foreground || '#ffffff')
+  el?.style.setProperty('--ime-fg', theme.background || '#000000')
+}
+
 /** One SSH session rendered with xterm.js. Keystrokes go to Go, output arrives as batched events. */
 export function TerminalPane(p: Props) {
   const be = useBackend()
@@ -129,6 +139,7 @@ export function TerminalPane(p: Props) {
     fit.current = f
     search.current = s
     t.open(host.current!)
+    imeColours(host.current, p.termTheme)
     try { f.fit() } catch { /* hidden */ }
 
     // Termius-style colouring of finished lines, a moment after output stops arriving
@@ -286,6 +297,7 @@ export function TerminalPane(p: Props) {
     t.options.fontSize = p.fontSize
     t.options.fontFamily = p.fontFamily
     t.options.theme = p.termTheme
+    imeColours(host.current, p.termTheme)
     t.options.cursorStyle = p.cursorStyle
     t.options.cursorBlink = p.cursorBlink
     t.options.scrollback = p.scrollback

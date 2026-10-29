@@ -112,7 +112,7 @@ case "$1" in --help) echo "`+claudeHelp+`"; exit 0;; esac
 cat >/dev/null
 echo '{"type":"control_response","response":{"subtype":"success","request_id":"vvterm-models","response":{"models":[{"value":"default","displayName":"Default","description":"d"},{"value":"opus","displayName":"Opus"}]}}}'
 `)
-	ms, err := (&Claude{Bin: bin}).Models(context.Background())
+	ms, err := (&Claude{Bin: bin, ConfigDir: t.TempDir(), Getenv: func(string) string { return "" }}).Models(context.Background())
 	if err != nil || len(ms) != 2 || ms[1].ID != "opus" || ms[1].Name != "Opus" {
 		t.Fatalf("%v %+v", err, ms)
 	}
@@ -266,6 +266,73 @@ func TestGeminiDetectReadsTheSelectedSignIn(t *testing.T) {
 		}
 		if st := (&Gemini{Bin: bin, Home: home}).Detect(context.Background()); st.State != c.want {
 			t.Errorf("%s creds=%v: got %+v", c.settings, c.creds, st)
+		}
+	}
+}
+
+func testImage(t *testing.T) assistant.ConfirmedImage {
+	t.Helper()
+	img, err := assistant.ConfirmImage("shot.png", append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return img
+}
+
+func TestClaudeSendsPicturesAsContentBlocksOfAStreamJSONMessage(t *testing.T) {
+	rec := filepath.Join(t.TempDir(), "rec")
+	bin := fakeCLI(t, "claude", `
+case "$1" in --help) echo "`+claudeHelp+`"; exit 0;; esac
+printf 'ARG:%s\n' "$@" > `+rec+`; echo "STDIN:$(cat)" >> `+rec+`
+echo '{"type":"result","result":"ok"}'
+`)
+	r := req(t, "what is in the picture?")
+	r.Images = []assistant.ConfirmedImage{testImage(t)}
+	if out, err := (&Claude{Bin: bin}).Ask(context.Background(), r, nil); err != nil || out != "ok" {
+		t.Fatalf("%q %v", out, err)
+	}
+	b, _ := os.ReadFile(rec)
+	got := string(b)
+	if !strings.Contains(got, "ARG:--input-format\nARG:stream-json") || !strings.Contains(got, `"type":"image"`) || !strings.Contains(got, `"media_type":"image/png"`) || !strings.Contains(got, "what is in the picture?") {
+		t.Fatalf("%s", got)
+	}
+	// with no picture the prompt stays plain text
+	if _, err := (&Claude{Bin: bin}).Ask(context.Background(), req(t, "plain"), nil); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(rec)
+	if strings.Contains(string(b), "--input-format") || strings.Contains(string(b), `"type":"image"`) {
+		t.Fatalf("%s", b)
+	}
+}
+
+func TestCodexGetsPicturesAsFilesInItsEmptyDirectory(t *testing.T) {
+	rec := filepath.Join(t.TempDir(), "rec")
+	bin := fakeCLI(t, "codex", `printf 'ARG:%s\n' "$@" > `+rec+`; ls -A >> `+rec+`; cat >/dev/null
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"a picture"}}'`)
+	r := req(t, "q")
+	r.Images = []assistant.ConfirmedImage{testImage(t), testImage(t)}
+	if out, err := (&Codex{Bin: bin}).Ask(context.Background(), r, nil); err != nil || out != "a picture" {
+		t.Fatalf("%q %v", out, err)
+	}
+	b, _ := os.ReadFile(rec)
+	got := string(b)
+	if strings.Count(got, "ARG:-i") != 2 || !strings.Contains(got, "image-1.png") || !strings.Contains(got, "image-2.png") {
+		t.Fatalf("%s", got)
+	}
+	if strings.Contains(got, "ARG:-\n") {
+		t.Fatalf("the prompt must come from stdin without a \"-\" that -i would swallow:\n%s", got)
+	}
+}
+
+func TestOnlyAdaptersThatCanTakePicturesSayThey_Do(t *testing.T) {
+	type imager interface{ SupportsImages() bool }
+	if !(&Claude{}).SupportsImages() || !(&Codex{}).SupportsImages() {
+		t.Fatal("Claude and Codex take pictures")
+	}
+	for _, a := range []any{&Gemini{}, &Custom{}} {
+		if _, ok := a.(imager); ok {
+			t.Errorf("%T must not claim to take pictures", a)
 		}
 	}
 }

@@ -17,7 +17,7 @@ describe('HostForm: AI assistant', () => {
   it('has a per-host switch that defaults to off on production hosts and is saved with the host', async () => {
     const {be} = setup()
     await userEvent.type(screen.getByLabelText('Hostname'), 'db.example.com')
-    expect(screen.getByRole('combobox', {name: /^AI assistant on this host, Default \(ask first\)/})).toBeInTheDocument()
+    expect(screen.getByRole('combobox', {name: /^AI assistant on this host, Default \(on\)/})).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Environment'), 'prod')
     await userEvent.click(screen.getByRole('combobox', {name: /^AI assistant on this host/}))
     expect(screen.getByRole('option', {name: /Default \(off\)/})).toBeInTheDocument()

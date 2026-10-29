@@ -162,6 +162,8 @@ label.field > span { display: block; color: var(--muted); font-size: 11px; margi
 .pane { position: relative; height: 100%; background: var(--term-bg); border: 1px solid transparent; }
 .pane.focused { border-color: #3a82f755; }
 .pane .xterm { padding: 8px; height: 100%; }
+/* text being composed with an input method, shown at the cursor with the theme's colours inverted (colours: see imeColours) */
+.pane .xterm .composition-view { background: var(--ime-bg, #fff); color: var(--ime-fg, #000); border-bottom: 2px solid var(--accent); border-radius: 2px; }
 .overlay { position: absolute; inset: 0; background: #000b; display: grid; place-items: center; z-index: 5; }
 .overlay .card { cursor: default; display: block; width: min(480px, 90%); padding: 20px; background: var(--bg-2); }
 .overlay .card:hover { background: var(--bg-2); border-color: transparent; }
@@ -598,7 +600,7 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 
 /* ---- terminal sidebar (hosts, snippets, history, themes) ---- */
 .top-tools button.on { background: var(--bg-3); color: var(--accent, #3ecf8e); }
-.term-side { width: 300px; flex: none; background: var(--bg-2); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.term-side { position: relative; width: 320px; flex: none; background: var(--bg-2); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .side-tabs { display: flex; gap: 6px; padding: 12px 12px 8px; }
 .side-tabs button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 9px; color: var(--muted); }
 .side-tabs button:hover { background: var(--bg-3); color: var(--text); }
@@ -846,7 +848,6 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .chord-hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 12.5px; color: var(--muted); }
 
 /* ---- AI assistant ---- */
-.term-side.wide { width: 380px; }
 .ai-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 8px; }
 .ai-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .ai-pickers { display: flex; gap: 6px; }
@@ -939,3 +940,14 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .ai-code-head { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; font-size: 11px; color: var(--muted); background: var(--bg-2); }
 .ai-code-head .link { display: inline-flex; gap: 4px; align-items: center; }
 .ai-code pre { margin: 0; padding: 8px 10px; overflow-x: auto; font-size: 12px; }
+.ai-preview-panel { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 6px; }
+.ai-preview-panel .ai-preview { max-height: 180px; }
+.ai-msg.ai-ask { background: transparent; padding: 0; }
+.ai-msg.ai-ask > :not(.ai-preview-panel) { background: var(--bg-3); }
+
+/* the edge of the right sidebar that can be dragged to change its width */
+.side-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 4; touch-action: none; }
+.side-resizer::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: transparent; transition: background .12s; }
+.side-resizer:hover::after, .side-resizer:focus-visible::after, .term-side.resizing .side-resizer::after { background: var(--accent); width: 2px; }
+.side-resizer:focus-visible { outline: none; }
+.term-side.resizing { user-select: none; }

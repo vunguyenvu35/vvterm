@@ -231,9 +231,9 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
       <Section title="AI assistant">
         <Field label="Assistant on this host">
           <Select label="AI assistant on this host" value={f.ai_policy} onChange={v => setF(x => ({...x, ai_policy: v as AiPolicy}))}
-            options={[{value: '', label: `Default (${f.env === 'prod' ? 'off' : 'ask first'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask before sharing the screen'}, {value: 'on', label: 'On'}]} />
+            options={[{value: '', label: `Default (${f.env === 'prod' ? 'off' : 'on'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask first, in the chat'}, {value: 'on', label: 'On'}]} />
         </Field>
-        <div className="muted">When on, the text of the terminal can be sent, with secrets hidden, to the AI tool you chose in Settings. Production hosts are off by default and never run commands for the assistant.</div>
+        <div className="muted">When on, the text of the terminal can be sent, with secrets hidden, to the AI tool you chose in Settings. The assistant asks you, in the chat, before anything that could change something. Production hosts are off by default and never run commands for the assistant.</div>
       </Section>
 
       <Section title="Options">

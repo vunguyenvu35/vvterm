@@ -7,7 +7,7 @@ import {errMsg, splitArgs} from '../util'
 import {McpServersPanel} from './McpServers'
 import type {AiModelList, AiProvider, AiSettings, Host} from '../types'
 
-const COMPANY: Record<string, string> = {claude: 'Anthropic', codex: 'OpenAI', gemini: 'Google'}
+const COMPANY: Record<string, string> = {claude: 'Anthropic', codex: 'OpenAI', gemini: 'Google', antigravity: 'Google (and the model provider you chose in Antigravity)'}
 
 const STATE_LABEL: Record<string, string> = {ready: 'Ready', needs_signin: 'Needs sign-in', unsupported: 'Unsupported version', not_installed: 'Not installed', '': 'Checking…'}
 

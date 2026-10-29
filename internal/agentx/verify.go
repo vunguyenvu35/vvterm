@@ -26,6 +26,8 @@ func verifyIsolation(ctx context.Context, ask askFunc) error {
 	defer cancel()
 	reply, err := ask(ctx, assistant.Request{System: sys, Question: q}, nil)
 	switch {
+	case errors.Is(err, ErrToolDenied):
+		return nil // it tried and every attempt was refused: nothing ran, so the tools are out of reach
 	case errors.Is(err, ErrToolUse):
 		return errors.New("isolation self-test failed: the agent used a tool")
 	case err != nil:

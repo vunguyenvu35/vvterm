@@ -34,6 +34,9 @@ var highRisk = []struct {
 
 var mediumRisk = regexp.MustCompile(`(^|[\s;&|])(rm|mv|cp|systemctl\s+(restart|stop|disable|enable|reload)|service\s+\S+\s+(restart|stop)|apt(-get)?\s+(install|remove|purge|upgrade)|yum\s+(install|remove)|dnf\s+(install|remove)|brew\s+(install|uninstall)|docker\s+(rm|stop|kill|restart|prune)|kubectl\s+(delete|apply|scale|rollout)|git\s+(reset|clean|push|checkout)|tee|truncate)(\s|$)|[^>]>[^>&]|>>`)
 
+// harmlessRedirect is output sent nowhere or joined to the other stream: it writes no file.
+var harmlessRedirect = regexp.MustCompile(`\d*>+\s*/dev/null|\d*>&\d`)
+
 // Assess judges a command. Reasons are shown to the user.
 func Assess(cmd string) (Risk, []string) {
 	var reasons []string
@@ -45,7 +48,7 @@ func Assess(cmd string) (Risk, []string) {
 	if len(reasons) > 0 {
 		return RiskHigh, reasons
 	}
-	if mediumRisk.MatchString(" " + cmd) {
+	if mediumRisk.MatchString(" " + harmlessRedirect.ReplaceAllString(cmd, " ")) {
 		return RiskMedium, []string{"changes files, services or packages"}
 	}
 	return RiskLow, nil

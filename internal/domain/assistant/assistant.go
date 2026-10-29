@@ -14,6 +14,9 @@ import (
 var (
 	ErrNeedsSignIn = errors.New("the provider is not signed in")
 	ErrToolUse     = errors.New("the agent tried to use a tool, which is not allowed")
+	// ErrToolDenied is returned when an agent only tried to use tools and every attempt was refused: nothing ran, but
+	// there is no answer either. It is proof of isolation for the self-test, and an error for a question.
+	ErrToolDenied = errors.New("the agent tried to use a tool, which was refused")
 )
 
 // State of a provider (an AI command-line tool) on this computer.
@@ -98,7 +101,9 @@ func ValidPolicy(p string) bool {
 	return false
 }
 
-// EffectivePolicy resolves the stored value: empty means off on production hosts and ask elsewhere.
+// EffectivePolicy resolves the stored value: empty means off on production hosts and on elsewhere. Reading the screen to
+// answer a question changes nothing, so it needs no confirmation by default; "ask" (confirm the first share of each
+// session, in the chat) is a choice a user can make for a host.
 func EffectivePolicy(stored string, production bool) Policy {
 	if stored != "" {
 		return Policy(stored)
@@ -106,7 +111,7 @@ func EffectivePolicy(stored string, production bool) Policy {
 	if production {
 		return PolicyOff
 	}
-	return PolicyAsk
+	return PolicyOn
 }
 
 type envelope struct {

@@ -220,6 +220,9 @@ func (a *AssistantService) execute(ctx context.Context, run *assistRun, ag Agent
 	case errors.Is(err, assistant.ErrNeedsSignIn):
 		fail("needs_signin", err.Error())
 		return
+	case errors.Is(err, assistant.ErrToolDenied):
+		fail("tool_use", "The assistant only tried to use a tool, which VVTerm does not allow, so there is no answer. Ask again.")
+		return
 	case errors.Is(err, assistant.ErrToolUse):
 		fail("tool_use", "The agent tried to use a tool, so the answer was discarded.")
 		return

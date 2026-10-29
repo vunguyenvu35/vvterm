@@ -96,7 +96,7 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 		},
 		ListSerial: serialx.Ports, Activity: db.ActivityLog(),
 		// AI assistant: the provider adapters, the MCP gateway and the connector for users' MCP servers
-		Agents: []usecase.Agent{&agentx.Claude{}, &agentx.Codex{}, &agentx.Gemini{}},
+		Agents: []usecase.Agent{&agentx.Claude{}, &agentx.Codex{}, &agentx.Gemini{}, &agentx.Antigravity{}},
 		NewCustomAgent: func(p assistant.CustomProvider) usecase.Agent {
 			return &agentx.Custom{Cfg: agentx.CustomConfig{ID: p.ID, Name: p.Name, Command: p.Command, Args: p.Args, PromptVia: p.PromptVia}}
 		},

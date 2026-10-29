@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react'
+import {PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState} from 'react'
 import {clearHistory, getHistory, subscribeHistory} from './history'
 import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
 import {AssistantTab} from '../assistant/AssistantTab'
@@ -9,6 +9,12 @@ import type {Group, Host, Settings, Snippet} from '../types'
 import type {Appearance} from '../settings/appearance'
 
 export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes' | 'assistant'
+
+/** The sidebar can be dragged wider or narrower; these keep both the sidebar and the terminal usable. */
+export const SIDE_MIN = 260
+export const SIDE_MAX = 760
+export const SIDE_DEFAULT = 320
+const TERMINAL_MIN = 360
 
 export const FONT_MIN = 8
 export const FONT_MAX = 32
@@ -38,6 +44,10 @@ interface Props {
   paneId?: string
   /** the assistant asks the user to enable a provider */
   onOpenSettings?(): void
+  /** the width the user chose (remembered by the caller) */
+  width?: number
+  /** the user finished dragging the edge, or reset it: remember this width */
+  onWidth?(w: number): void
 }
 
 const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
@@ -64,8 +74,33 @@ export function ThemeThumb({colors}: {colors: {bg: string; fg: string; green: st
  * before, and the colours and font of the terminal.
  */
 export function TerminalSidebar(p: Props) {
+  const [width, setWidth] = useState(p.width ?? SIDE_DEFAULT)
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{x: number; w: number} | null>(null)
+  useEffect(() => { setWidth(p.width ?? SIDE_DEFAULT) }, [p.width])
+  const clamp = (v: number) => Math.round(Math.max(SIDE_MIN, Math.min(SIDE_MAX, window.innerWidth - TERMINAL_MIN, v)))
+  const commit = (w: number) => { const c = clamp(w); setWidth(c); p.onWidth?.(c) }
+  const move = (e: ReactPointerEvent<HTMLDivElement>) => { if (drag.current) setWidth(clamp(drag.current.w + (drag.current.x - e.clientX))) }
+  const end = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return
+    const w = clamp(drag.current.w + (drag.current.x - e.clientX))
+    drag.current = null
+    setDragging(false)
+    commit(w)
+  }
   return (
-    <aside className={'term-side' + (p.tab === 'assistant' ? ' wide' : '')} aria-label="Terminal sidebar">
+    <aside className={'term-side' + (dragging ? ' resizing' : '')} style={{width}} aria-label="Terminal sidebar">
+      <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX} aria-valuenow={width} tabIndex={0}
+        className="side-resizer" title="Drag to resize; double-click to reset"
+        onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); drag.current = {x: e.clientX, w: width}; setDragging(true) }}
+        onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+        onDoubleClick={() => commit(SIDE_DEFAULT)}
+        onKeyDown={e => {
+          const step = e.shiftKey ? 64 : 16
+          if (e.key === 'ArrowLeft') { e.preventDefault(); commit(width + step) } // the edge moves left: wider
+          else if (e.key === 'ArrowRight') { e.preventDefault(); commit(width - step) }
+          else if (e.key === 'Home') { e.preventDefault(); commit(SIDE_DEFAULT) }
+        }} />
       <div className="side-tabs" role="toolbar" aria-label="Sidebar sections">
         {TABS.map(t => (
           <button key={t.id} aria-pressed={p.tab === t.id} aria-label={t.label} title={t.label}

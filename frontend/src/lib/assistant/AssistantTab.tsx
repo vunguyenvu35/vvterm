@@ -4,12 +4,11 @@ import {useToast} from '../ui/Toast'
 import {Select} from '../ui/Select'
 import {errMsg} from '../util'
 import {selectionOfPane} from '../terminal/panes'
-import {Modal} from '../ui/Modal'
 import {CommandCard} from './CommandCard'
 import {Composer, FileChip} from './Composer'
 import {MessageText} from './MessageText'
 import {readAttachment, toAttachment, type Attach} from './attachments'
-import {PreviewDialog} from './PreviewDialog'
+import {PreviewPanel} from './PreviewPanel'
 import {usePaneSession} from './useSession'
 import type {AiCommand, AiModelList, AiPolicy, AiPreview, AiProvider, AiReply, AiSessionState, AiStep} from '../types'
 
@@ -17,6 +16,8 @@ interface ConfirmReq {call: string; server: string; tool: string; args: string; 
 
 type Msg =
   | {kind: 'user'; text: string; selection?: boolean; files?: Attach[]}
+  /** a question the assistant needs the user to answer in the chat: share the screen (a host set to "ask"), or send pictures as they are */
+  | {kind: 'confirm'; rid: string; what: 'share' | 'images'; question: string; selection: string; files: Attach[]; preview?: AiPreview}
   | {kind: 'assistant'; rid: string; text: string; streaming: boolean; steps: AiStep[]; confirms: ConfirmReq[]; commands: AiCommand[]; meta?: string; error?: {message: string; code: string}}
 
 const store = {
@@ -44,13 +45,11 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   const [info, setInfo] = useState<AiSessionState | null>(null)
   const [preview, setPreview] = useState<AiPreview | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const [pending, setPending] = useState<{question: string; selection: string; files: Attach[]} | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<Attach[]>([])
   const [dragging, setDragging] = useState(false)
   const dragDepth = useRef(0)
-  const [pictures, setPictures] = useState<{question: string; selection: string; files: Attach[]} | null>(null)
   const [runId, setRunId] = useState('')
   const [loadErr, setLoadErr] = useState('')
   const listEnd = useRef<HTMLDivElement>(null)
@@ -128,11 +127,11 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
 
   const QUICK = ['Explain the last error', 'What should I check first?', 'Summarize this output', 'Is anything wrong here?']
 
-  const send = async (question: string, selection: string, attached: Attach[] = files, allowImages = false) => {
+  const send = async (question: string, selection: string, attached: Attach[] = files, allowImages = false, again = false) => {
     if (!sid || (!question.trim() && attached.length === 0) || busy) return
     question = question.trim() || (attached.some(a => a.kind === 'image') ? 'What is in this?' : 'Look at the attached file.')
     const rid = requestId()
-    setMsgs(ms => [...ms, {kind: 'user', text: question, selection: !!selection, files: attached}, {kind: 'assistant', rid, text: '', streaming: true, steps: [], confirms: [], commands: []}])
+    setMsgs(ms => [...ms, ...(again ? [] : [{kind: 'user' as const, text: question, selection: !!selection, files: attached}]), {kind: 'assistant', rid, text: '', streaming: true, steps: [], confirms: [], commands: []}])
     setInput('')
     setFiles([])
     setRunId(rid)
@@ -156,23 +155,35 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
       await be.assistant.ask(sid, question, {provider, model, lines: 0, selection, request_id: rid, attachments: attached.map(toAttachment), allow_images: allowImages})
     } catch (e) {
       finish()
-      setMsgs(ms => ms.filter(m => !(m.kind === 'assistant' && m.rid === rid)).slice(0, -1)) // take the question back
+      const asCard = (what: 'share' | 'images', preview?: AiPreview) => setMsgs(ms => ms.map(m => (m.kind === 'assistant' && m.rid === rid ? {kind: 'confirm' as const, rid, what, question, selection, files: attached, preview} : m)))
       if (errMsg(e) === 'confirm_share') {
+        let preview: AiPreview | undefined
+        try { preview = await be.assistant.preview(sid, 0, selection, attached.map(toAttachment)) } catch { /* the card says so */ }
+        asCard('share', preview)
+      } else if (errMsg(e) === 'confirm_images') asCard('images')
+      else {
+        // the question did not start: take it back so it can be corrected
+        setMsgs(ms => ms.filter(m => !(m.kind === 'assistant' && m.rid === rid)).slice(0, again ? undefined : -1))
         setInput(question); setFiles(attached)
-        try { setPreview(await be.assistant.preview(sid, 0, selection, attached.map(toAttachment))) } catch { /* shown without */ }
-        setPending({question, selection, files: attached})
-      } else if (errMsg(e) === 'confirm_images') {
-        setInput(question); setFiles(attached)
-        setPictures({question, selection, files: attached})
-      } else { setInput(question); setFiles(attached); toast.error(errMsg(e)) }
+        toast.error(errMsg(e))
+      }
     }
   }
 
-  const confirmShare = async () => {
-    if (!pending || !sid) return
-    const p = pending
-    setPending(null)
-    try { await be.assistant.confirmShare(sid); await loadInfo(); await send(p.question, p.selection, p.files) } catch (e) { toast.error(errMsg(e)) }
+  /** the user answered a confirmation card in the chat */
+  const answerCard = async (card: Extract<Msg, {kind: 'confirm'}>, yes: boolean) => {
+    setMsgs(ms => ms.filter(m => !(m.kind === 'confirm' && m.rid === card.rid)))
+    if (!yes) {
+      // withdraw the question: it goes back to the box with its files
+      setMsgs(ms => { const i = ms.map(m => m.kind).lastIndexOf('user'); return i >= 0 ? ms.filter((_, k) => k !== i) : ms })
+      setInput(card.question); setFiles(card.files)
+      return
+    }
+    try {
+      if (card.what === 'share') await be.assistant.confirmShare(sid)
+      await send(card.question, card.selection, card.files, card.what === 'images', true)
+      void loadInfo()
+    } catch (e) { toast.error(errMsg(e)) }
   }
 
   const cancel = () => { if (runId) void be.assistant.cancel(runId).catch(() => {}) }
@@ -219,7 +230,7 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   const newChat = () => { if (sid) void be.assistant.resetConversation(sid).catch(() => {}); setMsgs([]) }
   const openPreview = async () => {
     if (!sid) return
-    try { setPreview(await be.assistant.preview(sid, 0, '', files.map(toAttachment))); setShowPreview(true) } catch (e) { toast.error(errMsg(e)) }
+    try { setPreview(await be.assistant.preview(sid, 0, '', files.map(toAttachment))); setShowPreview(v => !v) } catch (e) { toast.error(errMsg(e)) }
   }
 
   if (loadErr) return <div className="ai-empty"><div className="error" role="alert">{loadErr}</div><button onClick={() => void loadProviders()}>Retry</button></div>
@@ -240,7 +251,7 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
   if (providers.length === 0) return <div className="ai-empty muted" data-testid="ai-setup">No AI tools were found on this computer. Install Claude Code, Codex CLI or Gemini CLI, or add your own command in Settings.<button onClick={onOpenSettings}>Open Settings</button></div>
 
   const modelOptions = (models?.models ?? []).map(m => ({value: m.id, label: m.name || m.id, hint: m.description}))
-  const policyOptions = [{value: '', label: `Default (${info?.production ? 'off' : 'ask first'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask first'}, {value: 'on', label: 'On'}]
+  const policyOptions = [{value: '', label: `Default (${info?.production ? 'off' : 'on'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask first, in the chat'}, {value: 'on', label: 'On'}]
 
   return (
     <div className={'ai-panel' + (dragging ? ' dropping' : '')} data-testid="ai-panel" {...dragProps}>
@@ -289,7 +300,23 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
                 </div>
               </div>
             )}
-            {msgs.map((m, i) => m.kind === 'user' ? (
+            {showPreview && preview && <PreviewPanel preview={preview} provider={current?.name ?? ''} actions={<button onClick={() => setShowPreview(false)}>Hide</button>} />}
+            {msgs.map((m, i) => m.kind === 'confirm' ? (
+              <div key={'c' + m.rid} className="ai-msg assistant ai-ask" role="group" aria-label={m.what === 'share' ? 'Share this terminal?' : 'Send pictures as they are?'}>
+                {m.what === 'share' ? (
+                  m.preview
+                    ? <PreviewPanel preview={m.preview} provider={current?.name ?? ''} title="Share this terminal with the assistant?" actions={<><button className="primary" onClick={() => void answerCard(m, true)}>Share and ask</button><button onClick={() => void answerCard(m, false)}>Cancel</button></>} />
+                    : <><b>Share this terminal with the assistant?</b><div className="ai-cmd-actions"><button className="primary" onClick={() => void answerCard(m, true)}>Share and ask</button><button onClick={() => void answerCard(m, false)}>Cancel</button></div></>
+                ) : (
+                  <>
+                    <b>Send pictures as they are?</b>
+                    <div className="ai-chips">{m.files.filter(f => f.kind === 'image').map(f => <FileChip key={f.id} file={f} />)}</div>
+                    <p>VVTerm hides secrets in text, but it <b>cannot find a secret inside a picture</b>. Anything you can see in {m.files.filter(f => f.kind === 'image').length === 1 ? 'it' : 'them'} goes to <b>{current?.name}</b> as it is. The terminal text and text files are still redacted. Check that no password, token or key is visible.</p>
+                    <div className="ai-cmd-actions"><button className="primary" onClick={() => void answerCard(m, true)}>Send pictures</button><button onClick={() => void answerCard(m, false)}>Cancel</button></div>
+                  </>
+                )}
+              </div>
+            ) : m.kind === 'user' ? (
               <div key={i} className="ai-msg user">
                 {m.files && m.files.length > 0 && <div className="ai-chips">{m.files.map(f => <FileChip key={f.id} file={f} />)}</div>}
                 {m.text}{m.selection && <span className="badge">selection</span>}
@@ -325,16 +352,6 @@ export function AssistantTab({paneId, onOpenSettings}: {paneId: string; onOpenSe
         </>
       )}
 
-      {showPreview && preview && <PreviewDialog preview={preview} provider={current?.name ?? ''} onClose={() => setShowPreview(false)} />}
-      {pictures && (
-        <Modal title="Send pictures as they are?" onClose={() => setPictures(null)}
-          footer={<><button onClick={() => setPictures(null)}>Cancel</button><button className="primary" onClick={() => { const p = pictures; setPictures(null); void send(p.question, p.selection, p.files, true) }}>Send pictures</button></>}>
-          <div className="ai-chips">{pictures.files.filter(f => f.kind === 'image').map(f => <FileChip key={f.id} file={f} />)}</div>
-          <p>VVTerm hides secrets in text, but it <b>cannot find a secret inside a picture</b>. Anything you can see in {pictures.files.length === 1 ? 'it' : 'them'} goes to <b>{current?.name}</b> as it is. The terminal text and text files are still redacted.</p>
-          <p className="muted">Check that no password, token or key is visible before you send.</p>
-        </Modal>
-      )}
-      {pending && preview && <PreviewDialog preview={preview} provider={current?.name ?? ''} onClose={() => setPending(null)} onConfirm={() => void confirmShare()} />}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import {fireEvent, render, screen, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {TerminalSidebar, FONT_MAX, FONT_MIN} from './Sidebar'
+import {TerminalSidebar, FONT_MAX, FONT_MIN, SIDE_DEFAULT, SIDE_MIN} from './Sidebar'
 import {clearHistory, recordCommand} from './history'
 import {TERMINAL_THEMES} from './themes'
 import {DEFAULT_SETTINGS} from '../settings/defaults'
@@ -19,6 +19,64 @@ function setup(tab: SidebarTab, over: Partial<typeof DEFAULT_SETTINGS> = {}) {
 }
 
 beforeEach(() => { clearHistory(); localStorage.clear() })
+
+describe('TerminalSidebar resizing', () => {
+  const mount = (width?: number) => {
+    const onWidth = vi.fn()
+    render(<TerminalSidebar tab="hosts" hosts={[]} snippets={[]} settings={DEFAULT_SETTINGS} appearance="dark" onTab={vi.fn()} onInsert={vi.fn()} width={width} onWidth={onWidth} />)
+    return {onWidth, side: () => screen.getByRole('complementary', {name: 'Terminal sidebar'}), edge: () => screen.getByRole('separator', {name: 'Resize sidebar'})}
+  }
+  const dragTo = (edge: HTMLElement, from: number, to: number) => {
+    fireEvent.pointerDown(edge, {clientX: from, pointerId: 1})
+    fireEvent.pointerMove(edge, {clientX: to, pointerId: 1})
+    fireEvent.pointerUp(edge, {clientX: to, pointerId: 1})
+  }
+
+  it('has the width it was given, and a handle on its left edge', () => {
+    const {side, edge} = mount(400)
+    expect(side().style.width).toBe('400px')
+    expect(edge()).toHaveAttribute('aria-valuenow', '400')
+  })
+
+  it('starts at the default width when none was chosen', () => {
+    expect(mount().side().style.width).toBe(SIDE_DEFAULT + 'px')
+  })
+
+  it('dragging the edge to the left widens it, to the right narrows it, and the width is remembered at the end', () => {
+    Object.defineProperty(window, 'innerWidth', {value: 1600, configurable: true})
+    const {side, edge, onWidth} = mount(320)
+    fireEvent.pointerDown(edge(), {clientX: 900, pointerId: 1})
+    fireEvent.pointerMove(edge(), {clientX: 800, pointerId: 1})
+    expect(side().style.width).toBe('420px')
+    expect(onWidth).not.toHaveBeenCalled() // only when the drag ends
+    fireEvent.pointerUp(edge(), {clientX: 800, pointerId: 1})
+    expect(onWidth).toHaveBeenLastCalledWith(420)
+    dragTo(edge(), 800, 900)
+    expect(onWidth).toHaveBeenLastCalledWith(320)
+  })
+
+  it('stays between the minimum and a maximum that leaves room for the terminal', () => {
+    Object.defineProperty(window, 'innerWidth', {value: 1000, configurable: true})
+    const {edge, onWidth} = mount(320)
+    dragTo(edge(), 700, 0)
+    expect(onWidth).toHaveBeenLastCalledWith(640) // 1000 - 360 for the terminal
+    dragTo(edge(), 300, 3000)
+    expect(onWidth).toHaveBeenLastCalledWith(SIDE_MIN)
+  })
+
+  it('the keyboard resizes it too, and a double click or Home resets it', () => {
+    Object.defineProperty(window, 'innerWidth', {value: 1600, configurable: true})
+    const {edge, onWidth} = mount(320)
+    fireEvent.keyDown(edge(), {key: 'ArrowLeft'})
+    expect(onWidth).toHaveBeenLastCalledWith(336)
+    fireEvent.keyDown(edge(), {key: 'ArrowRight', shiftKey: true})
+    expect(onWidth).toHaveBeenLastCalledWith(272) // 336 - 64
+    fireEvent.doubleClick(edge())
+    expect(onWidth).toHaveBeenLastCalledWith(SIDE_DEFAULT)
+    fireEvent.keyDown(edge(), {key: 'Home'})
+    expect(onWidth).toHaveBeenLastCalledWith(SIDE_DEFAULT)
+  })
+})
 
 describe('TerminalSidebar hosts tree', () => {
   const groups: Group[] = [{id: 'g1', name: 'Prod', sort_order: 0}, {id: 'g2', name: 'Web', parent_id: 'g1', sort_order: 0}]

@@ -108,28 +108,40 @@ describe('AssistantTab', () => {
     expect(be.state.calls).toContainEqual(['assistant.cancel', rid])
   })
 
-  it('a host that asks first shows the exact preview and only then shares', async () => {
+  it('a default host answers at once, with no confirmation of any kind', async () => {
+    const {be} = setup()
+    await ask('help')
+    await waitFor(() => expect(be.state.ai.asked).toHaveLength(1))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('group', {name: 'Share this terminal?'})).toBeNull()
+  })
+
+  it('a host set to ask shows the exact preview as a card in the chat, not a popup, and only then shares', async () => {
     const {be} = setup({}, b => {
       b.state.ai.info = {...b.state.ai.info, policy: 'ask', confirmed: false}
       b.state.ai.preview = {...b.state.ai.preview, text: 'DB_PASSWORD=*******', findings: [{kind: 'secret value', count: 1}], redacted: 1}
     })
     await ask('help')
-    const dlg = await screen.findByRole('dialog', {name: 'What will be sent'})
-    expect(within(dlg).getByLabelText('Text that will be sent')).toHaveTextContent('DB_PASSWORD=*******')
-    expect(within(dlg).getByText('1 item redacted')).toBeInTheDocument()
+    const card = await screen.findByRole('group', {name: 'Share this terminal?'})
+    expect(screen.queryByRole('dialog')).toBeNull() // in the chat, not a popup
+    expect(within(card).getByLabelText('Text that will be sent')).toHaveTextContent('DB_PASSWORD=*******')
+    expect(within(card).getByText('1 item redacted')).toBeInTheDocument()
+    expect(screen.getByText('help')).toBeInTheDocument() // the question stays in the chat
     expect(be.state.ai.asked).toHaveLength(0)
-    await userEvent.click(within(dlg).getByRole('button', {name: 'Share and ask'}))
+    await userEvent.click(within(card).getByRole('button', {name: 'Share and ask'}))
     await waitFor(() => expect(be.state.ai.asked).toHaveLength(1))
     expect(be.state.calls).toContainEqual(['assistant.confirmShare', 's1'])
-    expect(screen.getByText('help')).toBeInTheDocument()
+    expect(screen.queryByRole('group', {name: 'Share this terminal?'})).toBeNull()
+    expect(screen.getAllByText('help')).toHaveLength(1) // not asked twice in the chat
   })
 
-  it('cancelling the preview shares nothing and keeps the question', async () => {
+  it('cancelling the card shares nothing and puts the question back in the box', async () => {
     const {be} = setup({}, b => { b.state.ai.info = {...b.state.ai.info, policy: 'ask', confirmed: false} })
     await ask('help me')
-    await userEvent.click(within(await screen.findByRole('dialog', {name: 'What will be sent'})).getByRole('button', {name: 'Cancel'}))
+    await userEvent.click(within(await screen.findByRole('group', {name: 'Share this terminal?'})).getByRole('button', {name: 'Cancel'}))
     expect(be.state.ai.asked).toHaveLength(0)
     expect(screen.getByLabelText('Ask the assistant')).toHaveValue('help me')
+    expect(screen.queryByText('help me', {selector: '.ai-msg'})).toBeNull()
   })
 
   it('is switched off for a host whose policy is off', async () => {
@@ -144,12 +156,15 @@ describe('AssistantTab', () => {
     expect(await screen.findByText('Sharing screen · 3 redacted')).toBeInTheDocument()
   })
 
-  it('"What will be sent" shows the redacted text and the vault warning', async () => {
+  it('"What will be sent" opens in the chat (not a popup) and closes again', async () => {
     setup({}, be => { be.state.ai.preview = {...be.state.ai.preview, vault_locked: true, text: 'token=*******', redacted: 1, findings: [{kind: 'secret value', count: 1}]} })
     await userEvent.click(await screen.findByRole('button', {name: 'What will be sent'}))
-    const dlg = screen.getByRole('dialog', {name: 'What will be sent'})
-    expect(within(dlg).getByLabelText('Text that will be sent')).toHaveTextContent('token=*******')
-    expect(within(dlg).getByText(/vault is locked/)).toBeInTheDocument()
+    const panel = screen.getByRole('region', {name: 'What will be sent'})
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(within(panel).getByLabelText('Text that will be sent')).toHaveTextContent('token=*******')
+    expect(within(panel).getByText(/vault is locked/)).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', {name: 'Hide'}))
+    expect(screen.queryByRole('region', {name: 'What will be sent'})).toBeNull()
   })
 
   it('the model list comes from the provider and the choice is sent with the question', async () => {
@@ -297,21 +312,22 @@ describe('AssistantTab', () => {
       expect(box).toHaveValue('')
     })
 
-    it('pictures need an explicit confirmation, and Cancel sends nothing', async () => {
+    it('pictures need an explicit confirmation, as a card in the chat, and Cancel sends nothing', async () => {
       const {be} = setup()
       drop(await panel(), [pngFile()])
       await screen.findByTestId('ai-chip')
       await userEvent.type(screen.getByLabelText('Ask the assistant'), 'what is this?')
       await userEvent.click(screen.getByRole('button', {name: 'Send'}))
-      const dlg = await screen.findByRole('dialog', {name: 'Send pictures as they are?'})
-      expect(dlg).toHaveTextContent('cannot find a secret inside a picture')
+      const card = await screen.findByRole('group', {name: 'Send pictures as they are?'})
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(card).toHaveTextContent('cannot find a secret inside a picture')
       expect(be.state.ai.asked).toHaveLength(0)
-      await userEvent.click(within(dlg).getByRole('button', {name: 'Cancel'}))
+      await userEvent.click(within(card).getByRole('button', {name: 'Cancel'}))
       expect(be.state.ai.asked).toHaveLength(0)
       expect(screen.getByLabelText('Ask the assistant')).toHaveValue('what is this?')
-      expect(screen.getByTestId('ai-chip')).toBeInTheDocument() // still attached
+      expect(screen.getAllByTestId('ai-chip')).toHaveLength(1) // back in the box, still attached
       await userEvent.click(screen.getByRole('button', {name: 'Send'}))
-      await userEvent.click(within(await screen.findByRole('dialog', {name: 'Send pictures as they are?'})).getByRole('button', {name: 'Send pictures'}))
+      await userEvent.click(within(await screen.findByRole('group', {name: 'Send pictures as they are?'})).getByRole('button', {name: 'Send pictures'}))
       await waitFor(() => expect(be.state.ai.asked).toHaveLength(1))
       expect((asks(be).at(-1)![3] as {allow_images: boolean}).allow_images).toBe(true)
     })
@@ -333,13 +349,13 @@ describe('AssistantTab', () => {
       expect(screen.queryByTestId('ai-chip')).toBeNull()
     })
 
-    it('the preview before sharing includes the attached files and how many pictures go as they are', async () => {
+    it('the share card previews the attached files and how many pictures go as they are', async () => {
       const {be} = setup({}, b => { b.state.ai.info = {...b.state.ai.info, policy: 'ask', confirmed: false} })
       drop(await panel(), [logFile(), pngFile()])
       await waitFor(() => expect(screen.getAllByTestId('ai-chip')).toHaveLength(2))
       await userEvent.type(screen.getByLabelText('Ask the assistant'), 'help')
       await userEvent.click(screen.getByRole('button', {name: 'Send'}))
-      await screen.findByRole('dialog', {name: 'What will be sent'})
+      await screen.findByRole('group', {name: 'Share this terminal?'})
       const call = be.state.calls.filter(c => c[0] === 'assistant.preview').at(-1)!
       expect((call[4] as unknown[]).length).toBe(2)
     })

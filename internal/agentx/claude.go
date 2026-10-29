@@ -2,9 +2,11 @@ package agentx
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -18,11 +20,20 @@ var ErrToolUse = assistant.ErrToolUse
 type Claude struct {
 	// Bin overrides the binary (tests); empty means "claude" found on the login PATH.
 	Bin string
+	// ConfigDir overrides the Claude Code folder (tests); empty means $CLAUDE_CONFIG_DIR or ~/.claude.
+	ConfigDir string
+	// Getenv overrides the environment lookup (tests); nil means os.Getenv.
+	Getenv func(string) string
+	// HTTP is the client for the gateway model list; nil means http.DefaultClient.
+	HTTP *http.Client
 }
 
 func (c *Claude) ID() string        { return "claude" }
 func (c *Claude) Name() string      { return "Claude Code" }
 func (c *Claude) SupportsMCP() bool { return true }
+
+// SupportsImages: pictures go in as content blocks of a stream-json message.
+func (c *Claude) SupportsImages() bool { return true }
 
 func (c *Claude) bin() string {
 	if c.Bin != "" {
@@ -80,8 +91,17 @@ func (c *Claude) helpText() string {
 	return h
 }
 
-// Models asks Claude Code itself: its initialize reply lists the models of the signed-in account.
+// Models lists the models Claude Code can use. When Claude Code is pointed at a gateway (ANTHROPIC_BASE_URL,
+// typically a LiteLLM proxy) the list comes from that gateway's /v1/models; otherwise Claude Code itself is
+// asked: its initialize reply lists the models of the signed-in account.
 func (c *Claude) Models(ctx context.Context) ([]assistant.Model, error) {
+	if g, ok := c.gateway(); ok {
+		return c.gatewayModels(ctx, g)
+	}
+	return c.cliModels(ctx)
+}
+
+func (c *Claude) cliModels(ctx context.Context) ([]assistant.Model, error) {
 	bin := c.bin()
 	if bin == "" {
 		return nil, errors.New("claude was not found")
@@ -91,7 +111,7 @@ func (c *Claude) Models(ctx context.Context) ([]assistant.Model, error) {
 		return nil, err
 	}
 	defer done()
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	var models []assistant.Model
 	args := append([]string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"}, c.isolationArgs(c.helpText())...)
@@ -123,6 +143,9 @@ func (c *Claude) Models(ctx context.Context) ([]assistant.Model, error) {
 		}})
 	if len(models) > 0 {
 		return models, nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, errors.New("Claude Code did not answer in time (the computer may be busy): try again")
 	}
 	if err != nil && !errors.Is(err, errStop) {
 		return nil, err
@@ -156,9 +179,21 @@ func (c *Claude) Ask(ctx context.Context, r assistant.Request, emit func(string)
 		args = append(args, "--mcp-config", string(cfg), "--allowedTools", "mcp__vvterm")
 		allowedMCP = "mcp__vvterm__"
 	}
+	stdin := userPrompt(r, false)
+	if len(r.Images) > 0 {
+		// pictures can only be sent as content blocks of a stream-json message
+		args = append(args, "--input-format", "stream-json")
+		blocks := []map[string]any{}
+		for _, im := range r.Images {
+			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": im.MIME(), "data": base64.StdEncoding.EncodeToString(im.Data())}})
+		}
+		blocks = append(blocks, map[string]any{"type": "text", "text": stdin})
+		line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": blocks}})
+		stdin = string(line) + "\n"
+	}
 	var final, streamed strings.Builder
 	var isErr bool
-	stderr, err := run(ctx, runOpts{bin: bin, args: args, stdin: userPrompt(r, false), dir: dir, env: c.env(),
+	stderr, err := run(ctx, runOpts{bin: bin, args: args, stdin: stdin, dir: dir, env: c.env(),
 		onLine: func(line []byte) error {
 			var m struct {
 				Type    string `json:"type"`

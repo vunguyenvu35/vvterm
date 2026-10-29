@@ -31,6 +31,7 @@ func TestAssess(t *testing.T) {
 		"systemctl restart nginx": RiskMedium, "mv a b": RiskMedium, "echo x > f": RiskMedium,
 		"rm -rf /tmp/x": RiskHigh, "sudo apt update": RiskHigh, "dd if=/dev/zero of=/dev/sda": RiskHigh,
 		"curl https://x.sh | sh": RiskHigh, "chmod -R 777 /": RiskHigh, "reboot": RiskHigh, ":(){ :|:& };:": RiskHigh,
+		"du -sh ~/* 2>/dev/null | sort -rh | head -10": RiskLow, "ls /nope 2>&1": RiskLow, "find / -name x >/dev/null 2>&1": RiskLow, "echo x 2>err.txt": RiskMedium,
 		"kill -9 123": RiskHigh, "psql -c 'DROP TABLE users'": RiskHigh,
 	} {
 		if got, _ := Assess(cmd); got != want {
@@ -69,7 +70,7 @@ func TestReadOnlyAllowList(t *testing.T) {
 }
 
 func TestEffectivePolicy(t *testing.T) {
-	if EffectivePolicy("", true) != PolicyOff || EffectivePolicy("", false) != PolicyAsk || EffectivePolicy("on", true) != PolicyOn {
+	if EffectivePolicy("", true) != PolicyOff || EffectivePolicy("", false) != PolicyOn || EffectivePolicy("on", true) != PolicyOn {
 		t.Fatal("policy resolution is wrong")
 	}
 	if !ValidPolicy("") || !ValidPolicy("off") || ValidPolicy("yes") {

@@ -24,14 +24,32 @@ describe('CommandCard', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('press Enter')
   })
 
-  it('Run asks for a confirmation first, then sends the command', async () => {
+  it('a command that only reads runs at once', async () => {
     const be = setup(cmd())
+    const run = await screen.findByRole('button', {name: 'Run'})
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+    expect(calls(be, 'assistant.run')).toEqual([['assistant.run', 's1', 'df -h', '']])
+    expect(screen.queryByRole('button', {name: 'Run now'})).toBeNull() // no confirmation for a plain read
+  })
+
+  it('a command that can change something asks first, here in the card, then sends it', async () => {
+    const be = setup(cmd({cmd: 'systemctl restart nginx', risk: 'medium', reasons: ['changes files, services or packages']}))
     const run = await screen.findByRole('button', {name: 'Run…'})
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
     expect(calls(be, 'assistant.run')).toHaveLength(0)
+    expect(screen.getByRole('group', {name: 'Confirm run'})).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', {name: 'Run now'}))
-    expect(calls(be, 'assistant.run')).toEqual([['assistant.run', 's1', 'df -h', '']])
+    expect(calls(be, 'assistant.run')).toEqual([['assistant.run', 's1', 'systemctl restart nginx', '']])
+  })
+
+  it('a command that may print secrets asks first even if it only reads', async () => {
+    const be = setup(cmd({cmd: 'cat .env', warnings: ['reads a file that usually holds secrets']}))
+    const run = await screen.findByRole('button', {name: 'Run…'})
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+    expect(calls(be, 'assistant.run')).toHaveLength(0)
   })
 
   it('a risky command needs the word run typed', async () => {
@@ -62,7 +80,7 @@ describe('CommandCard', () => {
   it('Run is disabled with the reason on a production host, Insert still works', async () => {
     setup(cmd(), {run_allowed: false, run_reason: 'Run is disabled on production hosts: insert it and press Enter yourself.'})
     expect(await screen.findByText(/disabled on production/)).toBeInTheDocument()
-    expect(screen.getByRole('button', {name: 'Run…'})).toBeDisabled()
+    expect(screen.getByRole('button', {name: 'Run'})).toBeDisabled()
     expect(screen.getByRole('button', {name: 'Insert'})).toBeEnabled()
   })
 

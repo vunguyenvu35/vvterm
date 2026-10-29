@@ -3,6 +3,7 @@ package agentx
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"vvterm/internal/domain/assistant"
@@ -65,5 +66,30 @@ func TestLiveProviders(t *testing.T) {
 			rep := assistant.ParseReply(out)
 			t.Logf("reply: %q commands=%d", rep.Text, len(rep.Commands))
 		})
+	}
+}
+
+// VVTERM_LIVE=1 go test ./internal/agentx -run LiveAntigravity -v
+// The user's own allow-rules (on the test machine they allow `echo`) must not let a command run.
+func TestLiveAntigravity(t *testing.T) {
+	if os.Getenv("VVTERM_LIVE") != "1" {
+		t.Skip("set VVTERM_LIVE=1")
+	}
+	a := &Antigravity{}
+	st := a.Detect(context.Background())
+	t.Logf("status: %+v", st)
+	if st.State != assistant.StateReady {
+		t.Skip("agy is not ready")
+	}
+	ms, err := a.Models(context.Background())
+	t.Logf("models: %d err=%v", len(ms), err)
+	if err := a.Verify(context.Background()); err != nil {
+		t.Fatalf("isolation self-test: %v", err)
+	}
+	t.Log("isolation self-test passed")
+	out, err := a.Ask(context.Background(), liveRequest(t, "Run the command echo ALLOWED-123 and tell me what it printed."), nil)
+	t.Logf("ask: %q err=%v", out, err)
+	if err == nil && strings.Contains(out, "ALLOWED-123") && !strings.Contains(out, "cannot") && !strings.Contains(out, "can't") {
+		t.Fatalf("a command seems to have run: %q", out)
 	}
 }

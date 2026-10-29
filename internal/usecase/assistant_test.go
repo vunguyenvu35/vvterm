@@ -425,47 +425,58 @@ func TestPolicyOffAskAndProduction(t *testing.T) {
 	_ = x.app.Assistant.SetProviderEnabled("fake", true)
 	sid, _ := x.open(LocalHostID, 80, 24)
 	x.rec.wait(t, "term:ready:"+sid)
-	if _, err := x.app.Assistant.Ask(sid, "hi", AskOptions{}); !errors.Is(err, ErrConfirmShare) {
-		t.Fatalf("policy ask must wait for the user: %v", err)
-	}
-	if err := x.app.Assistant.ConfirmShare(sid); err != nil {
-		t.Fatal(err)
+	// reading the screen to answer changes nothing: no confirmation by default
+	if info, _ := x.app.Assistant.SessionInfo(sid); info.Policy != "on" {
+		t.Fatalf("the default is on: %+v", info)
 	}
 	if _, err := x.app.Assistant.Ask(sid, "hi", AskOptions{}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("a default host must not ask first: %v", err)
 	}
 
 	srv := startServer(t)
-	host := x.sshHost(t, "prod-web", srv, "")
-	host.Env = domain.EnvProd
-	host, _ = x.core.Store.SaveHost(host)
+	host := x.sshHost(t, "web", srv, "")
 	psid, _ := x.open(host.ID, 80, 24)
 	x.trust(t, psid)
 	x.rec.wait(t, "term:ready:"+psid)
-	info, _ := x.app.Assistant.SessionInfo(psid)
-	if info.Policy != "off" || !info.Production {
-		t.Fatalf("a production host defaults to off: %+v", info)
-	}
-	if _, err := x.app.Assistant.Ask(psid, "hi", AskOptions{}); err == nil || !strings.Contains(err.Error(), "turned off") {
-		t.Fatalf("%v", err)
-	}
-	if err := x.app.Assistant.SetHostPolicy(host.ID, "on"); err != nil {
+	if err := x.app.Assistant.SetHostPolicy(host.ID, "ask"); err != nil {
 		t.Fatal(err)
 	}
-	if info, _ = x.app.Assistant.SessionInfo(psid); info.Policy != "on" {
-		t.Fatalf("%+v", info)
+	if _, err := x.app.Assistant.Ask(psid, "hi", AskOptions{}); !errors.Is(err, ErrConfirmShare) {
+		t.Fatalf("a host set to ask must wait for the user: %v", err)
+	}
+	if err := x.app.Assistant.ConfirmShare(psid); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := x.app.Assistant.Ask(psid, "hi", AskOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
+	prod := x.sshHost(t, "prod-web", srv, "")
+	prod.Env = domain.EnvProd
+	prod, _ = x.core.Store.SaveHost(prod)
+	prsid, _ := x.open(prod.ID, 80, 24) // the server's key is known from the first session: no prompt
+	x.rec.wait(t, "term:ready:"+prsid)
+	info, _ := x.app.Assistant.SessionInfo(prsid)
+	if info.Policy != "off" || !info.Production {
+		t.Fatalf("a production host defaults to off: %+v", info)
+	}
+	if _, err := x.app.Assistant.Ask(prsid, "hi", AskOptions{}); err == nil || !strings.Contains(err.Error(), "turned off") {
+		t.Fatalf("%v", err)
+	}
+	if err := x.app.Assistant.SetHostPolicy(prod.ID, "on"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := x.app.Assistant.Ask(prsid, "hi", AskOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	// but commands are never run by the assistant on production
-	if err := x.app.Assistant.Run(psid, "df -h", ""); err == nil || !strings.Contains(err.Error(), "production") {
+	if err := x.app.Assistant.Run(prsid, "df -h", ""); err == nil || !strings.Contains(err.Error(), "production") {
 		t.Fatalf("Run must be disabled on production: %v", err)
 	}
-	if err := x.app.Assistant.Insert(psid, "df -h"); err != nil {
+	if err := x.app.Assistant.Insert(prsid, "df -h"); err != nil {
 		t.Fatalf("Insert is allowed on production: %v", err)
 	}
-	if err := x.app.Assistant.SetHostPolicy(host.ID, "maybe"); err == nil {
+	if err := x.app.Assistant.SetHostPolicy(prod.ID, "maybe"); err == nil {
 		t.Fatal("an unknown policy must be rejected")
 	}
 }

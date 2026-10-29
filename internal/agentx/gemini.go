@@ -69,7 +69,7 @@ func (g *Gemini) Detect(ctx context.Context) assistant.Status {
 		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "not signed in", "gemini"
 		return st
 	case kind != "oauth-personal":
-		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "Gemini CLI is set to sign in with "+kind+", which VVTerm cannot use", "gemini (choose Login with Google)"
+		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "Gemini CLI is set to sign in with "+kind+" (a setting of the Antigravity CLI, which shares its folder), which the Gemini CLI cannot use. Use Antigravity CLI instead", "gemini, then choose Login with Google"
 		return st
 	}
 	if _, err := os.Stat(filepath.Join(g.home(), "oauth_creds.json")); err != nil {
