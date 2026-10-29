@@ -60,13 +60,47 @@ func (g *Gemini) Detect(ctx context.Context) assistant.Status {
 			return st
 		}
 	}
-	// only the existence of the sign-in file is checked; it is never read
+	// Which sign-in the CLI is set to is read from its settings (not a secret); the sign-in file itself is only
+	// checked for existence, never read. Only "Login with Google" works: the other methods need an API key or
+	// a gateway from the environment, which VVTerm does not pass on.
+	kind := g.authType()
+	switch {
+	case kind == "":
+		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "not signed in", "gemini"
+		return st
+	case kind != "oauth-personal":
+		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "Gemini CLI is set to sign in with "+kind+", which VVTerm cannot use", "gemini (choose Login with Google)"
+		return st
+	}
 	if _, err := os.Stat(filepath.Join(g.home(), "oauth_creds.json")); err != nil {
 		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "not signed in", "gemini"
 		return st
 	}
 	st.State = assistant.StateReady
 	return st
+}
+
+// authType is the sign-in method selected in the CLI's settings ("" when none).
+func (g *Gemini) authType() string {
+	b, err := os.ReadFile(filepath.Join(g.home(), "settings.json"))
+	if err != nil {
+		return ""
+	}
+	var f struct {
+		Security struct {
+			Auth struct {
+				SelectedType string `json:"selectedType"`
+			} `json:"auth"`
+		} `json:"security"`
+		SelectedAuthType string `json:"selectedAuthType"`
+	}
+	if json.Unmarshal(b, &f) != nil {
+		return ""
+	}
+	if f.Security.Auth.SelectedType != "" {
+		return f.Security.Auth.SelectedType
+	}
+	return f.SelectedAuthType
 }
 
 // Models: Gemini CLI has no way to list models, so there is nothing to load.

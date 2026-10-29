@@ -233,3 +233,39 @@ func TestBaseEnvDropsSecretLookingNames(t *testing.T) {
 	}
 	_ = env
 }
+
+func liveRequest(t *testing.T, q string) assistant.Request {
+	t.Helper()
+	var g secretpolicy.Guard
+	sys, _, _ := g.Redact(assistant.SystemPrompt)
+	ctx, _, _ := g.Redact("Host: demo (demo.example.com)\nuser@demo:~$ df -h\n/dev/sda1 98% /var")
+	qq, _, _ := g.Redact(q)
+	return assistant.Request{System: sys, Context: ctx, Question: qq}
+}
+
+func TestGeminiDetectReadsTheSelectedSignIn(t *testing.T) {
+	bin := fakeCLI(t, "gemini", `case "$1" in --version) echo "0.44.1";; --help) echo "--policy --approval-mode --output-format --extensions";; esac`)
+	for _, c := range []struct {
+		settings string
+		creds    bool
+		want     assistant.State
+	}{
+		{``, false, assistant.StateNeedsSignIn},
+		{`{"security":{"auth":{"selectedType":"gateway"}}}`, true, assistant.StateNeedsSignIn},
+		{`{"security":{"auth":{"selectedType":"gemini-api-key"}}}`, true, assistant.StateNeedsSignIn},
+		{`{"security":{"auth":{"selectedType":"oauth-personal"}}}`, false, assistant.StateNeedsSignIn},
+		{`{"security":{"auth":{"selectedType":"oauth-personal"}}}`, true, assistant.StateReady},
+		{`{"selectedAuthType":"oauth-personal"}`, true, assistant.StateReady},
+	} {
+		home := t.TempDir()
+		if c.settings != "" {
+			os.WriteFile(filepath.Join(home, "settings.json"), []byte(c.settings), 0o600)
+		}
+		if c.creds {
+			os.WriteFile(filepath.Join(home, "oauth_creds.json"), []byte(`{"never":"read"}`), 0o600)
+		}
+		if st := (&Gemini{Bin: bin, Home: home}).Detect(context.Background()); st.State != c.want {
+			t.Errorf("%s creds=%v: got %+v", c.settings, c.creds, st)
+		}
+	}
+}
