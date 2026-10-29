@@ -93,7 +93,7 @@ func TestUseCaseDependsOnlyInward(t *testing.T) {
 	}
 	for _, d := range internalDeps(imps) {
 		switch {
-		case d == "internal/domain" || d == "internal/fsutil":
+		case d == "internal/domain" || strings.HasPrefix(d, "internal/domain/") || d == "internal/fsutil":
 		case usecaseAllowedInfra[d]:
 		case d == "app":
 			t.Errorf("usecase must not import the delivery layer")

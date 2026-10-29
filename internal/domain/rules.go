@@ -70,6 +70,11 @@ func NormalizeHost(h *Host) error {
 	default:
 		return errors.New("unknown telnet encoding")
 	}
+	switch h.AIPolicy {
+	case "", "off", "ask", "on":
+	default:
+		return fmt.Errorf("invalid assistant policy %q", h.AIPolicy)
+	}
 	if len(h.TerminalTheme) > 40 || strings.ContainsAny(h.TerminalTheme, " \t\r\n\x00/\\") {
 		return errors.New("invalid terminal theme")
 	}

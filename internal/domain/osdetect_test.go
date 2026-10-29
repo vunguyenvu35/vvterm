@@ -96,6 +96,9 @@ func TestNormalizeHostTelnetAndTheme(t *testing.T) {
 			t.Errorf("%+v must be rejected", bad)
 		}
 	}
+	if err := NormalizeHost(&Host{Hostname: "x", AIPolicy: "sometimes"}); err == nil {
+		t.Fatal("an unknown assistant policy must be rejected")
+	}
 	h = Host{Hostname: "x", TerminalTheme: "tokyo-night"}
 	if err := NormalizeHost(&h); err != nil {
 		t.Fatal(err)
