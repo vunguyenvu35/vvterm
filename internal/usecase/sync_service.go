@@ -4,24 +4,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"vvterm/internal/domain"
+	"vvterm/internal/syncfolder"
 	"vvterm/internal/syncgit"
+	"vvterm/internal/vault"
 )
 
 // SyncStatus is the frontend view of the sync state.
 type SyncStatus struct {
 	Configured bool      `json:"configured"`
 	RepoURL    string    `json:"repo_url"`
+	Folder     string    `json:"folder"` // set in synced-folder mode; RepoURL is empty then
 	LastSync   time.Time `json:"last_sync"`
 	LastError  string    `json:"last_error,omitempty"`
 	Syncing    bool      `json:"syncing"`
 }
 
-// SyncService syncs the encrypted bundle through a Git repo the user owns.
+// SyncService syncs the encrypted bundle through a Git repo the user owns, or through a folder
+// that a cloud client (Google Drive, iCloud Drive, Dropbox...) keeps in step.
 type SyncService struct {
 	c *Core
 
@@ -32,7 +37,8 @@ type SyncService struct {
 func NewSyncService(c *Core) *SyncService {
 	s := &SyncService{c: c}
 	s.status.RepoURL = c.settings.SyncURL
-	s.status.Configured = c.settings.SyncURL != ""
+	s.status.Folder = c.settings.SyncFolder
+	s.status.Configured = c.settings.SyncURL != "" || c.settings.SyncFolder != ""
 	return s
 }
 
@@ -49,16 +55,45 @@ func (s *SyncService) Configure(repoURL string) error {
 		return err
 	}
 	s.c.setMu.Lock()
-	s.c.settings.SyncURL = repoURL
+	s.c.settings.SyncURL, s.c.settings.SyncFolder = repoURL, ""
 	err := s.c.saveSettings()
 	s.c.setMu.Unlock()
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
-	s.status.RepoURL, s.status.Configured, s.status.LastError = repoURL, true, ""
+	s.status.RepoURL, s.status.Folder, s.status.Configured, s.status.LastError = repoURL, "", true, ""
 	s.mu.Unlock()
 	return nil
+}
+
+// ConfigureFolder syncs through a folder instead of Git. Only bundle.enc and vault-header.json
+// are written there, both encrypted.
+func (s *SyncService) ConfigureFolder(dir string) error {
+	dir = filepath.Clean(strings.TrimSpace(dir))
+	if err := (&syncfolder.Folder{Dir: dir}).Check(); err != nil {
+		return err
+	}
+	s.c.setMu.Lock()
+	s.c.settings.SyncFolder, s.c.settings.SyncURL = dir, ""
+	err := s.c.saveSettings()
+	s.c.setMu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.status.Folder, s.status.RepoURL, s.status.Configured, s.status.LastError = dir, "", true, ""
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *SyncService) folder() (*syncfolder.Folder, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status.Folder == "" {
+		return nil, false
+	}
+	return &syncfolder.Folder{Dir: s.status.Folder}, true
 }
 
 func (s *SyncService) Status() SyncStatus {
@@ -71,7 +106,7 @@ func (s *SyncService) begin() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.status.Configured {
-		return errors.New("sync is not configured: set a repository URL first")
+		return errors.New("sync is not configured: choose a Git repository or a folder first")
 	}
 	if s.status.Syncing {
 		return errors.New("a sync is already running")
@@ -89,7 +124,7 @@ func (s *SyncService) end(err error) {
 		s.c.record(domain.ActSync, "", "", "Sync failed: "+err.Error(), false)
 		return
 	}
-	s.c.record(domain.ActSync, "", "", "Synced with the repository", true)
+	s.c.record(domain.ActSync, "", "", "Synced", true)
 	s.status.LastError = ""
 	s.status.LastSync = time.Now().UTC()
 }
@@ -107,12 +142,17 @@ func (s *SyncService) SyncNow() (err error) {
 	if err != nil {
 		return err
 	}
-	r := s.repo()
-	if err = r.Init(); err != nil {
-		return err
-	}
 	local := syncgit.Bundle{Data: s.c.Store.Snapshot(), Secrets: s.c.Vault.Secrets()}
-	res, err := r.Sync(local, hdr, s.c.Vault)
+	var res syncgit.Result
+	if f, ok := s.folder(); ok {
+		res, err = f.Sync(local, hdr, s.c.Vault)
+	} else {
+		r := s.repo()
+		if err = r.Init(); err != nil {
+			return err
+		}
+		res, err = r.Sync(local, hdr, s.c.Vault)
+	}
 	if err != nil {
 		return err
 	}
@@ -132,19 +172,31 @@ func (s *SyncService) JoinExisting(masterPassword string) (err error) {
 	if s.c.Vault.Status().Exists {
 		return errors.New("this machine already has a vault; use Sync now instead")
 	}
-	r := s.repo()
-	if err = r.Init(); err != nil {
-		return err
+	var (
+		hdr    vault.Header
+		enc    []byte
+		exists bool
+	)
+	if f, ok := s.folder(); ok {
+		if err = f.Check(); err != nil {
+			return err
+		}
+		hdr, enc, exists, err = f.Remote()
+	} else {
+		r := s.repo()
+		if err = r.Init(); err != nil {
+			return err
+		}
+		if err = r.Fetch(); err != nil {
+			return err
+		}
+		hdr, enc, exists, err = r.Remote()
 	}
-	if err = r.Fetch(); err != nil {
-		return err
-	}
-	hdr, enc, exists, err := r.Remote()
 	if err != nil {
 		return err
 	}
 	if !exists {
-		return errors.New("the repository does not contain a VVTerm bundle yet")
+		return errors.New("nothing to restore: no VVTerm bundle was found there yet")
 	}
 	if err = s.c.Vault.Adopt(masterPassword, hdr, nil); err != nil {
 		return err

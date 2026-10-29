@@ -84,12 +84,13 @@ func TestDomainHasNoFrameworkDependencies(t *testing.T) {
 // Infrastructure that the use cases still reference directly. This list is the documented
 // technical debt: it may shrink (when a port replaces the dependency) but must never grow.
 var usecaseAllowedInfra = map[string]bool{
-	"internal/sshx":     true, // SSH transport (planned port: Connector)
-	"internal/forward":  true, // port forwarding engine
-	"internal/importer": true, // ssh_config parsing
-	"internal/exporter": true, // ssh_config / backup writers
-	"internal/syncgit":  true, // git transport for sync
-	"internal/vault":    true, // key parsing helpers and keychain types
+	"internal/sshx":       true, // SSH transport (planned port: Connector)
+	"internal/forward":    true, // port forwarding engine
+	"internal/importer":   true, // ssh_config parsing
+	"internal/exporter":   true, // ssh_config / backup writers
+	"internal/syncgit":    true, // git transport for sync
+	"internal/syncfolder": true, // synced-folder transport for sync
+	"internal/vault":      true, // key parsing helpers and keychain types
 }
 
 func TestUseCaseDependsOnlyInward(t *testing.T) {
@@ -114,7 +115,7 @@ func TestUseCaseDependsOnlyInward(t *testing.T) {
 }
 
 func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
-	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "fsutil", "testssh", "sqlitedb", "sftpx", "agentx", "mcpgw"} {
+	for _, pkg := range []string{"store", "vault", "sshx", "forward", "importer", "exporter", "syncgit", "syncfolder", "fsutil", "testssh", "sqlitedb", "sftpx", "agentx", "mcpgw"} {
 		for _, d := range internalDeps(imports(t, "internal/"+pkg)) {
 			if d == "app" || d == "internal/usecase" {
 				t.Errorf("infrastructure package %s imports %s (dependency points outward)", pkg, d)
@@ -125,7 +126,7 @@ func TestInfrastructureNeverImportsUseCasesOrDelivery(t *testing.T) {
 
 func TestOnlyDeliveryLayerTouchesWails(t *testing.T) {
 	for _, pkg := range []string{"internal/usecase", "internal/domain", "internal/store", "internal/vault", "internal/sshx",
-		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/sqlitedb", "internal/sftpx", "internal/agentx", "internal/mcpgw"} {
+		"internal/forward", "internal/importer", "internal/exporter", "internal/syncgit", "internal/syncfolder", "internal/sqlitedb", "internal/sftpx", "internal/agentx", "internal/mcpgw"} {
 		for p := range imports(t, pkg) {
 			if strings.Contains(p, "wailsapp") {
 				t.Errorf("%s imports Wails (%s)", pkg, p)

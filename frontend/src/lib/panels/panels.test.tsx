@@ -75,6 +75,16 @@ describe('SyncPanel', () => {
     expect(screen.getByTestId('sync-status')).toHaveTextContent('Never synced')
   })
 
+  it('syncs through a cloud folder', async () => {
+    const be = makeFake()
+    render(<Providers be={be}><SyncPanel vault={vaultSt} onClose={vi.fn()} onChanged={vi.fn()} /></Providers>)
+    await userEvent.click(await screen.findByRole('button', {name: 'Cloud folder'}))
+    await userEvent.click(screen.getByRole('button', {name: 'Browse…'}))
+    await waitFor(() => expect(screen.getByLabelText('Sync folder')).toHaveValue('/tmp/dir'))
+    await userEvent.click(screen.getByRole('button', {name: 'Use this folder'}))
+    await waitFor(() => expect(be.state.calls).toContainEqual(['sync.configureFolder', '/tmp/dir']))
+  })
+
   it('disables sync while the vault is locked and join once a vault exists', async () => {
     const be = makeFake()
     render(<Providers be={be}><SyncPanel vault={{...vaultSt, unlocked: false}} onClose={vi.fn()} onChanged={vi.fn()} /></Providers>)

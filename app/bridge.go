@@ -99,7 +99,7 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 		targets: map[string]bridgeTarget{
 			"SettingsService": {a.Settings, allow("Get", "Save")},
 			"VaultService":    {a.Vault, allow("Status", "ChangePassword", "SetAutoLock", "EnableBiometric", "DisableBiometric", "ResetVault", "SetHint")},
-			"SyncService":     {a.Sync, allow("Configure", "SyncNow", "JoinExisting", "Status")},
+			"SyncService":     {a.Sync, allow("Configure", "ConfigureFolder", "SyncNow", "JoinExisting", "Status")},
 			// a terminal window drives its own session and reads the hosts for their names and themes
 			"SessionService": {a.Session, allow("Open", "Attach", "Write", "Resize", "Reconnect", "Close", "TrustHostKey")},
 			"HostService":    {a.Host, allow("ListHosts")},
