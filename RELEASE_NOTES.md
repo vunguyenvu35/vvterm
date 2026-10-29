@@ -10,7 +10,7 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 
 ### Get started
 
-1. **Settings → AI assistant**: switch on a tool VVTerm found (Claude Code, Codex CLI, Antigravity CLI, Gemini CLI, or a command of your own). It stays off until you do, after a short isolation test.
+1. **Settings → AI assistant**: switch on a tool VVTerm found (Claude Code, Codex CLI, or a command of your own; the Antigravity and Gemini CLIs are listed but cannot be switched on yet, see Limits). It stays off until you do, after a short isolation test.
 2. Open a terminal, then the ✨ icon in the sidebar. Pick the provider and model from the chip under the message box, and ask.
 3. Drop a log or a screenshot on the panel, or paste one, to add it to your question.
 
@@ -32,7 +32,7 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 - **What will be sent** shows the exact redacted text, inside the chat, before or after you ask. Every use is written to the activity log (Logs → Assistant).
 - A command with a hidden value cannot be run from the panel. A secret in a tool's arguments blocks the call; tool results are redacted.
 - **Pictures are the exception**: a secret inside a picture cannot be found, so VVTerm asks you to confirm each time (in the chat) and says so plainly.
-- The AI tool runs in an empty temporary folder with a cleaned environment and no tools of its own. A provider can only be switched on after a self-test in which it is asked to run a command and must fail. For Antigravity, whose own allow-rules would let a command run, every call overrides them with deny rules.
+- The AI tool runs in an empty temporary folder with a cleaned environment and no tools of its own. A provider can only be switched on after a self-test in which it is asked to run a command and to search the web, and must fail at both. Codex CLI is started with its shell tool, its apps connector and its web search turned off.
 - Redaction is best effort. A password written in an ordinary sentence cannot always be recognised.
 
 ### Also fixed in this release
@@ -43,7 +43,8 @@ Ask an AI about what is on your terminal, without leaving VVTerm and without han
 
 ### Limits you should know about
 
-- Gemini CLI shares `~/.gemini` with Antigravity, which sets a sign-in the Gemini CLI does not support. Use the Antigravity CLI provider, or sign in again with `gemini`.
+- **Antigravity CLI cannot be switched on yet.** Its web search tool keeps working whatever deny rule is given (several were tried), so text from your terminal could leave in a search query, and the isolation self-test correctly fails. It will be usable when Antigravity offers a way to turn that tool off.
+- Gemini CLI shares `~/.gemini` with Antigravity, which sets a sign-in the Gemini CLI does not support. Sign in again with `gemini` (Login with Google) to use it.
 - The Gemini CLI adapter could not be tested against a signed-in account; its isolation is checked by the self-test when you switch it on.
 - MCP tools work through Claude Code only. Pictures work with Claude Code and Codex CLI only.
 - The assistant is not run on Windows or Linux yet, and chat history is kept in memory only (a new chat starts empty after a restart).

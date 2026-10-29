@@ -2,6 +2,8 @@ module vvterm
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/creack/pty v1.1.24
 	github.com/google/uuid v1.6.0

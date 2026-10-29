@@ -92,6 +92,7 @@ func TestClaudeGatewayIsTheOnlyToolChannel(t *testing.T) {
 	bin := fakeCLI(t, "claude", `
 case "$1" in --help) echo "`+claudeHelp+`"; exit 0;; esac
 printf 'ARG:%s\n' "$@" > `+rec+`; cat >/dev/null
+prev=""; for a in "$@"; do if [ "$prev" = "--mcp-config" ]; then echo "CONFIG-FILE:$a" >> `+rec+`; cat "$a" >> `+rec+`; ls -l "$a" | cut -c1-10 >> `+rec+`; fi; prev="$a"; done
 echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__vvterm__terminal_read"}]}}'
 echo '{"type":"result","result":"ok"}'
 `)
@@ -103,6 +104,11 @@ echo '{"type":"result","result":"ok"}'
 	b, _ := os.ReadFile(rec)
 	if !strings.Contains(string(b), "--strict-mcp-config") || !strings.Contains(string(b), `"url":"http://127.0.0.1:1/mcp"`) || !strings.Contains(string(b), "ARG:mcp__vvterm") {
 		t.Fatalf("%s", b)
+	}
+	// the token is in a private file, never in an argument another process could read
+	args := string(b)[:strings.Index(string(b), "CONFIG-FILE:")]
+	if strings.Contains(args, "tok") || strings.Contains(args, "Bearer") || !strings.Contains(string(b), "-rw-------") {
+		t.Fatalf("the gateway token must not be on the command line, and its file must be private:\n%s", b)
 	}
 }
 
@@ -155,7 +161,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"x"}}'`)
 		t.Fatalf("got %v", err)
 	}
 	b, _ := os.ReadFile(rec)
-	for _, want := range []string{"ARG:--disable\nARG:shell_tool", "ARG:--ignore-user-config", "ARG:read-only", "ARG:--ephemeral"} {
+	for _, want := range []string{"ARG:--disable\nARG:shell_tool", "ARG:--disable\nARG:apps", `ARG:web_search="disabled"`, "ARG:--ignore-user-config", "ARG:read-only", "ARG:--ephemeral"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("missing %q", want)
 		}
@@ -334,5 +340,35 @@ func TestOnlyAdaptersThatCanTakePicturesSayThey_Do(t *testing.T) {
 		if _, ok := a.(imager); ok {
 			t.Errorf("%T must not claim to take pictures", a)
 		}
+	}
+}
+
+func TestVerifyIsolationAlsoProbesTheWeb(t *testing.T) {
+	ctx := context.Background()
+	call := 0
+	webTool := func(c context.Context, r assistant.Request, e func(string)) (string, error) {
+		call++
+		if call == 2 {
+			return "", ErrToolUse // the command probe passed, the web probe ran a tool
+		}
+		return "NO TOOLS", nil
+	}
+	if err := verifyIsolation(ctx, webTool); err == nil || !strings.Contains(err.Error(), "reach the web") {
+		t.Fatalf("a web tool must fail the self-test: %v", err)
+	}
+	call = 0
+	talks := func(c context.Context, r assistant.Request, e func(string)) (string, error) {
+		call++
+		if call == 2 {
+			return "vvterm.com - the official site", nil // an agent with no visible tool that answers the web probe
+		}
+		return "NO TOOLS", nil
+	}
+	if err := verifyIsolation(ctx, talks); err == nil || !strings.Contains(err.Error(), "no way to reach the web") {
+		t.Fatalf("an answer to the web probe must fail the self-test: %v", err)
+	}
+	both := func(c context.Context, r assistant.Request, e func(string)) (string, error) { return "", ErrToolDenied }
+	if err := verifyIsolation(ctx, both); err != nil {
+		t.Fatalf("refused attempts prove isolation: %v", err)
 	}
 }

@@ -281,6 +281,12 @@ func (b *Bridge) handler() http.Handler {
 	mux := http.NewServeMux()
 	guard := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			// Only the app's own processes call the bridge. A request from a web page (it carries an Origin) or one
+			// addressed to a name other than the loopback address (DNS rebinding) is refused before the token is looked at.
+			if r.Header.Get("Origin") != "" || !strings.HasPrefix(r.Host, "127.0.0.1:") {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			if !b.authorised(r) {
 				http.Error(w, "unauthorised", http.StatusUnauthorized)
 				return

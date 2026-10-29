@@ -65,9 +65,13 @@ func (c *Codex) Detect(ctx context.Context) assistant.Status {
 			return st
 		}
 	}
-	if feats, _ := output(bin, 8*time.Second, c.env(), "features", "list"); !strings.Contains(feats, "shell_tool") {
-		st.State, st.Detail = assistant.StateUnsupported, "this version cannot turn its shell tool off"
-		return st
+	// shell_tool is the tool that runs commands; apps is the built-in connector through which it can still search the web
+	feats, _ := output(bin, 8*time.Second, c.env(), "features", "list")
+	for _, f := range []string{"shell_tool", "apps"} {
+		if !strings.Contains(feats, f) {
+			st.State, st.Detail = assistant.StateUnsupported, "this version cannot turn its "+f+" feature off"
+			return st
+		}
 	}
 	if _, err := output(bin, 8*time.Second, c.env(), "login", "status"); err != nil {
 		st.State, st.Detail, st.Hint = assistant.StateNeedsSignIn, "not signed in", "codex login"
@@ -125,7 +129,7 @@ func (c *Codex) Ask(ctx context.Context, r assistant.Request, emit func(string))
 		return "", err
 	}
 	defer done()
-	args := []string{"exec", "--disable", "shell_tool", "--ignore-user-config", "--ignore-rules", "--sandbox", "read-only",
+	args := []string{"exec", "--disable", "shell_tool", "--disable", "apps", "-c", `web_search="disabled"`, "--ignore-user-config", "--ignore-rules", "--sandbox", "read-only",
 		"--skip-git-repo-check", "--ephemeral", "--json", "-C", dir}
 	if r.Model != "" {
 		args = append(args, "-m", r.Model)
