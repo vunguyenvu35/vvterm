@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>An SSH client for people who want to own their data.</b><br>
-  Hosts, keys and passwords live in an encrypted vault on your Mac, export to standard formats at any time, and sync through a private Git repository you control.
+  Hosts, keys and passwords live in an encrypted vault on your computer, export to standard formats at any time, and sync through a private Git repository you control.
 </p>
 
 <p align="center"><img src="docs/screenshots/20-split-panes.png" alt="VVTerm with two terminals side by side" width="900"></p>
@@ -23,7 +23,7 @@
 - **Save snippets** of commands you run often and type them into any terminal with a click.
 - **Make it yours**: 26 terminal colour themes, light / dark / auto appearance, font, cursor and scrollback, interface zoom, your own keyboard shortcuts, all in a Settings window of its own.
 - **Forward ports**: local, remote and SOCKS5 proxy.
-- **Stay in control.** Import and export your `~/.ssh/config`, share a host list without secrets, make encrypted backups, or sync between your Macs through a private Git repository.
+- **Stay in control.** Import and export your `~/.ssh/config`, share a host list without secrets, make encrypted backups, or sync between your machines through a private Git repository.
 
 <table>
   <tr>
@@ -38,16 +38,40 @@
 
 ## Try it
 
-**Requirements:** a Mac. VVTerm is currently a beta for macOS only.
-
-### 1. Install
+### On macOS
 
 - **From a release (recommended):** download `VVTerm-<version>-macos-<arch>.zip` from the [Releases](../../releases) page, unzip it and drag **VVTerm.app** to *Applications*.
 - **From source:** see the [Development guide](docs/Development.md) (three commands).
 
 > **First launch.** Beta builds are not notarized by Apple yet, so macOS may say the app *"can't be opened"*. Right-click **VVTerm.app → Open → Open** once. This is only needed the first time.
 
-### 2. First five minutes
+### On Windows
+
+**Prerequisites:** Windows 10/11 (Microsoft Edge WebView2 is included by default), Go 1.22+, Node.js 18+.
+
+1. **Install Wails CLI** (if not already installed):
+   ```powershell
+   go install github.com/wailsapp/wails/v2/cmd/wails@latest
+   ```
+
+2. **Build and run**:
+   - **Quick build with script:**
+     ```powershell
+     .\scripts\build-windows.ps1
+     .\build\bin\vvterm.exe
+     ```
+   - **Development mode (hot reload):**
+     ```powershell
+     wails dev
+     ```
+   - **Manual build:**
+     ```powershell
+     cd frontend && npm install && npm run build && cd ..
+     wails build
+     .\build\bin\vvterm.exe
+     ```
+
+### First five minutes
 
 1. **Create your vault.** Choose a master password (12+ characters). It cannot be recovered, so keep it safe.
 2. **Add a credential** in **Keychain**: generate a new key (copy the public key to your server's `~/.ssh/authorized_keys`), import an existing key, or save a password.
@@ -59,7 +83,7 @@ The [User guide](docs/UserGuide.md) walks through every screen with screenshots.
 
 ### No server to test with?
 
-Start two throw-away demo SSH servers on your Mac (needs Docker):
+Start two throw-away demo SSH servers (needs Docker):
 
 ```bash
 docker compose --profile dev up -d
@@ -71,9 +95,9 @@ Add hosts `127.0.0.1` port `2201` (bastion) and `2202`, username `demo`, passwor
 
 | | |
 | --- | --- |
-| **Where it lives** | `~/Library/Application Support/vvterm/` (one SQLite database plus a `known_hosts` file) |
+| **Where it lives** | `~/Library/Application Support/vvterm/` on macOS, or `%APPDATA%\vvterm\` on Windows |
 | **What is encrypted** | Keys and passwords: AES-256-GCM, with a key derived from your master password (Argon2id) |
-| **What leaves your Mac** | Nothing, unless you turn on Git sync, which only uploads encrypted data to *your* repository |
+| **What leaves your computer** | Nothing, unless you turn on Git sync, which only uploads encrypted data to *your* repository |
 | **Unknown servers** | You confirm the fingerprint once. If a known server's key ever changes, the connection is **blocked with no override** |
 | **Forwards** | Listen on `127.0.0.1` only, unless you explicitly allow more |
 | **Auto-lock** | The vault locks after 15 idle minutes (configurable) |
@@ -84,10 +108,10 @@ Back up regularly with **Import / Export → Encrypted backup**.
 
 ## Known limitations of this beta
 
-- macOS only; Windows and Linux are not built or tested yet.
-- "Keychain unlock" stores the vault key in the macOS Keychain; it does **not** require Touch ID yet.
-- The vault does not lock when the Mac sleeps (only on idle).
-- Settings opens as a second window of the app (a second process): it shows a second Dock icon while open and needs the main app running.
+- On Windows, the local shell tab (pty) is currently Unix-based and not supported yet; SSH, SFTP, serial ports, Telnet, forwards, and vault work normally.
+- "Keychain unlock" stores the vault key in the macOS Keychain / Windows Credential Manager; it does **not** require Touch ID yet.
+- The vault does not lock when the computer sleeps (only on idle).
+- Settings opens as a second window of the app (a second process): it shows a second Dock icon on macOS while open and needs the main app running.
 - SFTP transfers single files only (no folder transfer, queue or resume yet).
 - Git sync was tested with local repositories, not yet with every hosting provider.
 - `ProxyCommand` and `Match` blocks in `~/.ssh/config` are reported as warnings on import and skipped.
@@ -99,7 +123,7 @@ The full list is in the [release notes](RELEASE_NOTES.md).
 Your feedback is the point of this beta. Please [open an issue](../../issues/new) and include:
 
 - what you did, what you expected and what happened (a screenshot helps);
-- your VVTerm version and macOS version;
+- your VVTerm version and OS version;
 - **never** paste passwords, private keys or your vault file.
 
 ## Support VVTerm

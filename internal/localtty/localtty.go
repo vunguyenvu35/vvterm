@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	"github.com/creack/pty"
 )
@@ -90,10 +89,7 @@ func (s *Shell) Err() error { <-s.done; return s.err }
 // Close hangs up the terminal and stops the process group.
 func (s *Shell) Close() {
 	s.once.Do(func() {
-		if s.cmd.Process != nil {
-			_ = syscall.Kill(-s.cmd.Process.Pid, syscall.SIGHUP)
-			_ = s.cmd.Process.Signal(syscall.SIGHUP)
-		}
+		s.killProcessGroup()
 		s.tty.Close()
 	})
 }
