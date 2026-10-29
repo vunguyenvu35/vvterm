@@ -1,0 +1,66 @@
+import {useEffect, useState} from 'react'
+import {useBackend} from '../backend'
+import {useToast} from '../ui/Toast'
+import {errMsg} from '../util'
+import type {AiCommand, AiCommandCheck} from '../types'
+
+const RISK: Record<string, string> = {low: 'Low risk', medium: 'Changes things', high: 'High risk'}
+
+/**
+ * A command the assistant suggests. Insert puts it on the prompt without pressing Enter, so the user reads it in
+ * place. Run presses Enter too, after a confirmation (and the typed word "run" for a risky command). The risk is
+ * judged by VVTerm, never by the assistant, and a command with a hidden value cannot be run from here.
+ */
+export function CommandCard({sid, cmd}: {sid: string; cmd: AiCommand}) {
+  const be = useBackend()
+  const toast = useToast()
+  const [check, setCheck] = useState<AiCommandCheck | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [done, setDone] = useState('')
+
+  useEffect(() => {
+    let live = true
+    if (!cmd.blocked) void be.assistant.checkCommand(sid, cmd.cmd).then(c => { if (live) setCheck(c) }).catch(() => {})
+    return () => { live = false }
+  }, [be, sid, cmd.cmd, cmd.blocked])
+
+  const insert = async () => {
+    try { await be.assistant.insert(sid, cmd.cmd); setDone('Inserted: press Enter in the terminal to run it'); setConfirming(false) } catch (e) { toast.error(errMsg(e)) }
+  }
+  const run = async () => {
+    try { await be.assistant.run(sid, cmd.cmd, typed); setDone('Sent to the terminal'); setConfirming(false); setTyped('') } catch (e) { toast.error(errMsg(e)) }
+  }
+  const needsWord = !!check?.typed_confirm
+  const runDisabled = !check || !check.run_allowed
+  return (
+    <div className={'ai-cmd risk-' + cmd.risk + (cmd.blocked ? ' blocked' : '')} data-testid="ai-command">
+      <div className="ai-cmd-head">
+        <span className={'ai-risk ' + cmd.risk}>{RISK[cmd.risk] ?? cmd.risk}</span>
+        {cmd.why && <span className="ai-cmd-why">{cmd.why}</span>}
+      </div>
+      <code className="ai-cmd-text">{cmd.cmd}</code>
+      {cmd.reasons.length > 0 && <ul className="ai-cmd-notes">{cmd.reasons.map(r => <li key={r}>{r}</li>)}</ul>}
+      {cmd.warnings.length > 0 && <ul className="ai-cmd-notes warn">{cmd.warnings.map(r => <li key={r}>{r}</li>)}</ul>}
+      {cmd.blocked ? <div className="ai-cmd-block" role="note">{cmd.block_reason || 'This command cannot be run from here.'}</div> : (
+        <>
+          {!confirming && !done && (
+            <div className="ai-cmd-actions">
+              <button className="primary" onClick={insert} title="Put it on the prompt; you press Enter">Insert</button>
+              <button onClick={() => setConfirming(true)} disabled={runDisabled} title={check && !check.run_allowed ? check.run_reason : 'Insert and press Enter'}>Run…</button>
+              {check && !check.run_allowed && <span className="muted ai-cmd-why">{check.run_reason}</span>}
+            </div>
+          )}
+          {confirming && (
+            <div className="ai-cmd-actions" role="group" aria-label="Confirm run">
+              {needsWord && <input aria-label="Type run to confirm" placeholder="type run" value={typed} onChange={e => setTyped(e.target.value)} className="ai-typed" />}
+              <button className="primary" onClick={run} disabled={needsWord && typed.trim() !== 'run'}>Run now</button>
+              <button onClick={() => { setConfirming(false); setTyped('') }}>Cancel</button>
+            </div>
+          )}
+          {done && <div className="ai-cmd-done" role="status">{done}</div>}
+        </>
+      )}
+    </div>
+  )
+}

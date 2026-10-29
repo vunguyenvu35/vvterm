@@ -1,13 +1,14 @@
 import {useEffect, useMemo, useState} from 'react'
 import {clearHistory, getHistory, subscribeHistory} from './history'
 import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
-import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconTrash} from '../ui/Icons'
+import {AssistantTab} from '../assistant/AssistantTab'
+import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconSparkle, IconTrash} from '../ui/Icons'
 import {buildTree, countHosts, countOpen, filterTree, type GroupNode} from '../hosts/tree'
 import {isTerminalTab, leaves, type Tab} from '../layout'
 import type {Group, Host, Settings, Snippet} from '../types'
 import type {Appearance} from '../settings/appearance'
 
-export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes'
+export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes' | 'assistant'
 
 export const FONT_MIN = 8
 export const FONT_MAX = 32
@@ -33,6 +34,10 @@ interface Props {
   onConnect?(h: Host): void
   /** a theme or font was picked: save these settings */
   onSettings?(patch: Partial<Settings>): void
+  /** the focused pane: the AI assistant reads and helps this terminal */
+  paneId?: string
+  /** the assistant asks the user to enable a provider */
+  onOpenSettings?(): void
 }
 
 const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
@@ -40,6 +45,7 @@ const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
   {id: 'snippets', label: 'Snippets', icon: <IconBraces size={17} />},
   {id: 'history', label: 'History', icon: <IconClock size={17} />},
   {id: 'themes', label: 'Themes and font', icon: <IconPalette size={17} />},
+  {id: 'assistant', label: 'AI assistant', icon: <IconSparkle size={17} />},
 ]
 
 /** A tiny terminal drawn in a theme's own colours. */
@@ -59,7 +65,7 @@ export function ThemeThumb({colors}: {colors: {bg: string; fg: string; green: st
  */
 export function TerminalSidebar(p: Props) {
   return (
-    <aside className="term-side" aria-label="Terminal sidebar">
+    <aside className={'term-side' + (p.tab === 'assistant' ? ' wide' : '')} aria-label="Terminal sidebar">
       <div className="side-tabs" role="toolbar" aria-label="Sidebar sections">
         {TABS.map(t => (
           <button key={t.id} aria-pressed={p.tab === t.id} aria-label={t.label} title={t.label}
@@ -71,6 +77,7 @@ export function TerminalSidebar(p: Props) {
         {p.tab === 'snippets' && <SnippetsTab snippets={p.snippets} onInsert={p.onInsert} onNew={p.onNewSnippet} />}
         {p.tab === 'history' && <HistoryTab onInsert={p.onInsert} />}
         {p.tab === 'themes' && <ThemesTab settings={p.settings} appearance={p.appearance} onSettings={p.onSettings} />}
+        {p.tab === 'assistant' && <AssistantTab paneId={p.paneId ?? ''} onOpenSettings={() => p.onOpenSettings?.()} />}
       </div>
     </aside>
   )

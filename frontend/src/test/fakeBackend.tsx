@@ -2,7 +2,8 @@ import {ReactNode} from 'react'
 import {BackendContext, Backend} from '../lib/backend'
 import {ToastProvider} from '../lib/ui/Toast'
 import {DEFAULT_SETTINGS} from '../lib/settings/defaults'
-import type {ActivityEntry, KnownHost, RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus} from '../lib/types'
+import type {ActivityEntry, KnownHost, RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus,
+  AiCommandCheck, AiModelList, AiPreview, AiProvider, AiReply, AiSessionState, AiSettings, McpImportItem, McpServer, McpTool} from '../lib/types'
 
 export interface Fake extends Backend {
   state: {
@@ -30,6 +31,24 @@ export interface Fake extends Backend {
     logs: ActivityEntry[]
     testResult: ConnectionTest
     calls: Array<[string, ...unknown[]]>
+    /** the AI assistant */
+    ai: {
+      providers: AiProvider[]
+      models: Record<string, AiModelList>
+      settings: AiSettings
+      info: AiSessionState
+      preview: AiPreview
+      /** provider id -> the reason enabling it fails */
+      enableError: Record<string, string>
+      reply: AiReply
+      /** the ids of the questions asked so far */
+      asked: string[]
+      mcp: McpServer[]
+      tools: Record<string, McpTool[]>
+      importable: McpImportItem[]
+      /** what checkCommand answers for a command (default: low risk, everything allowed) */
+      check: (cmd: string) => AiCommandCheck
+    }
   }
   emit(event: string, data?: unknown): void
 }
@@ -85,6 +104,17 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     logs: [],
     testResult: {ok: true, message: 'Connected to 10.0.0.1 as root', server_version: 'SSH-2.0-OpenSSH_9.6', latency_ms: 42, hops: 1},
     calls: [],
+    ai: {
+      providers: [{id: 'claude', name: 'Claude Code', status: {state: 'ready', version: '2.1.0', detail: '', hint: ''}, enabled: true, default: true, model: '', supports_mcp: true, custom: false}],
+      models: {claude: {models: [{id: '', name: 'Default (CLI decides)'}, {id: 'opus', name: 'Opus 5.5'}, {id: 'sonnet', name: 'Sonnet 5.5'}], error: '', can_list: true}},
+      settings: {lines: 200, patterns: [], auto_run: false, default_provider: 'claude'},
+      info: {host_id: 'local', label: 'This computer', policy: 'on', stored: '', production: false, confirmed: true, connected: true},
+      preview: {text: 'Host: This computer\n$ df -h\n/dev/sda1 98% /var', findings: [], redacted: 0, lines: 3, alt_screen: false, vault_locked: false, empty: false},
+      enableError: {},
+      reply: {text: 'The disk is full.', commands: [{cmd: 'df -h', why: 'check usage', risk: 'low', reasons: [], warnings: [], blocked: false, block_reason: ''}], provider: 'claude', model: '', redacted: 0},
+      asked: [], mcp: [], tools: {}, importable: [],
+      check: () => ({blocked: false, block_reason: '', risk: 'low', reasons: [], warnings: [], run_allowed: true, run_reason: '', typed_confirm: false}),
+    },
     ...init,
   }
   const rec = (name: string, ...a: unknown[]) => { state.calls.push([name, ...a]) }
@@ -230,6 +260,59 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       downloadAll: async (s, remotes, dir, overwrite) => {
         rec('sftp.downloadAll', s, remotes, dir, overwrite)
         return copyTree(state.remote, state.local, remotes, dir, overwrite, e => emit('sftp:progress:' + s, {name: e, direction: 'download', done: 1, total: 1}))
+      },
+    },
+    assistant: {
+      providers: async () => state.ai.providers.map(p => ({...p})),
+      refreshProviders: async () => { rec('assistant.refreshProviders'); return state.ai.providers.map(p => ({...p})) },
+      setProviderEnabled: async (i, on) => {
+        rec('assistant.setProviderEnabled', i, on)
+        if (on && state.ai.enableError[i]) throw state.ai.enableError[i]
+        state.ai.providers = state.ai.providers.map(p => (p.id === i ? {...p, enabled: on} : p))
+        if (on && !state.ai.settings.default_provider) state.ai.settings.default_provider = i
+      },
+      setDefaultProvider: async i => { rec('assistant.setDefaultProvider', i); state.ai.providers = state.ai.providers.map(p => ({...p, default: p.id === i})); state.ai.settings.default_provider = i },
+      setProviderModel: async (i, m) => { rec('assistant.setProviderModel', i, m); state.ai.providers = state.ai.providers.map(p => (p.id === i ? {...p, model: m} : p)) },
+      models: async (i, r) => { rec('assistant.models', i, r); return state.ai.models[i] ?? {models: [{id: '', name: 'Default (CLI decides)'}], error: '', can_list: false} },
+      settings: async () => ({...state.ai.settings}),
+      saveSettings: async s => { rec('assistant.saveSettings', s); state.ai.settings = {...s}; return {...s} },
+      saveCustomProvider: async p => { rec('assistant.saveCustomProvider', p) },
+      deleteCustomProvider: async i => { rec('assistant.deleteCustomProvider', i) },
+      sessionInfo: async sid => { rec('assistant.sessionInfo', sid); return {...state.ai.info} },
+      setHostPolicy: async (h, p) => { rec('assistant.setHostPolicy', h, p); state.ai.info = {...state.ai.info, stored: p, policy: p || (state.ai.info.production ? 'off' : 'ask')} },
+      confirmShare: async sid => { rec('assistant.confirmShare', sid); state.ai.info = {...state.ai.info, confirmed: true} },
+      resetConversation: async sid => { rec('assistant.resetConversation', sid) },
+      preview: async (sid, l, sel) => { rec('assistant.preview', sid, l, sel); return {...state.ai.preview} },
+      ask: async (sid, q, o) => {
+        rec('assistant.ask', sid, q, o)
+        if (state.ai.info.policy === 'ask' && !state.ai.info.confirmed) throw 'confirm_share'
+        if (state.ai.info.policy === 'off') throw 'The assistant is turned off for this host'
+        const rid = o.request_id || id('ask-')
+        state.ai.asked.push(rid)
+        return rid
+      },
+      cancel: async i => { rec('assistant.cancel', i) },
+      confirmTool: async (r, c, a) => { rec('assistant.confirmTool', r, c, a) },
+      checkCommand: async (sid, cmd) => { rec('assistant.checkCommand', sid, cmd); return state.ai.check(cmd) },
+      insert: async (sid, cmd) => { rec('assistant.insert', sid, cmd) },
+      run: async (sid, cmd, t) => { rec('assistant.run', sid, cmd, t) },
+      mcp: {
+        list: async () => state.ai.mcp.map(s => ({...s})),
+        save: async s => {
+          rec('assistant.mcp.save', s)
+          const i = state.ai.mcp.findIndex(x => x.id === s.id)
+          const view: McpServer = {id: s.id || id('mcp'), name: s.name, type: s.type, command: s.command ?? '', args: s.args ?? [], url: s.url ?? '',
+            env: Object.keys(s.env ?? {}), headers: Object.keys(s.headers ?? {}), enabled: s.enabled, trusted: s.trusted, host_ids: s.host_ids ?? [], providers: s.providers ?? [], status: '', reviewed: 0}
+          if (i >= 0) state.ai.mcp[i] = view
+          else state.ai.mcp.push(view)
+          return view
+        },
+        remove: async i => { rec('assistant.mcp.remove', i); state.ai.mcp = state.ai.mcp.filter(s => s.id !== i) },
+        test: async i => { rec('assistant.mcp.test', i); const t = state.ai.tools[i]; if (!t) throw 'cannot start the server'; return t.map(x => ({...x})) },
+        setTool: async (s, t, m) => { rec('assistant.mcp.setTool', s, t, m); state.ai.tools[s] = (state.ai.tools[s] ?? []).map(x => (x.name === t ? {...x, mode: m as McpTool['mode'], new: false} : x)) },
+        approveNew: async i => { rec('assistant.mcp.approveNew', i); state.ai.tools[i] = (state.ai.tools[i] ?? []).map(x => ({...x, new: false})) },
+        importable: async () => state.ai.importable.map(x => ({...x})),
+        import: async ref => { rec('assistant.mcp.import', ref); const it = state.ai.importable.find(x => x.ref === ref)!; const v: McpServer = {id: id('mcp'), name: it.name, type: it.type, command: it.command, args: it.args, url: it.url, env: it.env, headers: it.headers, enabled: false, trusted: false, host_ids: [], providers: [], status: '', reviewed: 0}; state.ai.mcp.push(v); return v },
       },
     },
     serial: {

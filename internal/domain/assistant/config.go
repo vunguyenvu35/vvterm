@@ -133,10 +133,8 @@ type Config struct {
 	// Patterns are extra redaction regular expressions (they only add to the built-in detectors).
 	Patterns []string `json:"patterns,omitempty"`
 	// AutoRun lets the assistant run commands from the read-only allow-list by itself (off by default).
-	AutoRun bool `json:"auto_run"`
-	// KeepHistory stores chat history (redacted) between launches; the default keeps it in memory only.
-	KeepHistory bool        `json:"keep_history"`
-	MCP         []MCPServer `json:"mcp,omitempty"`
+	AutoRun bool        `json:"auto_run"`
+	MCP     []MCPServer `json:"mcp,omitempty"`
 }
 
 // DefaultConfig is the first-run configuration: every provider off.

@@ -1,4 +1,4 @@
-import {b64ToBytes, envColor, errMsg, formatAddr, parseTags} from './util'
+import {b64ToBytes, envColor, errMsg, formatAddr, joinArgs, parseTags, splitArgs} from './util'
 
 describe('util', () => {
   it('decodes base64 including non-UTF8 bytes', () => {
@@ -22,5 +22,19 @@ describe('util', () => {
     expect(envColor('prod')).toContain('env-prod')
     expect(envColor(undefined)).toContain('env-none')
     expect(envColor('' as never)).toContain('env-none')
+  })
+})
+
+describe('command line arguments', () => {
+  it('splitArgs keeps quoted text together', () => {
+    expect(splitArgs('-y @acme/docs --name "My Docs" --x=\'a b\' --y="c d"')).toEqual(['-y', '@acme/docs', '--name', 'My Docs', '--x=a b', '--y=c d'])
+    expect(splitArgs('""  x')).toEqual(['', 'x'])
+    expect(splitArgs('   ')).toEqual([])
+    expect(splitArgs('a  b')).toEqual(['a', 'b'])
+  })
+  it('joinArgs quotes what needs it and round-trips', () => {
+    const args = ['-y', 'my pkg', 'plain', 'say "hi"']
+    expect(joinArgs(args)).toBe('-y "my pkg" plain "say \\"hi\\""')
+    expect(splitArgs(joinArgs(args))).toEqual(args)
   })
 })

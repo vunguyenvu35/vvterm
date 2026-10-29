@@ -243,7 +243,6 @@ export interface AiSettings {
   lines: number
   patterns: string[]
   auto_run: boolean
-  keep_history: boolean
   default_provider: string
 }
 
@@ -294,7 +293,7 @@ export interface AiCommandCheck {
   typed_confirm: boolean
 }
 
-export interface AiAskOptions {provider: string; model: string; lines: number; selection: string}
+export interface AiAskOptions {provider: string; model: string; lines: number; selection: string; request_id?: string}
 export interface AiCustomProvider {id?: string; name: string; command: string; args?: string[]; prompt_via?: 'stdin' | 'arg'}
 
 export type McpMode = 'allow' | 'ask' | 'off'

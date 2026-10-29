@@ -41,3 +41,29 @@ export function formatAddr(h: {hostname: string; port: number; username?: string
 
 /** what this computer calls its fingerprint / face unlock */
 export const biometricName = () => (typeof navigator !== 'undefined' && /windows|win32|win64/i.test(navigator.platform || navigator.userAgent || '') ? 'Windows Hello' : 'Touch ID')
+
+/**
+ * Splits a command line into arguments: spaces separate them; single or double quotes keep a space inside one
+ * argument (also in the middle of it, as in --name="a b"); inside double quotes a backslash escapes " and \.
+ */
+export function splitArgs(s: string): string[] {
+  const out: string[] = []
+  let cur = '', has = false, quote = ''
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (quote) {
+      if (c === quote) quote = ''
+      else if (quote === '"' && c === '\\' && (s[i + 1] === '"' || s[i + 1] === '\\')) cur += s[++i]
+      else cur += c
+    } else if (c === '"' || c === "'") { quote = c; has = true }
+    else if (/\s/.test(c)) { if (has || cur) out.push(cur); cur = ''; has = false }
+    else cur += c
+  }
+  if (has || cur) out.push(cur)
+  return out
+}
+
+/** The reverse of splitArgs, for showing arguments in a text field. */
+export function joinArgs(a: string[]): string {
+  return a.map(x => (/[\s"']/.test(x) || x === '' ? JSON.stringify(x) : x)).join(' ')
+}

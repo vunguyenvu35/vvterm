@@ -7,7 +7,7 @@ import {Select} from '../ui/Select'
 import {useBackend} from '../backend'
 import {errMsg, parseTags} from '../util'
 import {IconCheckCircle, IconEye, IconEyeOff, IconPlus, IconServer, IconXCircle} from '../ui/Icons'
-import type {ConnectionTest, Group, Host, HostKeyPrompt, Identity, Settings} from '../types'
+import type {AiPolicy, ConnectionTest, Group, Host, HostKeyPrompt, Identity, Settings} from '../types'
 
 interface Props {
   host?: Host
@@ -58,6 +58,7 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
     telnet_password: '',
     telnet_encoding: host?.telnet_encoding || 'utf-8',
     terminal_theme: host?.terminal_theme ?? '',
+    ai_policy: (host?.ai_policy ?? '') as AiPolicy,
   })
   const [showPw, setShowPw] = useState(false)
   const [err, setErr] = useState('')
@@ -89,6 +90,7 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
       telnet_username: f.telnet_on ? f.telnet_username.trim() : '',
       telnet_encoding: f.telnet_on && f.telnet_encoding !== 'utf-8' ? f.telnet_encoding : '',
       terminal_theme: f.terminal_theme,
+      ai_policy: f.ai_policy,
       label: f.label.trim(),
       hostname: f.hostname.trim(),
       port,
@@ -224,6 +226,14 @@ export function HostForm({host, isNew, groups, hosts, identities, onClose, onSav
 
       <Section title="Terminal theme">
         <ThemePicker value={f.terminal_theme} onChange={v => setF(x => ({...x, terminal_theme: v}))} inherited={resolveTerminalTheme(appSetting, appearance)} />
+      </Section>
+
+      <Section title="AI assistant">
+        <Field label="Assistant on this host">
+          <Select label="AI assistant on this host" value={f.ai_policy} onChange={v => setF(x => ({...x, ai_policy: v as AiPolicy}))}
+            options={[{value: '', label: `Default (${f.env === 'prod' ? 'off' : 'ask first'})`}, {value: 'off', label: 'Off'}, {value: 'ask', label: 'Ask before sharing the screen'}, {value: 'on', label: 'On'}]} />
+        </Field>
+        <div className="muted">When on, the text of the terminal can be sent, with secrets hidden, to the AI tool you chose in Settings. Production hosts are off by default and never run commands for the assistant.</div>
       </Section>
 
       <Section title="Options">

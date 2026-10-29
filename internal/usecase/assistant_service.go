@@ -122,13 +122,12 @@ type AssistantSettings struct {
 	Lines           int      `json:"lines"`
 	Patterns        []string `json:"patterns"`
 	AutoRun         bool     `json:"auto_run"`
-	KeepHistory     bool     `json:"keep_history"`
 	DefaultProvider string   `json:"default_provider"`
 }
 
 func (a *AssistantService) Settings() AssistantSettings {
 	c := a.config()
-	return AssistantSettings{Lines: c.Lines, Patterns: append([]string{}, c.Patterns...), AutoRun: c.AutoRun, KeepHistory: c.KeepHistory, DefaultProvider: c.DefaultProvider}
+	return AssistantSettings{Lines: c.Lines, Patterns: append([]string{}, c.Patterns...), AutoRun: c.AutoRun, DefaultProvider: c.DefaultProvider}
 }
 
 // SaveSettings validates and stores the options. Patterns can only add detectors.
@@ -143,7 +142,7 @@ func (a *AssistantService) SaveSettings(in AssistantSettings) (AssistantSettings
 		return AssistantSettings{}, err
 	}
 	err := a.update(func(c *assistant.Config) error {
-		c.Lines, c.Patterns, c.AutoRun, c.KeepHistory = in.Lines, pats, in.AutoRun, in.KeepHistory
+		c.Lines, c.Patterns, c.AutoRun = in.Lines, pats, in.AutoRun
 		if in.DefaultProvider != "" {
 			if pc := c.Providers[in.DefaultProvider]; !pc.Enabled {
 				return errors.New("the default provider must be enabled")
