@@ -111,6 +111,13 @@ VVTerm is free and open source, built and maintained in spare time. If it saves 
   <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/%E2%98%95%20Buy%20me%20a%20coffee-ko--fi.com%2Fvunguyenvu-FF5E5B?style=for-the-badge" alt="Buy me a coffee on Ko-fi"></a>
 </p>
 
+Or send USDT (check the network before you send):
+
+| Network | Address |
+| --- | --- |
+| Tron (TRC20) | `TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK` |
+| BSC (BEP20) | `0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153` |
+
 Stars, bug reports and pull requests help just as much.
 
 ## Documentation

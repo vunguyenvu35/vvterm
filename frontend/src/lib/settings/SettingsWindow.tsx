@@ -43,6 +43,11 @@ const LINKS: [string, string][] = [
   ['Support on Ko-fi', 'https://ko-fi.com/vunguyenvu'],
 ]
 
+const DONATE: [string, string][] = [
+  ['USDT / Tron (TRC20)', 'TMXXHRNG7qauoFWJKYbqEbd4FGgt3DgjBK'],
+  ['USDT / BSC (BEP20)', '0x4bdfd1d6456c28d06e3f8456ddac59e6168e5153'],
+]
+
 interface Props {
   settings: Settings
   appearance: Appearance
@@ -226,6 +231,16 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                     <div><button className="primary" disabled={name.trim() === s.account_name && email.trim() === s.account_email}
                       onClick={() => guard(async () => { onSettings(await be.settings.save({...s, account_name: name, account_email: email})) }, 'Profile saved')}>Save profile</button></div>
                     <div className="muted">Stored only on this Mac, in your settings file. It is not sent anywhere.</div>
+                  </section>
+                  <section className="card-section">
+                    <h4>Donate</h4>
+                    <div className="muted">VVTerm is free and open source. If it saves you time, you can send USDT. Check the network before you send.</div>
+                    {DONATE.map(([label, addr]) => (
+                      <div className="setting-row" key={addr}>
+                        <div><b>{label}</b><div className="muted" style={{wordBreak: 'break-all', userSelect: 'text'}}>{addr}</div></div>
+                        <button aria-label={'Copy ' + label + ' address'} onClick={() => { void be.system.writeClipboard(addr).then(() => toast.info('Address copied')).catch(e => toast.error(errMsg(e))) }}>Copy</button>
+                      </div>
+                    ))}
                   </section>
                   <section className="card-section">
                     <h4>Plan</h4>
