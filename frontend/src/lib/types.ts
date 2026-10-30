@@ -80,6 +80,12 @@ export interface VaultStatus {
 export type ThemeMode = 'auto' | 'light' | 'dark'
 export type CursorStyle = 'block' | 'bar' | 'underline'
 
+/** What Clear cache removed. */
+export interface CacheReport {
+  files: number
+  bytes: number
+}
+
 export interface Settings {
   theme: ThemeMode
   terminal_theme: string // 'auto' follows the app theme, otherwise a catalogue id

@@ -6,7 +6,7 @@
 
 ## Go (unit + integration)
 
-### `app` (36)
+### `app` (46)
 
 - TestDataDirEnvOverride
 - TestBuildWiresRealAdapters
@@ -15,8 +15,10 @@
 - TestClipboardNeedsANativeWindow
 - TestOpenPathRefusesFilesThatRunPrograms
 - TestSettingsExecutableUsesTheDocklessHelperWhenBuilt
+- TestSameProgram
 - TestPrepareSettingsHelperLinksThePlistAndRefreshesOnRebuild
 - TestBridgeConnectionFileIsPrivateAndRemovedOnClose
+- TestBridgeRefusesAWindowOfAnotherVersion
 - TestBridgeCallsSettingsAndNotifiesTheMainWindow
 - TestBridgePassesUseCaseErrorsThrough
 - TestBridgeOnlyExposesTheAllowList
@@ -26,11 +28,17 @@
 - TestConnectBridgeExplainsWhenTheMainAppIsNotRunning
 - TestSettingsLauncherOpensOnceAndRaisesAfterwards
 - TestOpenSettingsFallsBackWithoutNativeWindows
+- TestLockingTheVaultClosesTheSettingsWindow
 - TestSettingsWindowCanConfigureTheAssistantButNotUseIt
+- TestSettingsWindowIsRaisedAfterItStartsAndWhenAskedAgain
+- TestBridgeRefusesBrowserOriginsAndForeignHostNames
+- TestReadOnlyCallAssistantPolling
+- TestBridgeAllowsResetAndClearCacheFromSettings
 - TestMenuBarHasTheUsualMenus
 - TestFileMenuAsksTheWindowForTheRightActions
 - TestViewMenuZoomsSplitsAndShowsPages
 - TestHelpMenuOpensOnlyTheProjectPages
+- TestHelpMenuHasAboutAndCheckForUpdates
 - TestEveryMenuActionIsKnownAndUnique
 - TestAppMenuIsSafeBeforeTheWindowExists
 - TestAcceleratorFromShortcutText
@@ -44,8 +52,10 @@
 - TestMenuItemsOfOtherWindowsAreDoneByTheMainWindow
 - TestAnAppWindowMayCallAnyUseCaseButOnlyThose
 - TestAskingWhereTheEventsAreNowDoesNotWait
+- TestNewerVersion
+- TestCheckUpdate
 
-### `internal/agentx` (13)
+### `internal/agentx` (24)
 
 - TestClaudeAskIsRunIsolatedAndStreams
 - TestClaudeToolUseIsStopped
@@ -58,7 +68,18 @@
 - TestCustomAgentViaStdinAndArg
 - TestBaseEnvDropsSecretLookingNames
 - TestGeminiDetectReadsTheSelectedSignIn
+- TestClaudeSendsPicturesAsContentBlocksOfAStreamJSONMessage
+- TestCodexGetsPicturesAsFilesInItsEmptyDirectory
+- TestOnlyAdaptersThatCanTakePicturesSayThey_Do
+- TestVerifyIsolationAlsoProbesTheWeb
+- TestAntigravityModelsAndSignInComeFromAgyModels
+- TestAntigravityRunsWithDenyRulesAndTreatsARunToolAsAViolation
+- TestClaudeModelsComeFromTheLiteLLMProxy
+- TestClaudeGatewayEnvWinsOverSettingsAndAPIKeyIsSent
+- TestClaudeGatewayErrorIsReported
+- TestLiveImages
 - TestLiveProviders
+- TestLiveAntigravity
 - TestLiveClaudeThroughTheGateway
 
 ### `internal/archtest` (8)
@@ -84,16 +105,20 @@
 - TestCheckJumpChain
 - TestNormalizeSnippet
 
-### `internal/domain/assistant` (8)
+### `internal/domain/assistant` (12)
 
 - TestParseReplyEnvelopeAndRiskIsOurs
 - TestParseReplyPlainTextHasNoCommands
 - TestAssess
 - TestDumpWarnings
 - TestReadOnlyAllowList
+- TestReadOnlyChainsAreCheckedSegmentBySegment
 - TestEffectivePolicy
 - TestScreenText
 - TestSecretSplitOverTwoScreenRowsStaysOneLine
+- TestImagesAreIdentifiedByTheirContentNotTheirName
+- TestTextAttachmentsAreChecked
+- TestGitAndJournalctlAreReadOnlyOnlyWithTheirReadingFlags
 
 ### `internal/domain/secretpolicy` (10)
 
@@ -242,6 +267,14 @@
 - TestSnippetsCRUDSortingAndTombstones
 - TestSetHostOSKeepsTheRestAndSurvivesAnEditWithoutIt
 
+### `internal/syncfolder` (5)
+
+- TestTwoMachinesConvergeAndSecondSyncIsNoop
+- TestConflictCopiesAreMergedAndRemoved
+- TestForeignOrUnreadableCopyIsKept
+- TestOtherVaultIsRefused
+- TestCheckRejectsBadFolders
+
 ### `internal/syncgit` (16)
 
 - TestMergeUnionOfDisjointRecords
@@ -277,7 +310,7 @@
 - TestServerLogoutIsACleanEndAndCloseIsToo
 - TestConnectionRefusedIsReported
 
-### `internal/usecase` (130)
+### `internal/usecase` (140)
 
 - TestLogRecordsConnectingAndClosingATab
 - TestLogRecordsAFailedConnectionAndALostOne
@@ -302,6 +335,7 @@
 - TestProvidersMustBeReadyAndPassTheIsolationTestToBeEnabled
 - TestDisablingTheDefaultPicksAnotherEnabledProvider
 - TestModelsComeFromTheProviderAndNothingIsInvented
+- TestModelLoadsAreSingleFlightAndAFailureIsRetried
 - TestAskNeverSendsASecretAndShowsMasks
 - TestAskFailsClosedWhenRedactionIsBroken
 - TestPolicyOffAskAndProduction
@@ -312,6 +346,11 @@
 - TestInsertDoesNotPressEnterAndRunNeedsTheTypedWordForRiskyCommands
 - TestSettingsValidatePatternsAndOnlyAdd
 - TestPreviewIsExactlyWhatIsSent
+- TestTextAttachmentsGoThroughTheSecretGuardLikeTheScreen
+- TestAttachmentsAreCheckedAndLimited
+- TestImagesNeedTheUsersConfirmationAndAProviderThatTakesThem
+- TestProvidersAnswerAtOnceAndDetectionRunsInTheBackground
+- TestReadOnlyCommandsRunWithoutAskingAndOnlyThose
 - TestLocalTerminalSessionEndToEnd
 - TestDeviceSessionFailuresAreReportedInTheTab
 - TestDeviceLostIsAnErrorNotACleanEnd
@@ -369,6 +408,7 @@
 - TestSFTPConnectionAlsoLearnsTheServerType
 - TestHighlightOutputIsOnForNewAndOldSettingsFilesAndCanBeSwitchedOff
 - TestTerminalMouseSettingsDefaultsAndValidation
+- TestSyncThroughAFolderEndToEnd
 - TestSessionFullLifecycle
 - TestAConnectionReportsHowFarItGotBeforeItIsReady
 - TestAConnectionThatFailsReportsNoSuchProgressAsDone
@@ -394,6 +434,9 @@
 - TestValidateCombo
 - TestValidateShortcuts
 - TestTwoStepShortcuts
+- TestResetSettingsKeepsAccountAndSyncTarget
+- TestClearCacheRemovesCacheFilesAndForgetsTheAITools
+- TestClearCacheWithoutAFolderIsFine
 - TestTestConnectionSucceedsWithTypedPasswordAndStoresNothing
 - TestTestConnectionKnownHostSkipsPromptSecondTime
 - TestTestConnectionWithSavedIdentity
@@ -436,664 +479,10 @@
 - TestHintTooLongIsRejected
 - TestKeychainNeedsTheAuthenticator
 
-**Go test functions: 370** (table-driven cases and sub-tests are extra).
+**Go test functions: 410** (table-driven cases and sub-tests are extra).
 
 ## Frontend (Vitest)
 
-- src/App.test.tsx › App › starts on the unlock screen and shows hosts after unlocking
-- src/App.test.tsx › App › shows the create-vault flow on first run
-- src/App.test.tsx › App › opens a tab per double-click, switches and closes tabs
-- src/App.test.tsx › App › splits the active pane right and down
-- src/App.test.tsx › App › removes a pane when its shell exits and the tab when the last pane exits
-- src/App.test.tsx › App › returns to the unlock screen when the vault auto-locks
-- src/App.test.tsx › App › the Lock button locks the vault
-- src/App.test.tsx › App › creates a host through the form
-- src/App.test.tsx › App › deletes a host after confirmation
-- src/App.test.tsx › App › does not delete when the confirmation is declined
-- src/App.test.tsx › App › opens each panel from the sidebar and closes with Escape
-- src/App.test.tsx › App › applies the theme from settings
-- src/App.test.tsx › App navigation and quick connect › switches between Hosts, Keychain and Port Forwarding pages
-- src/App.test.tsx › App navigation and quick connect › a forward card has Edit, which opens the docked panel on the Port Forwarding page
-- src/App.test.tsx › App navigation and quick connect › the Forwards button of a host card opens New Port Forwarding with that host already chosen
-- src/App.test.tsx › App navigation and quick connect › quick connect to an unknown host opens the New host panel prefilled
-- src/App.test.tsx › App navigation and quick connect › the + opens a New Tab with a search box and the recent connections; picking a host turns it into that connection
-- src/App.test.tsx › App navigation and quick connect › the New Tab also finds open tabs and switches to them
-- src/App.test.tsx › App navigation and quick connect › a host that also has Telnet first asks which protocol to use
-- src/App.test.tsx › App navigation and quick connect › Close on the protocol screen closes the tab
-- src/App.test.tsx › App snippets › creates a snippet from the Snippets page
-- src/App.test.tsx › App snippets › Run types the script and Enter into the focused pane of the last terminal and switches to it
-- src/App.test.tsx › App snippets › Paste does not press Enter
-- src/App.test.tsx › App snippets › refuses to run without an open terminal
-- src/App.test.tsx › App snippets › says nothing about a terminal that is not connected yet
-- src/App.test.tsx › App snippets › the title-bar picker runs a snippet inside the terminal view
-- src/App.test.tsx › App snippets › deletes after confirmation
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › New host opens next to the list (same screen) and shows a draft card that follows typing
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › Connect in the New host panel saves the host and opens a terminal tab
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › Settings opens as its own window above the page, and closes again
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › Cmd/Ctrl+, toggles the Settings window from anywhere, including a terminal tab
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › the gear button in the title bar opens Settings
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › a terminal theme chosen in Settings is applied to the terminals
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › theme Auto follows the OS appearance
-- src/App.test.tsx › App: docked panels, connect from the form, settings page, theme › after a vault reset the unlock screen becomes the create form
-- src/App.test.tsx › App: panels belong to the page they were opened on › New host closes when you move to another screen
-- src/App.test.tsx › App: panels belong to the page they were opened on › New group and New snippet close on page change too
-- src/App.test.tsx › App: panels belong to the page they were opened on › opening a terminal closes the panel instead of leaving it behind
-- src/App.test.tsx › App: panels belong to the page they were opened on › the + tab leaves the Vaults page, so an open panel closes like on any other move
-- src/App.test.tsx › App: the SFTP tab next to Vaults › is there from the start, right after Vaults, with no close button, and starts on "Connect to host"
-- src/App.test.tsx › App: the SFTP tab next to Vaults › Ctrl+Shift+S opens SFTP and Ctrl+Shift+H goes back to Vaults
-- src/App.test.tsx › App: the SFTP tab next to Vaults › the + adds a host as one more tab in the Remote header (the same host again too), each closable
-- src/App.test.tsx › App: the SFTP tab next to Vaults › Ctrl+W on the SFTP screen closes the host tab showing in the Remote pane, never the SFTP tab itself
-- src/App.test.tsx › App: the SFTP tab next to Vaults › connects to a host chosen inside the tab: Select host, then the host (a card has no SFTP button)
-- src/App.test.tsx › App: the SFTP tab next to Vaults › closing the last terminal goes back to Vaults, not to the SFTP tab; Ctrl+W on the SFTP tab does nothing
-- src/App.test.tsx › App: the SFTP tab next to Vaults › snippets still go to the last terminal, never to the SFTP tab
-- src/App.test.tsx › App: full screen › marks the page while the window is in full screen, so the room for the window buttons goes
-- src/App.test.tsx › App: keyboard shortcuts › a two-step shortcut runs on the second key; a wrong key or Esc cancels it
-- src/App.test.tsx › App: keyboard shortcuts › the default combo opens and closes Settings
-- src/App.test.tsx › App: keyboard shortcuts › a customised combo works and the old one no longer does
-- src/App.test.tsx › App: keyboard shortcuts › lock vault returns to the unlock screen
-- src/App.test.tsx › App: keyboard shortcuts › zoom shortcuts change and reset the interface zoom
-- src/App.test.tsx › App: keyboard shortcuts › next/previous tab cycle through Vaults and the open tabs; close tab does not ask
-- src/App.test.tsx › App: keyboard shortcuts › does nothing while a new shortcut is being recorded
-- src/App.test.tsx › App: Settings as a native window › opens the native window (no in-app window) from the navigation, the gear and the shortcut
-- src/App.test.tsx › App: Settings as a native window › falls back to the in-app window when there is no native window
-- src/App.test.tsx › App: Settings as a native window › picks up settings saved in the Settings window (zoom, theme)
-- src/App.test.tsx › App: Settings as a native window › reloads the data after the Settings window changed the vault or sync
-- src/App.test.tsx › App: confirmations are in-app dialogs (a desktop webview has no confirm()) › with "Confirm before closing a tab" on, closing a tab asks in the app, and Cancel keeps it
-- src/App.test.tsx › App: confirmations are in-app dialogs (a desktop webview has no confirm()) › closing a tab (when asked for) and deleting a host use the same in-app dialog
-- src/App.test.tsx › App: server type › the icon changes as soon as the first connection reveals the server type
-- src/App.test.tsx › App: Terminal and Serial on the Hosts page › Terminal opens a tab on this computer
-- src/App.test.tsx › App: Terminal and Serial on the Hosts page › Serial opens a docked panel, then a tab for the port at that speed
-- src/App.test.tsx › App: Hosts toolbar order › New host with its caret, then Terminal and Serial
-- src/App.test.tsx › App: tab names › a second tab on the same host is numbered, and a closed tab frees its number
-- src/App.test.tsx › App: tab names › a double click renames a tab, and the new name is used when closing it
-- src/App.test.tsx › App: tab names › an empty name is ignored, and a long one is cut to 60 characters
-- src/App.test.tsx › App: tab names › local terminals and serial ports are numbered too
-- src/App.test.tsx › App: Known Hosts and Logs pages › the navigation opens them
-- src/App.test.tsx › App: Telnet › the Telnet button of a host opens a tab on telnet:<host>, numbered like any other
-- src/App.test.tsx › App: closing a tab does not ask by default › the × and the shortcut close at once, with no dialog of any kind
-- src/App.test.tsx › App: the New host caret menu › offers New group and Import; Import opens the Import / Export panel
-- src/App.test.tsx › App: the New host caret menu › closes on Escape and on a click elsewhere, and moves with the arrow keys
-- src/App.test.tsx › App: the New host caret menu › the host card subtitle mentions telnet when the host has it
-- src/App.test.tsx › App: tab menu, broadcast and maximise › Duplicate opens another tab on the same host right next to it, numbered, and selects it
-- src/App.test.tsx › App: tab menu, broadcast and maximise › Split right from the menu splits that tab and shows it
-- src/App.test.tsx › App: tab menu, broadcast and maximise › Rename from the menu, then the shortcut turns Broadcast on and off
-- src/App.test.tsx › App: tab menu, broadcast and maximise › Maximize pane shows one pane, and closing the split pane afterwards leaves no stale zoom
-- src/App.test.tsx › App: the application menu bar › opens the panels the File menu names
-- src/App.test.tsx › App: the application menu bar › New Terminal opens a local terminal; Duplicate, Close Tab and Close Pane act on the open tab
-- src/App.test.tsx › App: the application menu bar › View shows the pages and the SFTP tab, and zooms
-- src/App.test.tsx › App: the application menu bar › Settings… opens (never toggles shut) and Lock Vault locks
-- src/App.test.tsx › App: the application menu bar › does nothing while the vault is locked, and ignores an unknown action
-- src/App.test.tsx › App: the application menu bar › knows every action the Go menu can send
-- src/App.test.tsx › App: terminal sidebar and new windows › the sidebar sits beside a terminal only, can be hidden, and is remembered
-- src/App.test.tsx › App: terminal sidebar and new windows › a theme picked in the sidebar is saved as the terminal theme
-- src/App.test.tsx › App: terminal sidebar and new windows › Duplicate in new window opens a window for the host of the tab
-- src/App.test.tsx › App: New host and local terminal shortcuts › Ctrl/Cmd+N opens the New host panel, Ctrl/Cmd+Shift+T a terminal on this computer
-- src/App.test.tsx › App: moving a host into a group by dragging › saves the host with the group and says so
-- src/App.test.tsx › App: ask which protocol to use › with the setting on, a plain host asks too; Telnet and Mosh are shown but cannot be picked when unavailable
-- src/App.test.tsx › App: page shortcuts › Ctrl/Cmd+4 goes to Snippets and Ctrl/Cmd+1 back to Hosts, from a terminal too
-- src/App.test.tsx › App: an app window opened for a host › opens that host in its first tab once the vault is open, and does not open it twice
-- src/App.test.tsx › App: an app window opened for a host › a terminal on this computer opens at once
-- src/App.test.tsx › App: dragging a tab onto a pane › turns the two tabs into one tab with a split, the dragged tab joining as new sessions
-- src/App.test.tsx › App: dragging a tab onto a pane › a pane can be taken back out of the split into a tab of its own, again without a reconnect
-- src/lib/backend.test.ts › Settings window backend (bridge) › is recognised only where the bridge is bound
-- src/lib/backend.test.ts › Settings window backend (bridge) › forwards settings, vault security and sync calls as JSON through the bridge
-- src/lib/backend.test.ts › Settings window backend (bridge) › an empty result is undefined, and errors from the main process reject
-- src/lib/backend.test.ts › Settings window backend (bridge) › keeps the version and help links local, and cannot open another Settings window
-- src/lib/backend.test.ts › toggleMaximise › zooms the native window through the Wails runtime
-- src/lib/backend.test.ts › toggleMaximise › does nothing in a browser, where there is no runtime
-- src/lib/backend.test.ts › app window (Duplicate in new window) › is recognised by its own bound object, and every use case call goes to the main process
-- src/lib/layout.test.ts › pane layout › starts with one leaf
-- src/lib/layout.test.ts › pane layout › splits a pane, focuses the new one, and keeps the host
-- src/lib/layout.test.ts › pane layout › supports nested splits in both directions
-- src/lib/layout.test.ts › pane layout › ignores a split of an unknown pane
-- src/lib/layout.test.ts › pane layout › closing a pane promotes its sibling and fixes focus
-- src/lib/layout.test.ts › pane layout › closing the last pane returns null
-- src/lib/layout.test.ts › pane layout › keeps focus when an unfocused pane closes
-- src/lib/layout.test.ts › sftp tabs › are tabs of kind sftp with a single leaf for the host
-- src/lib/layout.test.ts › sftp tabs › cannot be split
-- src/lib/layout.test.ts › uniqueTitle › keeps a free name, and numbers a taken one with the lowest free number
-- src/lib/layout.test.ts › broadcast, zoom and duplicate › broadcast needs two panes, toggles, and goes away when one pane is left
-- src/lib/layout.test.ts › broadcast, zoom and duplicate › zoom shows one pane, toggles back, ignores a pane that is not there, and a new split leaves the zoom
-- src/lib/layout.test.ts › broadcast, zoom and duplicate › closing the zoomed pane leaves the zoom; closing another keeps it
-- src/lib/layout.test.ts › broadcast, zoom and duplicate › duplicate makes a new tab on the focused pane's host, but not for a file browser
-- src/lib/layout.test.ts › moveTab › puts a tab before or after another one
-- src/lib/layout.test.ts › moveTab › never moves the pinned tab, and nothing goes before it
-- src/lib/layout.test.ts › moveTab › changes nothing for an unknown tab or a move onto itself
-- src/lib/util.test.ts › util › decodes base64 including non-UTF8 bytes
-- src/lib/util.test.ts › util › normalises errors from Wails (string) and exceptions
-- src/lib/util.test.ts › util › parses and de-duplicates tags
-- src/lib/util.test.ts › util › formats addresses
-- src/lib/util.test.ts › util › maps env to colour tokens
-- src/lib/util.test.ts › command line arguments › splitArgs keeps quoted text together
-- src/lib/util.test.ts › command line arguments › joinArgs quotes what needs it and round-trips
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › asks to enable a provider when none is on
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › names a provider that is not signed in and how to fix it
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › listens before it asks, then shows the streamed text and the final answer with its command
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › does not show a half-written JSON answer
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › shows an error with a way to Settings when the provider is not signed in
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › shows what the assistant did with tools and asks before a tool that changes something
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › Stop cancels the running question
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a host that asks first shows the exact preview and only then shares
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › cancelling the preview shares nothing and keeps the question
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › is switched off for a host whose policy is off
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › the badge says how many items were redacted from the screen
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › "What will be sent" shows the redacted text and the vault warning
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › the model list comes from the provider and the choice is sent with the question
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a custom model id is stored with the provider and then used
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a provider that cannot list models says so
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a real host can switch the assistant on or off for itself
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › a local terminal has no host switch
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › Enter sends and Shift+Enter makes a new line; an empty question is not sent
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › New chat clears the conversation and tells the backend
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › waits for the terminal before it can be used
-- src/lib/assistant/AssistantTab.test.tsx › AssistantTab › reloads the providers when Settings changed them from its own window
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › Insert puts the command on the prompt without Enter
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › Run asks for a confirmation first, then sends the command
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › a risky command needs the word run typed
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › a command with a hidden value cannot be inserted or run
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › Run is disabled with the reason on a production host, Insert still works
-- src/lib/assistant/CommandCard.test.tsx › CommandCard › shows what a command may print
-- src/lib/hosts/HostForm.test.tsx › HostForm: AI assistant › has a per-host switch that defaults to off on production hosts and is saved with the host
-- src/lib/hosts/HostForm.test.tsx › HostForm: AI assistant › keeps the stored policy when a host is edited
-- src/lib/hosts/HostForm.test.tsx › HostForm › follows the Termius flow: address, general, port, credentials, options
-- src/lib/hosts/HostForm.test.tsx › HostForm › is docked (an aside) rather than a modal dialog backdrop
-- src/lib/hosts/HostForm.test.tsx › HostForm › requires a hostname
-- src/lib/hosts/HostForm.test.tsx › HostForm › rejects port 0
-- src/lib/hosts/HostForm.test.tsx › HostForm › rejects port 70000
-- src/lib/hosts/HostForm.test.tsx › HostForm › rejects port abc
-- src/lib/hosts/HostForm.test.tsx › HostForm › rejects spaces in hostname
-- src/lib/hosts/HostForm.test.tsx › HostForm › Save stores a complete host with a key identity, tags and jump host
-- src/lib/hosts/HostForm.test.tsx › HostForm › a typed password becomes a vault identity; the host only references it
-- src/lib/hosts/HostForm.test.tsx › HostForm › the password field can be revealed and is disabled when an identity is chosen
-- src/lib/hosts/HostForm.test.tsx › HostForm › Connect saves first, then asks to open a terminal for the saved host
-- src/lib/hosts/HostForm.test.tsx › HostForm › Connect does not open anything when validation fails
-- src/lib/hosts/HostForm.test.tsx › HostForm › prefills when editing, keeps the id, and excludes itself from the jump list
-- src/lib/hosts/HostForm.test.tsx › HostForm › a draft from quick connect creates a new record (no id)
-- src/lib/hosts/HostForm.test.tsx › HostForm › reports what is being typed so the page can show a draft card
-- src/lib/hosts/HostForm.test.tsx › HostForm › shows backend errors and does not connect
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › tests the typed values without saving anything
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › does not send the password when an identity is selected
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › shows a failed test clearly
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › validates before testing and reports backend errors
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › asks to trust an unknown host key and answers with the displayed fingerprint
-- src/lib/hosts/HostForm.test.tsx › HostForm: Test connection › cancelling the host key prompt rejects it with an empty fingerprint
-- src/lib/hosts/HostForm.test.tsx › GroupForm › requires a name then saves
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › Telnet is off until "Add Telnet" is pressed, and then comes right after the SSH port
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › Add Telnet shows the port (23), a warning, its own username, password and encoding
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › refuses a Telnet port that is not a port
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › editing a host shows its Telnet settings, and Remove turns Telnet off
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › the theme is a picture card: pick one from the pictures, or go back to the app setting
-- src/lib/hosts/HostForm.test.tsx › HostForm: Telnet and terminal theme › an existing host keeps its theme when edited, and can go back to the app setting
-- src/lib/hosts/HostList.test.tsx › HostList › shows every host and the group cards with host counts (including sub-groups)
-- src/lib/hosts/HostList.test.tsx › HostList › drills into a group, shows sub-groups and a breadcrumb, and goes back
-- src/lib/hosts/HostList.test.tsx › HostList › searches across all groups by label, hostname, user and tag
-- src/lib/hosts/HostList.test.tsx › HostList › filters by environment and toggles off
-- src/lib/hosts/HostList.test.tsx › HostList › connects on double click and via the hover actions
-- src/lib/hosts/HostList.test.tsx › HostList › edits and deletes a group without opening it
-- src/lib/hosts/HostList.test.tsx › HostList › shows an empty-state hint
-- src/lib/hosts/HostList.test.tsx › HostList › renders the toolbar slot
-- src/lib/hosts/HostList.test.tsx › quick connect › Connect opens the only matching host
-- src/lib/hosts/HostList.test.tsx › quick connect › an unknown target starts a new host with the parsed values (Enter works too)
-- src/lib/hosts/HostList.test.tsx › quick connect › Connect is disabled until something is typed
-- src/lib/hosts/HostList.test.tsx › quick connect › parses ssh root@10.0.0.1
-- src/lib/hosts/HostList.test.tsx › quick connect › parses host.example.com
-- src/lib/hosts/HostList.test.tsx › quick connect › parses u@h:2222
-- src/lib/hosts/HostList.test.tsx › quick connect › parses SSH   u@h
-- src/lib/hosts/HostList.test.tsx › quick connect › rejects ""
-- src/lib/hosts/HostList.test.tsx › quick connect › rejects "a b c"
-- src/lib/hosts/HostList.test.tsx › quick connect › rejects "h:99999"
-- src/lib/hosts/HostList.test.tsx › quick connect › rejects "@h"
-- src/lib/hosts/HostList.test.tsx › quick connect › rejects "user@"
-- src/lib/hosts/HostList.test.tsx › draft card › shows a placeholder card while a new host is being entered, and the typed text
-- src/lib/hosts/HostList.test.tsx › draft card › is not counted as a host
-- src/lib/hosts/HostList.test.tsx › HostList: no SFTP button on a card › SFTP lives in its own tab next to Vaults, so a card has no SFTP button, not even on hover
-- src/lib/hosts/HostList.test.tsx › HostList: server type icon › shows the distribution icon once the server type is known, with the environment as a pip
-- src/lib/hosts/HostList.test.tsx › HostList: Telnet action › is offered only for hosts that have Telnet on, and opens that host with Telnet
-- src/lib/hosts/HostList.test.tsx › HostList: Telnet action › is not shown without a handler
-- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › starts as a grid; the View menu has a check on the current view
-- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › List shows the same hosts as rows, closes the menu, and is remembered
-- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › opens in the remembered view
-- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › Esc and a click elsewhere close the menu
-- src/lib/hosts/HostList.test.tsx › HostList: Grid / List view › works when the browser storage is unavailable
-- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › dropping a host card on a group card moves the host there
-- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › inside a group, a host can go into a sub-group or out through "All hosts"
-- src/lib/hosts/HostList.test.tsx › HostList: drag a host onto a group › cards are not draggable without a handler, and other drags are ignored
-- src/lib/hosts/HostList.test.tsx › HostList: tag filter › lists every tag once, sorted, and keeps the hosts that have any ticked tag
-- src/lib/hosts/HostList.test.tsx › HostList: tag filter › searches the tags, and Clear selection brings every host back
-- src/lib/hosts/HostList.test.tsx › HostList: tag filter › combines with the search box, and reaches hosts inside groups too
-- src/lib/hosts/HostList.test.tsx › HostList: tag filter › says so when there are no tags yet, and closes on Escape
-- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › lists the ports found, picks the first and defaults to 115200
-- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › connects to the chosen port at the chosen speed
-- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › says so when there are no ports, disables Connect, and finds a device after Refresh
-- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › shows a backend error and stays usable
-- src/lib/hosts/SerialPanel.test.tsx › SerialPanel › names ports and offers the usual speeds
-- src/lib/hosts/tree.test.ts › buildTree › nests groups and places hosts
-- src/lib/hosts/tree.test.ts › buildTree › puts hosts of unknown groups into ungrouped
-- src/lib/hosts/tree.test.ts › buildTree › treats a group with a missing parent as a root
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › lists the trusted hosts with key type and fingerprint
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › says what this page is when nothing is trusted yet
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › searches by host, key type and fingerprint
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › forgets a host after confirming, and explains what that means
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › copies a fingerprint
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › hashed entries are shown but cannot be forgotten, with the reason
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Known Hosts page › refreshes when something new was trusted (log:added), and shows a backend error
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › shows the newest lines first with host, message and whether it worked
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › filters by group and by text, asking the backend
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › says what to expect when empty, and when nothing matches
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › updates live when a line is added
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › clears after confirming
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › shows a backend error
-- src/lib/panels/KnownHostsAndLogs.test.tsx › Logs page › formats the time without the year this year, and with it otherwise
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › lists rules as cards: letter, name, host, mapping and state; Stop works
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › uses the label as the name, and L / R / D for the three types
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › says what to do when there are none
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › reacts to forward:state events
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › Start shows a host key prompt when the host is unknown and answers with the displayed fingerprint
-- src/lib/panels/PortForwardsPage.test.tsx › Port Forwarding page › deletes after confirming
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › starts with the wizard: pick Local / Remote / Dynamic, see a picture and a description
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Continue walks through port → host → destination → name, with Back at every step
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Remote says so at each step; Dynamic skips the destination
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Skip wizard shows everything on one page
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › adds a local rule and shows it as a card; the draft card follows the label
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › Dynamic hides the destination fields and sends none
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › the host card button opens the wizard with that host chosen: the host step is skipped
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › edits an existing rule (no wizard) and keeps its id
-- src/lib/panels/PortForwardsPage.test.tsx › New Port Forwarding panel › shows the validation error from the backend and keeps the panel open
-- src/lib/panels/PortForwardsPage.test.tsx › Select Host step: groups › lists hosts under their group, and hosts of an unknown group with the ungrouped ones
-- src/lib/panels/panels.test.tsx › DataPanel › imports an ssh config and shows the report with warnings
-- src/lib/panels/panels.test.tsx › DataPanel › warns before exporting private keys
-- src/lib/panels/panels.test.tsx › DataPanel › requires an 8+ character backup password
-- src/lib/panels/panels.test.tsx › DataPanel › exports metadata-only JSON
-- src/lib/panels/panels.test.tsx › DataPanel › surfaces backend errors
-- src/lib/panels/panels.test.tsx › SyncPanel › saves the repo and syncs
-- src/lib/panels/panels.test.tsx › SyncPanel › disables sync while the vault is locked and join once a vault exists
-- src/lib/panels/panels.test.tsx › SyncPanel › restores on a new machine
-- src/lib/panels/panels.test.tsx › SyncPanel › shows sync errors
-- src/lib/panels/panels.test.tsx › null slices from Go (regression) › DataPanel renders an import report whose arrays are null
-- src/lib/panels/panels.test.tsx › null slices from Go (regression) › the Wails adapter normalises null report arrays
-- src/lib/sftp/Permissions.test.tsx › permission modes › reads and writes rwx strings
-- src/lib/sftp/Permissions.test.tsx › PermissionsDialog › shows the current bits, changes them with the grid or the octal box, and saves
-- src/lib/sftp/Permissions.test.tsx › PermissionsDialog › keeps the dialog open and says why when saving fails
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows this computer on the left and the host on the right, folders first, hidden files off locally
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows hidden files on request
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › navigates each pane on its own: double click, up, path box, breadcrumbs
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › shows an error and restores the path when a folder does not exist
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › creates, renames and deletes locally (folders recursively, after confirming)
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: two panes › does the same on the host through SFTP
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Upload sends the selected file to the remote folder and shows what happened
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Download saves the selected remote file into the local folder and lists it
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › a whole folder goes with everything inside, and the summary says how much
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Cmd/Ctrl-click, Shift-click and Cmd/Ctrl+A select several, and the buttons say how many
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › dragging a selected row drags the whole selection; dragging an unselected row drags just that row
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › asks once for the whole batch before replacing, and leaves files alone when declined
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › a single existing file gets the single-file question
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › drag and drop: local items dropped on the remote pane upload, remote items dropped on the local pane download
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › dropping on the pane it came from does nothing, and the target pane lights up while dragging over
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › ignores drops that are not from the panes (files from Finder, text)
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › shows the error from a failed transfer, and still refreshes the receiving side
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › cannot transfer before a host is connected
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › deletes several selected items after one confirmation
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: moving files and folders between the panes › Rename needs exactly one selected item
-- src/lib/sftp/SftpBrowser.test.tsx › transfer summaries › says what was done and what was left
-- src/lib/sftp/SftpBrowser.test.tsx › transfer summaries › asks about one or many existing files
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › starts with "Connect to host"; Select host lists the saved hosts, searchable, and connecting works
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › Select host can be cancelled and explains an empty host list
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › Change host closes the connection and goes back to the choice
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › closes its connection when the tab goes away
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › asks to trust an unknown host key before connecting
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › shows a banner when the connection fails and reconnects on request
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host › shows the banner when the connection drops later and disables transfers
-- src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › formats sizes
-- src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › builds breadcrumbs, parents and joined paths
-- src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › validates names
-- src/lib/sftp/SftpBrowser.test.tsx › sftp format helpers › names the kind of an entry
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: the host list stays current › uses the hosts the app gives it, so a host added later is offered
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a file has the full list: Open … Select All and Close
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › empty space has the same list, with what needs a file greyed out
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › the Actions button opens the same menu for what is selected; Select All and Close work
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › the + next to the host name opens the host list to switch hosts, and Cancel keeps the current one
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Filter narrows the rows by name
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Open on a folder goes into it, and on a remote file downloads it to a temporary folder and opens that
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › a local file is opened in place, and Open with asks which app
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Upload (local pane) and Download (remote pane) in the menu send the chosen items to the other pane
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Rename and New Folder open the name box, Delete asks first
-- src/lib/sftp/SftpBrowser.test.tsx › SftpBrowser: right-click menu › Edit Permissions changes the mode on the server
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › lists the detected providers with their state and nothing is on by default
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › turning one on runs the isolation test and shows when it fails
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › an enabled provider shows the models loaded from the provider and saves the default one
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › says when a provider cannot list its models
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › names the company that receives the redacted text and can make one the default
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › Refresh runs detection again
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: providers › adds a command of its own: the arguments are split and it still needs the test to be switched on
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › says redaction cannot be turned off and offers no switch for it
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › saves the number of lines and extra patterns
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: privacy › auto-run of read-only commands is a separate opt-in
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › adds a server: secrets are sent to be stored and are not shown again
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › replaces or removes a saved value
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › tests the connection; new tools wait for a mode and can be approved with the suggested ones
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › a tool mode is chosen one by one
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › a server that cannot start shows why
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › limits a server to chosen hosts and providers; a provider without MCP is marked
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › trusting a server is an explicit choice
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › imports a server from another tool: names only are listed
-- src/lib/settings/AssistantSettings.test.tsx › AssistantSettings: MCP servers › switches a server on or off and deletes it
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › fills its own native window: no floating chrome, no dots, no drag
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › Esc closes the window
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › the title is centred between the macOS buttons and the right edge
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › applies the saved theme, zoom and motion to its own page, and saves changes
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › reads the settings again whenever the window is focused (the main window may have changed them)
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp (the Settings window process) › shows a loading state, then nothing breaks when the main window is gone
-- src/lib/settings/SettingsApp.test.tsx › SettingsApp title bar › a double click on the title bar zooms the window, but not on its buttons
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › is a window with a title bar, not a page
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › has categories on the left and theme, help links and version below them (Termius layout)
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › closes with the red dot and with Escape
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › Escape closes an open dropdown first and not the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the window can be dragged by its title bar but not by its buttons
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › changes the app theme to Auto, Light or Dark from the sidebar dropdown and saves immediately
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the theme dropdown opens the custom menu
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › picks a terminal theme, filters by dark/light, and can go back to "match app"
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › "Match app theme" always shows the automatic choice, not the selected theme
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › the preview uses the chosen theme colours, font and size
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › font (custom dropdown), size stepper, cursor, blinking and scrollback all persist
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › stepper stops at the limits
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › shows a backend validation error as a toast and keeps the old value
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: "ask on open" shows only with Touch ID turned on, and can be switched off
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: with Touch ID on, "ask on open" is a switch that is saved
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › Ctrl+1…7 jump to a category and Ctrl+Tab goes round them, with the keys shown on the tabs
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: a password hint can be saved
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › security: auto-lock, keychain switch and password change
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › sync is shown inside the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow › help links open only the project pages
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximise fills the screen, restore goes back, and the title bar double-click does the same
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › maximised, the in-app dots give way to Restore and Close on the right (the native macOS buttons own the top left)
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › minimise rolls the window up to its title bar and unrolls it again, keeping the chosen tab
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › a maximised window cannot be dragged, and maximising resets its position
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: window controls › the window is resizable by CSS (corner handle) with sane limits
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › opens on General with zoom, reduce motion and confirm-before-close
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom steps by 10%, stops at 80% and 160%, and resets
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › zoom in is disabled at 160%
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: General › the switches persist
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › shows a local profile, the free plan and the not-yet features
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › saves the profile only when it changed, and shows the initial as the avatar
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Account › reports an invalid email from the backend
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › a second key right after the first makes a two-step shortcut (Ctrl+K, then M)
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › a one-step shortcut cannot take the first step of a two-step one, and the other way round
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › lists every action with its default and the fixed shortcuts
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › records a new shortcut and saves only the difference from the default
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a duplicate and says which action uses it
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › refuses a plain key, accepts after a valid one
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › modifier-only presses are ignored; Esc cancels without touching the window
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › choosing the default again removes the override; reset and reset-all work
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Shortcuts › tells the global handler to stay quiet while recording
-- src/lib/settings/SettingsWindow.test.tsx › Switch › toggles and exposes its state
-- src/lib/settings/SettingsWindow.test.tsx › SettingsWindow: Highlight output › is on by default in the Terminal tab and can be switched off
-- src/lib/settings/appearance.test.tsx › useAppearance › an explicit mode ignores the OS
-- src/lib/settings/appearance.test.tsx › useAppearance › auto follows the OS and reacts when it changes
-- src/lib/settings/appearance.test.tsx › useAppearance › switching from auto to explicit stops following the OS
-- src/lib/shell/TabStatus.test.tsx › pane status › summarises panes: connecting wins, closed only when all are, nothing when unknown
-- src/lib/shell/TabStatus.test.tsx › TabStatus › shows a spinner while connecting, a green dot when connected and a red dot when disconnected
-- src/lib/shell/TabStatus.test.tsx › TabStatus › a split tab is connecting while one of its panes is
-- src/lib/shell/TabStatus.test.tsx › TabStatus › a file browser tab and a tab still choosing a protocol have none
-- src/lib/shell/TopBar.test.tsx › TopBar › the Vaults tab does not reuse the .home page-container class (regression: it stretched to 220px)
-- src/lib/shell/TopBar.test.tsx › TopBar › selects and closes terminal tabs without selecting them on close
-- src/lib/shell/TopBar.test.tsx › TopBar › split buttons are only enabled inside a terminal tab
-- src/lib/shell/TopBar.test.tsx › Nav › shows the key of an action at the right of its item, and no native tooltip while the label is visible
-- src/lib/shell/TopBar.test.tsx › Nav › every item has an accessible name, and a tooltip when the labels are hidden on narrow windows
-- src/lib/shell/TopBar.test.tsx › Brand wordmark › keeps the two V letters apart (regression: tight letter-spacing made "VV" read as "W")
-- src/lib/shell/TopBar.test.tsx › Brand wordmark › renders logo and wordmark in one flex row with the accessible name VVTerm
-- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › toggles on the empty part of the bar
-- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › does not toggle when the double click lands on a tab or a button
-- src/lib/shell/TopBar.test.tsx › TopBar: double click zooms the window like a Mac app › works without a handler (browser mode)
-- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › a double click turns the name into an input with the name selected; Enter saves it
-- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › Esc cancels, and leaving the field saves what was typed
-- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › the pinned SFTP tab cannot be renamed, and renaming does not select or close the tab
-- src/lib/shell/TopBar.test.tsx › TopBar: renaming a tab › does nothing without a handler (the tooltip is not offered either)
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › opens at the pointer with Duplicate, Rename, Split right, Split down and Close
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › each item acts on that tab and closes the menu
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › Rename turns the tab name into the input
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › closes on Escape and on a click elsewhere, and never shows the browser menu
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › the pinned SFTP tab has no menu
-- src/lib/shell/TopBar.test.tsx › TopBar: the right-click menu of a tab › items that do not apply are disabled
-- src/lib/shell/TopBar.test.tsx › TopBar: tab icons › a tab shows the server type of its host, and a plain terminal icon for this computer
-- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › a tab dropped on the right half of another goes after it, on the left half before it
-- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › the pinned tab and a tab being renamed cannot be dragged; without a handler nothing is draggable
-- src/lib/shell/TopBar.test.tsx › TopBar: dragging tabs › is not draggable without a handler
-- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › are one or two steps separated by a space; only the first needs a modifier
-- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › one event never matches a two-step shortcut; each step matches by itself
-- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › conflict with a single shortcut on the same first step, in both directions; chords may share a first step
-- src/lib/shortcuts/shortcuts.test.ts › two-step shortcuts › are written out step by step, and as separate keys for drawing key caps
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › has unique action ids and unique valid default combos
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › effective() merges overrides over defaults and ignores empty ones
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › keyOf maps physical keys (so Option/Shift layouts do not matter) and ignores bare modifiers
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › builds combos with Mod = Cmd on macOS and Ctrl elsewhere
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › matches ignores modifier order and case, and rejects extra modifiers
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › validates like the backend
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › finds the action that already owns a combo, except the one being edited
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › formats for macOS and other platforms
-- src/lib/shortcuts/shortcuts.test.ts › shortcuts › exposes a capture flag that starts off
-- src/lib/snippets/snippets.test.tsx › SnippetsPage › lists snippets with their description or first line
-- src/lib/snippets/snippets.test.tsx › SnippetsPage › Run executes, Paste does not, and the other actions are wired
-- src/lib/snippets/snippets.test.tsx › SnippetsPage › explains that a terminal is needed, and shows an empty state
-- src/lib/snippets/snippets.test.tsx › SnippetsPage › shows the empty hint without snippets
-- src/lib/snippets/snippets.test.tsx › SnippetForm › requires a label and a script
-- src/lib/snippets/snippets.test.tsx › SnippetForm › saves a multi-line script exactly as typed
-- src/lib/snippets/snippets.test.tsx › SnippetForm › prefills when editing and updates the same record
-- src/lib/snippets/snippets.test.tsx › SnippetForm › shows backend errors
-- src/lib/snippets/snippets.test.tsx › SnippetPicker › is disabled outside a terminal
-- src/lib/snippets/snippets.test.tsx › SnippetPicker › runs or pastes the chosen snippet and closes
-- src/lib/snippets/snippets.test.tsx › SnippetPicker › closes on Escape and on outside click, and tells when there are none
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › names the host with its pane number and small print
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › a single pane has no header at all: it would only cover the first line of the terminal
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › describes this computer, serial ports and Telnet panes
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › the buttons call back with the tab and the pane
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › while broadcasting the panes are marked and the buttons say so
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › what is typed in one pane is typed in the others, only while broadcasting
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › zoom shows one pane and hides the others without unmounting any (no session ends)
-- src/lib/terminal/PaneHeader.test.tsx › Workspace: the header of a pane › works through a nested split too
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › nests hosts under groups, and a folded group hides its contents
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › a host with an open tab switches to it; Alt-click opens a new one
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › lists the active sessions at the top and switches between them
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar hosts tree › searching unfolds the groups that lead to a match
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › has the five sections and tells which one is open
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Hosts: searches and opens a host
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: one line each; a click shows the whole script with Run and Paste
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Snippets: no tooltip that explains clicking; New Snippet and search work
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › History: lists typed commands, filters, types and clears them
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Themes: lists the themes as pictures, marks the current one and picks another
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font: family and size, with limits
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font size stops at the limits
-- src/lib/terminal/Sidebar.test.tsx › TerminalSidebar › Font size stops at the lower limit too
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › opens a session, attaches after subscribing, and renders output bytes
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › sends keystrokes only once the session is ready
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › asks for host key confirmation and answers with the displayed fingerprint
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › rejecting the host key sends an empty fingerprint
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › shows the connection-lost banner and reconnects only on Enter
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › a clean exit asks the parent to remove the pane
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › closes the session and disposes xterm on unmount
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › shows an error banner if opening fails
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane › opens the search bar with Ctrl+F
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane snippet writer › registers by pane id, types only when ready, and unregisters on unmount
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › sends one call at a time, in order, and what was typed meanwhile goes out together
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › a failed call does not block the ones after it
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: keystroke order › snippets are typed through the same ordered queue, after what is already on its way
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › copies the selection once it stops changing (copy on select)
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › does nothing when copy on select is off, or the selection was cleared
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy key copies the selection and is not sent to the shell; with nothing selected it passes through
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › Next / Previous tab are not sent to the shell: the terminal lets them through to the app
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the copy and paste combinations can be changed
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the paste key pastes the clipboard into the terminal, only when connected
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › a right click pastes by default, and never shows the browser menu
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › right click = none does nothing at all
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › right click = menu shows Copy, Paste, Select all and Clear where you clicked
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: copy on select, right click, copy and paste keys › the menu closes on Escape and on a click elsewhere
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › shows who it connects to, and a line that creeps along without ever jumping
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › the target moves on when the backend says the login is done, and the line follows smoothly
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › when the session is ready the line runs the rest of the way, and the terminal shows when it has arrived
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › a failure stops the line where it was and shows the error with Retry, Show logs and Close
-- src/lib/terminal/TerminalPane.test.tsx › TerminalPane: the connecting screen › a connection lost after it was up keeps the old banner, not the connecting screen
-- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › a host with its own theme uses it; the others follow Settings
-- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › a Telnet pane of the host uses the same theme, and a local terminal follows Settings
-- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › an unknown theme id falls back to the app appearance rather than breaking
-- src/lib/terminal/Workspace.test.tsx › Workspace: per-host terminal theme › works without a host list
-- src/lib/terminal/Workspace.test.tsx › Workspace: a tab dragged onto a pane › lights up the side it is nearest to and tells the app where the split goes when dropped
-- src/lib/terminal/Workspace.test.tsx › Workspace: a tab dragged onto a pane › shows nothing for a tab dropped on itself, or when nothing is being dragged
-- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › joins the dropped tab as a split on the chosen side, with new panes and the focus on them
-- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › a tab with several panes brings them all, the very same panes (no new sessions); wrong cases change nothing
-- src/lib/terminal/Workspace.test.tsx › graftTab and sideOf › sideOf picks the nearest edge
-- src/lib/terminal/Workspace.test.tsx › popPane › takes a pane out of a split into a tab of its own, keeping its id
-- src/lib/terminal/Workspace.test.tsx › popPane › paneRects halves the area at every split
-- src/lib/terminal/highlight.test.ts › findHighlights › finds URLs, and does not also colour the IP or the path inside them
-- src/lib/terminal/highlight.test.ts › findHighlights › finds IPv4 addresses with an optional port, and refuses impossible ones
-- src/lib/terminal/highlight.test.ts › findHighlights › finds IPv6 and MAC-style addresses, but not a clock time
-- src/lib/terminal/highlight.test.ts › findHighlights › finds dates and times
-- src/lib/terminal/highlight.test.ts › findHighlights › finds the words that say how it went, ignoring case and word boundaries
-- src/lib/terminal/highlight.test.ts › findHighlights › finds paths, but not URL slashes or dates like 12/31
-- src/lib/terminal/highlight.test.ts › findHighlights › never overlaps, keeps the order of the line, and the first rule wins
-- src/lib/terminal/highlight.test.ts › findHighlights › handles empty and very long lines
-- src/lib/terminal/highlight.test.ts › readLine › maps characters to columns, with wide characters taking two
-- src/lib/terminal/highlight.test.ts › readLine › turns empty cells into spaces
-- src/lib/terminal/highlight.test.ts › createHighlighter › colours finished lines only: the line the cursor is on is left alone
-- src/lib/terminal/highlight.test.ts › createHighlighter › looks at each line once, picking up new lines as the cursor moves down
-- src/lib/terminal/highlight.test.ts › createHighlighter › leaves words a program coloured itself, and everything in the alternate screen
-- src/lib/terminal/highlight.test.ts › createHighlighter › places colours by column even after wide characters
-- src/lib/terminal/highlight.test.ts › createHighlighter › dispose removes every colour and stops; reset starts again from the top
-- src/lib/terminal/highlight.test.ts › createHighlighter › does nothing when the cursor is still on the first line, or the buffer is empty
-- src/lib/terminal/highlight.test.ts › createHighlighter › works through a long scroll in bounded steps
-- src/lib/terminal/history.test.ts › createLineTracker › reports each line finished with Enter, applying Backspace
-- src/lib/terminal/history.test.ts › createLineTracker › drops a line on Ctrl-C and Ctrl-U, ignores arrows, empty lines and control keys
-- src/lib/terminal/history.test.ts › command history › keeps newest first, moves a repeated command up and trims it
-- src/lib/terminal/history.test.ts › command history › keeps at most MAX_HISTORY commands, refuses empty and huge lines, and tells subscribers
-- src/lib/terminal/history.test.ts › command history › is stored in localStorage
-- src/lib/terminal/panes.test.ts › pane registry › writes to a registered pane and stops after unregister
-- src/lib/terminal/panes.test.ts › pane registry › reports false for unknown panes and for panes that refuse input
-- src/lib/terminal/panes.test.ts › pane registry › a stale unregister does not remove a newer registration
-- src/lib/terminal/panes.test.ts › toTerminalInput › turns newlines into carriage returns and presses Enter once when running
-- src/lib/terminal/panes.test.ts › toTerminalInput › leaves the last line on the prompt when not running
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › has unique ids, names, and both dark and light themes
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › vvterm-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › vvterm-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › dracula defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › nord defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › tokyo-night defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › one-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › gruvbox-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › gruvbox-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › solarized-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › solarized-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › night-owl defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › light-owl defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › kanagawa-wave defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › kanagawa-lotus defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › everforest-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › everforest-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › rose-pine defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › rose-pine-dawn defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › monokai defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › aura defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › flexoki-dark defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › flexoki-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › github-light defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-green defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-blue defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-red defines a full, valid palette
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › vvterm-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › vvterm-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › dracula is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › nord is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › tokyo-night is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › one-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › gruvbox-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › gruvbox-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › solarized-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › solarized-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › night-owl is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › light-owl is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › kanagawa-wave is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › kanagawa-lotus is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › everforest-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › everforest-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › rose-pine is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › rose-pine-dawn is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › monokai is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › aura is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › flexoki-dark is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › flexoki-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › github-light is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-green is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-blue is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › hacker-red is readable: text contrasts with the background and "dark" is truthful
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › blends colours
-- src/lib/terminal/themes.test.ts › terminal theme catalogue › finds and resolves themes; auto and unknown ids follow the appearance
-- src/lib/terminal/themes.test.ts › "Match app theme" looks like the app › the default dark and light themes use the app background from styles.css and green text
-- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › says so in a password field while Caps Lock is on, and goes away when it is off
-- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › only in password fields, and not after the field lost the focus
-- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › sits inside the field, at its right edge and centred vertically
-- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › is quiet when the platform cannot tell
-- src/lib/ui/CapsLockWarning.test.tsx › CapsLockWarning › the webview's own indicator and autofill button are hidden by the stylesheet
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › shows the question and resolves true on the confirm button, with a custom label
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › resolves false on Cancel, on Esc and on a click outside
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › Enter confirms, and the confirm button has the focus
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › keeps Esc and Enter away from whatever is underneath
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › a newer question replaces an unanswered one, which counts as "no"
-- src/lib/ui/Confirm.test.tsx › in-app confirmation › without a provider it falls back to window.confirm
-- src/lib/ui/OsIcon.test.tsx › OsIcon › has a name, colour and mark for every server type the backend can store
-- src/lib/ui/OsIcon.test.tsx › OsIcon › names the server type, and is empty while it is unknown
-- src/lib/ui/OsIcon.test.tsx › OsIcon › draws the distribution mark, or the generic server icon when unknown
-- src/lib/ui/OsIcon.test.tsx › OsIcon glyphs › draws a logo for every server type (never the generic icon for a known one)
-- src/lib/ui/Select.test.tsx › Select › shows the current label and exposes combobox semantics
-- src/lib/ui/Select.test.tsx › Select › opens a custom listbox (not the native popup) with hints and a check on the selected option
-- src/lib/ui/Select.test.tsx › Select › click selects, closes and calls onChange once
-- src/lib/ui/Select.test.tsx › Select › choosing the current value does not fire onChange
-- src/lib/ui/Select.test.tsx › Select › disabled options cannot be chosen
-- src/lib/ui/Select.test.tsx › Select › keyboard: arrows skip disabled options, Enter selects, Esc closes and keeps the value
-- src/lib/ui/Select.test.tsx › Select › End and Home jump to the ends; type-ahead finds an option
-- src/lib/ui/Select.test.tsx › Select › Space and Enter on the trigger open it; Tab closes it
-- src/lib/ui/Select.test.tsx › Select › closes on an outside click and toggles on a second trigger click
-- src/lib/ui/Select.test.tsx › Select › Escape closes the menu without letting the event reach a parent that would close a panel
-- src/lib/ui/Select.test.tsx › Select › keeps a hidden native <select> in sync, so label lookups and form tooling still work
-- src/lib/ui/Select.test.tsx › Select › shows a placeholder when the value matches no option
-- src/lib/ui/Select.test.tsx › Select › a disabled select cannot be opened
-- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › blocks the browser menu on text and anywhere else in the page
-- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › leaves it to text fields, where it holds Cut, Copy and Paste
-- src/lib/ui/noNativeMenu.test.ts › installNoNativeMenu › stops when removed
-- src/lib/vault/Keychain.test.tsx › Keychain page › shows a toolbar and one card per identity with its type, and no secret material
-- src/lib/vault/Keychain.test.tsx › Keychain page › names key types
-- src/lib/vault/Keychain.test.tsx › Keychain page › says what to do when there are no keys
-- src/lib/vault/Keychain.test.tsx › Keychain page › copies a public key and deletes after confirming
-- src/lib/vault/Keychain.test.tsx › New key panel › opens docked next to the list with a draft card that follows the label
-- src/lib/vault/Keychain.test.tsx › New key panel › saves a pasted key with its passphrase
-- src/lib/vault/Keychain.test.tsx › New key panel › drag and drop: dropping a key file fills the private key and the label
-- src/lib/vault/Keychain.test.tsx › New key panel › keeps a label that was already typed when a file is dropped
-- src/lib/vault/Keychain.test.tsx › New key panel › refuses a dropped file that is not a private key, and one that is too large
-- src/lib/vault/Keychain.test.tsx › New key panel › "Import from key file" reads the chosen file
-- src/lib/vault/Keychain.test.tsx › New key panel › shows the error from the vault and keeps the panel open
-- src/lib/vault/Keychain.test.tsx › New key panel › generates a key and shows only the public key
-- src/lib/vault/Keychain.test.tsx › New key panel › saves a password identity and an ssh-agent identity
-- src/lib/vault/Keychain.test.tsx › New Key panel: the design › has Label, Private key, Public key and Certificate in that order, then the drop area and the import button
-- src/lib/vault/Keychain.test.tsx › New Key panel: the design › a field name floats onto its border once the field has something in it
-- src/lib/vault/Keychain.test.tsx › New Key panel: the design › sends the public key and the certificate with the private key
-- src/lib/vault/Keychain.test.tsx › New Key panel: the design › asks for a passphrase when the key is encrypted in the OpenSSH way too
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › the hint stays hidden until asked for
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › no hint saved: no hint button
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › creating a vault can save a hint, but not one that contains the password
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › on a Mac with Touch ID the sheet comes up by itself, and the button says Touch ID
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › with "ask on open" off the sheet waits for the button
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen hint and Touch ID › without Touch ID the keychain button does not pop up by itself
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › unlocks with the right password
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › shows the backend error for a wrong password and stays locked
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › creation requires 12+ characters and a matching confirmation
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › offers keychain unlock only when enabled
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen › keychain unlock works
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › is offered when unlocking but not when creating
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › is not offered on the create form
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › explains honestly that the password cannot be recovered and what a reset keeps and erases
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › the reset button stays disabled until RESET is typed exactly
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › resets, tells the user what happened and turns into the create form
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › pressing Enter in the confirmation field resets only when RESET is typed, and never tries to unlock
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › Back returns to the unlock form and clears the confirmation
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: forgot password › shows backend errors
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: dragging the window › has a drag strip, and a double click on it zooms the window
-- src/lib/vault/UnlockScreen.test.tsx › UnlockScreen: dragging the window › the strip is part of the create-vault screen too
 
 ## End-to-end (Playwright, real backend)
 

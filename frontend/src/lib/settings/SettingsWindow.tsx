@@ -2,6 +2,7 @@ import {PointerEvent as ReactPointerEvent, useEffect, useRef, useState} from 're
 import {useBackend, type UpdateInfo} from '../backend'
 import {SupportPanel} from '../panels/SupportPanel'
 import {useToast} from '../ui/Toast'
+import {useConfirm} from '../ui/Confirm'
 import {Switch} from '../ui/Switch'
 import {Select} from '../ui/Select'
 import {biometricName, errMsg} from '../util'
@@ -9,6 +10,7 @@ import {ThemePicker} from './ThemePicker'
 import {resolveTerminalTheme} from '../terminal/themes'
 import {SyncPanel} from '../panels/SyncPanel'
 import {IconArrowUpRight, IconUser} from '../ui/Icons'
+import {formatBytes} from '../sftp/format'
 import {ShortcutsEditor} from './ShortcutsEditor'
 import {AssistantSettings} from './AssistantSettings'
 import {capture, formatCombo, matches} from '../shortcuts/shortcuts'
@@ -21,10 +23,10 @@ const keychainName = () => {
   return /mac/i.test(p) ? 'the macOS Keychain' : /windows|win32|win64/i.test(p) ? 'Windows Credential Manager' : 'the system keychain'
 }
 
-type Cat = 'general' | 'account' | 'terminal' | 'security' | 'assistant' | 'sync' | 'shortcuts'
+type Cat = 'general' | 'account' | 'terminal' | 'security' | 'assistant' | 'sync' | 'shortcuts' | 'storage'
 const CATS: {id: Cat; label: string}[] = [
   {id: 'general', label: 'General'}, {id: 'account', label: 'Account'}, {id: 'terminal', label: 'Terminal'},
-  {id: 'security', label: 'Security'}, {id: 'assistant', label: 'AI assistant'}, {id: 'sync', label: 'Sync'}, {id: 'shortcuts', label: 'Shortcuts'},
+  {id: 'security', label: 'Security'}, {id: 'assistant', label: 'AI assistant'}, {id: 'sync', label: 'Sync'}, {id: 'shortcuts', label: 'Shortcuts'}, {id: 'storage', label: 'Storage'},
 ]
 
 const FONTS = [
@@ -70,6 +72,7 @@ interface Props {
 export function SettingsWindow({settings: s, appearance, vault, onSettings, onVault, onChanged, onClose, native = false}: Props) {
   const be = useBackend()
   const toast = useToast()
+  const confirm = useConfirm()
   const [cat, setCat] = useState<Cat>('general')
   const catRef = useRef(cat)
   catRef.current = cat
@@ -106,7 +109,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, native])
-  // Mod+1…7 jump to a category, Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous one (not while a shortcut is being recorded)
+  // Mod+1…8 jump to a category, Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous one (not while a shortcut is being recorded)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (capture.active) return
@@ -141,6 +144,27 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   const guard = async (fn: () => Promise<void>, ok: string) => {
     setErr('')
     try { await fn(); toast.info(ok) } catch (e) { setErr(errMsg(e)) }
+  }
+
+  const [busyStorage, setBusyStorage] = useState(false)
+  const clearCache = async () => {
+    setBusyStorage(true)
+    try {
+      const r = await be.settings.clearCache()
+      toast.info(r.files > 0 ? `Cache cleared: ${r.files} file${r.files === 1 ? '' : 's'}, ${formatBytes(r.bytes)}` : 'Cache cleared')
+    } catch (e) { toast.error(errMsg(e)) } finally { setBusyStorage(false) }
+  }
+  const resetSettings = async () => {
+    if (!await confirm('Reset every setting to its default? Your profile, sync target, hosts, keys and vault stay as they are.', {confirmLabel: 'Reset settings', danger: true})) return
+    setBusyStorage(true)
+    try {
+      const next = await be.settings.reset()
+      onSettings(next)
+      onVault() // the auto-lock time is part of the vault status
+      setScroll(String(next.scrollback))
+      setAuto(String(next.auto_lock_minutes))
+      toast.info('Settings reset to their defaults')
+    } catch (e) { toast.error(errMsg(e)) } finally { setBusyStorage(false) }
   }
 
   const term = resolveTerminalTheme(s.terminal_theme, appearance).theme
@@ -402,6 +426,20 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
               {cat === 'sync' && <SyncPanel page vault={vault} onClose={() => {}} onChanged={onChanged} />}
 
               {cat === 'shortcuts' && <ShortcutsEditor overrides={s.shortcuts ?? {}} onChange={shortcuts => update({shortcuts})} />}
+
+              {cat === 'storage' && (
+                <section className="card-section">
+                  <h4>Storage</h4>
+                  <div className="setting-row">
+                    <div><b>Clear cache</b><div className="muted">Removes files VVTerm can make again and what it remembers about your AI tools (they are looked up again). Your hosts, keys, vault, settings and history are not touched.</div></div>
+                    <button disabled={busyStorage} onClick={() => void clearCache()}>Clear cache</button>
+                  </div>
+                  <div className="setting-row">
+                    <div><b>Reset settings</b><div className="muted">Puts appearance, terminal, general options, shortcuts and auto-lock back to their defaults. Your profile and sync target stay. Hosts, keys and the vault are not touched.</div></div>
+                    <button className="danger" disabled={busyStorage} onClick={() => void resetSettings()}>Reset settings…</button>
+                  </div>
+                </section>
+              )}
 
               {err && cat === 'account' && <div className="error" role="alert">{err}</div>}
             </div>

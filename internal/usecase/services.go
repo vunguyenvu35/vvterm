@@ -31,6 +31,8 @@ func New(core *Core) *Services {
 	sess := NewSessionService(core, fwd)
 	assist := NewAssistantService(core, sess)
 	sess.OnClose = assist.ForgetSession
+	settings := NewSettingsService(core)
+	settings.OnClearCache = assist.ClearCache
 	return &Services{
 		Core:      core,
 		Host:      NewHostService(core),
@@ -40,7 +42,7 @@ func New(core *Core) *Services {
 		Forward:   fwd,
 		Sync:      NewSyncService(core),
 		ImportExp: NewImportExportService(core),
-		Settings:  NewSettingsService(core),
+		Settings:  settings,
 		Snippet:   NewSnippetService(core),
 		Sftp:      NewSftpService(core),
 		Local:     NewLocalService(),
@@ -62,9 +64,13 @@ func (s *Services) Shutdown() {
 }
 
 // SettingsService reads and writes settings.json (theme, font, auto-lock).
-type SettingsService struct{ c *Core }
+type SettingsService struct {
+	c *Core
+	// OnClearCache drops what other services remember (set where the services are built).
+	OnClearCache func()
+}
 
-func NewSettingsService(c *Core) *SettingsService { return &SettingsService{c} }
+func NewSettingsService(c *Core) *SettingsService { return &SettingsService{c: c} }
 
 func (s *SettingsService) Get() Settings {
 	s.c.setMu.Lock()

@@ -62,12 +62,13 @@ func defaultSettings() Settings {
 
 // Core wires the packages together; the services below share one instance.
 type Core struct {
-	Dir     string // root of user data (contains data/ and sync/)
-	DataDir string
-	SyncDir string
-	Store   Repository
-	Vault   SecretVault
-	Dialer  *sshx.Dialer
+	CacheDir string // files that can be made again; see SettingsService.ClearCache
+	Dir      string // root of user data (contains data/ and sync/)
+	DataDir  string
+	SyncDir  string
+	Store    Repository
+	Vault    SecretVault
+	Dialer   *sshx.Dialer
 	// OpenRemoteFS starts SFTP on an SSH connection; nil disables the SFTP feature.
 	OpenRemoteFS RemoteFSOpener
 	// OpenLocalShell, OpenSerial and ListSerial back the Terminal and Serial features; nil disables them.
@@ -93,8 +94,10 @@ type Core struct {
 // concrete Repository and SecretVault (see app.NewCore); tests inject their own.
 type Options struct {
 	Store Repository
-	Vault SecretVault
-	Emit  Emitter
+	// CacheDir is where the app keeps files it can make again (optional: without it Clear cache only drops what is in memory).
+	CacheDir string
+	Vault    SecretVault
+	Emit     Emitter
 	// OpenRemoteFS is the SFTP adapter (optional).
 	OpenRemoteFS RemoteFSOpener
 	// Local terminal and serial adapters (optional).
@@ -116,7 +119,7 @@ func NewCore(dir string, opt Options) (*Core, error) {
 	if opt.Store == nil || opt.Vault == nil {
 		return nil, errors.New("store and vault ports are required")
 	}
-	c := &Core{Dir: dir, DataDir: filepath.Join(dir, "data"), SyncDir: filepath.Join(dir, "sync"), emit: opt.Emit,
+	c := &Core{CacheDir: opt.CacheDir, Dir: dir, DataDir: filepath.Join(dir, "data"), SyncDir: filepath.Join(dir, "sync"), emit: opt.Emit,
 		Store: opt.Store, Vault: opt.Vault, prompts: newPrompter(), OpenRemoteFS: opt.OpenRemoteFS,
 		OpenLocalShell: opt.OpenLocalShell, OpenSerial: opt.OpenSerial, OpenTelnet: opt.OpenTelnet, ListSerial: opt.ListSerial, Activity: opt.Activity,
 		Agents: opt.Agents, NewCustomAgent: opt.NewCustomAgent, ToolGateway: opt.ToolGateway, MCP: opt.MCP}

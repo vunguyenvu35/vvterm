@@ -1,6 +1,6 @@
 import {createContext, useContext} from 'react'
 import type {
-  ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
+  CacheReport, ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
   ActivityEntry, KnownHost, RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
   AiAskOptions, AiAttachment, AiCommandCheck, AiCustomProvider, AiModelList, AiPolicy, AiPreview, AiProvider, AiSessionState, AiSettings,
   McpImportItem, McpServer, McpServerInput, McpTool,
@@ -78,6 +78,10 @@ export interface Backend {
   settings: {
     get(): Promise<Settings>
     save(s: Settings): Promise<Settings>
+    /** every preference back to its default (the account profile and the sync target stay) */
+    reset(): Promise<Settings>
+    /** removes what the app can make again; nothing the user created */
+    clearCache(): Promise<CacheReport>
   }
   sftp: {
     open(hostId: string, promptKey: string): Promise<SftpInfo>
@@ -284,6 +288,8 @@ export function wailsBackend(): Backend {
     settings: {
       get: () => u('SettingsService', 'Get'),
       save: s => u('SettingsService', 'Save', s),
+      reset: () => u('SettingsService', 'ResetSettings'),
+      clearCache: () => u('SettingsService', 'ClearCache'),
     },
     sftp: {
       open: (h, k) => u('SftpService', 'Open', h, k),
@@ -421,6 +427,8 @@ export function bridgeBackend(): Backend {
     settings: {
       get: () => rpc('SettingsService', 'Get'),
       save: s => rpc('SettingsService', 'Save', s),
+      reset: () => rpc('SettingsService', 'ResetSettings'),
+      clearCache: () => rpc('SettingsService', 'ClearCache'),
     },
     // the host list (for choosing where an MCP server is offered) is read from the main process
     hosts: {...base.hosts, listHosts: async f => (await rpc<Host[]>('HostService', 'ListHosts', {query: '', group_id: '', env: '', tag: '', ...f})) ?? []},

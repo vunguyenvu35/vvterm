@@ -3,7 +3,7 @@ import {BackendContext, Backend} from '../lib/backend'
 import {ToastProvider} from '../lib/ui/Toast'
 import {DEFAULT_SETTINGS} from '../lib/settings/defaults'
 import type {ActivityEntry, KnownHost, RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus,
-  AiCommandCheck, AiModelList, AiPreview, AiProvider, AiReply, AiSessionState, AiSettings, McpImportItem, McpServer, McpTool} from '../lib/types'
+  CacheReport, AiCommandCheck, AiModelList, AiPreview, AiProvider, AiReply, AiSessionState, AiSettings, McpImportItem, McpServer, McpTool} from '../lib/types'
 
 export interface Fake extends Backend {
   state: {
@@ -24,6 +24,8 @@ export interface Fake extends Backend {
     local: Record<string, {dir: boolean; size: number}>
     /** true: openSettings succeeds like the real app (a native window opens); false: it rejects (browser mode) */
     nativeSettings: boolean
+    /** what Clear cache reports */
+    cache: CacheReport
     /** serial devices the Serial panel finds */
     serialPorts: string[]
     /** the system clipboard */
@@ -104,6 +106,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       '/Users/me/notes.txt': {dir: false, size: 300}, '/Users/me/.zshrc': {dir: false, size: 120}, '/Users/me/Documents/cv.pdf': {dir: false, size: 40960},
     },
     nativeSettings: false,
+    cache: {files: 3, bytes: 5120},
     serialPorts: ['/dev/cu.usbserial-1410', '/dev/cu.usbmodem1101'],
     clipboard: '',
     knownHosts: [],
@@ -217,6 +220,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
     settings: {
       get: async () => ({...state.settings}),
       save: async s => { state.settings = {...state.settings, ...s}; return state.settings },
+      reset: async () => { rec('settings.reset'); const {account_name, account_email, sync_url} = state.settings; state.settings = {...DEFAULT_SETTINGS, font_family: 'monospace', account_name, account_email, sync_url}; return state.settings },
+      clearCache: async () => { rec('settings.clearCache'); return {...state.cache} },
     },
     sftp: {
       open: async (h, k) => { rec('sftp.open', h, k); return {sid: id('sf'), home: '/', host: state.hosts.find(x => x.id === h)?.label ?? 'host'} },

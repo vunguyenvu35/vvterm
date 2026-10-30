@@ -198,7 +198,7 @@ Open **Settings** from the navigation, the gear in the title bar, or **⌘/Ctrl 
 
 ![Settings window](screenshots/45-settings-general.png)
 
-The menu on the left has **General, Account, Terminal, Security, Sync, Shortcuts**, then **Theme**, help links (documentation, feature requests, bug reports, release notes, Ko-fi) and the **version**. Changes apply immediately.
+The menu on the left has **General, Account, Terminal, Security, AI assistant, Sync, Shortcuts, Storage**, then **Theme**, help links (documentation, feature requests, bug reports, release notes, Ko-fi) and the **version**. Changes apply immediately.
 
 **Updates.** **Check for updates** (under the help links) asks GitHub for the latest release and compares it with your version. If there is a newer one, **Version X is available** appears: click it to open the release page and download the build for your system (macOS `.dmg` or `.zip`, Windows `.exe`, Linux `.tar.gz`). To update, quit VVTerm and replace the old app with the new one; your data is kept outside the app, so nothing is lost. The check only runs when you click it, and only the release information is read: nothing about you is sent. A pre-release is not offered as an update.
 
@@ -222,6 +222,7 @@ When VVTerm opens it also looks by itself, at most once a day (switch it off wit
 ![Maximised settings](screenshots/47-settings-maximized.png)
 
 - **Shortcuts:** every action has a default, shown as key caps (⇧ ⌘ T). Click it, press the new combination and it is saved. To make a **two-step shortcut** such as ⌘K then M, press the first combination and, within about a second, the second key (it needs no modifier); wait instead and it stays a one-step shortcut. While a two-step shortcut is running, a small note at the bottom says it is waiting for the next key; Esc cancels it. Two-step shortcuts have no key hint in the menu bar. One shortcut cannot be both a one-step shortcut and the first step of another. A combination already in use is refused and tells you which action owns it; plain keys are refused (add Ctrl, Alt or ⌘; F-keys are allowed). *Reset* returns one action to its default, *Reset all* all of them. Esc and a few terminal keys are fixed and listed below the table.
+- **Storage:** **Clear cache** removes files VVTerm can make again and what it remembers about your AI tools (they are looked up again; it reports what it removed). **Reset settings** puts appearance, terminal, general options, shortcuts and auto-lock back to their defaults after you confirm. Your profile, sync target, hosts, keys and the vault are never touched.
 
 ![Shortcuts](screenshots/51-settings-shortcuts.png)
 

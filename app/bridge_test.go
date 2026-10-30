@@ -388,3 +388,17 @@ func TestReadOnlyCallAssistantPolling(t *testing.T) {
 		t.Error("SetProviderEnabled changes data")
 	}
 }
+
+func TestBridgeAllowsResetAndClearCacheFromSettings(t *testing.T) {
+	_, _, changed, dir := newBridgeApp(t)
+	c, _ := ConnectBridge(dir)
+	if _, err := c.Call("SettingsService", "ResetSettings", "[]"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Call("SettingsService", "ClearCache", "[]"); err != nil {
+		t.Fatal(err)
+	}
+	if len(*changed) != 2 {
+		t.Fatalf("the main window must hear about both: %v", *changed)
+	}
+}

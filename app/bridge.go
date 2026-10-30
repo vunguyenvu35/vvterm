@@ -97,7 +97,7 @@ func NewBridge(a *App, onChange func(service string)) *Bridge {
 		},
 		wake: make(chan struct{}),
 		targets: map[string]bridgeTarget{
-			"SettingsService": {a.Settings, allow("Get", "Save")},
+			"SettingsService": {a.Settings, allow("Get", "Save", "ResetSettings", "ClearCache")},
 			"VaultService":    {a.Vault, allow("Status", "ChangePassword", "SetAutoLock", "EnableBiometric", "DisableBiometric", "ResetVault", "SetHint")},
 			"SyncService":     {a.Sync, allow("Configure", "ConfigureFolder", "SyncNow", "JoinExisting", "Status")},
 			// a terminal window drives its own session and reads the hosts for their names and themes

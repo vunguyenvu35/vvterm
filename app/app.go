@@ -84,7 +84,7 @@ func Build(dir string, kc vault.Keychain, kdf *vault.KDFParams) (*App, error) {
 	if kdf != nil {
 		v.SetKDF(*kdf)
 	}
-	core, err := usecase.NewCore(dir, usecase.Options{Store: st, Vault: v, OpenRemoteFS: func(c *sshx.Client) (usecase.RemoteFS, error) { return sftpx.Open(c.Client) },
+	core, err := usecase.NewCore(dir, usecase.Options{CacheDir: cacheDir(), Store: st, Vault: v, OpenRemoteFS: func(c *sshx.Client) (usecase.RemoteFS, error) { return sftpx.Open(c.Client) },
 		OpenLocalShell: func(cols, rows int, onData func([]byte)) (usecase.Shell, error) {
 			return localtty.Open(cols, rows, onData)
 		},
@@ -192,4 +192,13 @@ func (a *App) closeSettingsWhenLocked(event string) {
 	if event == "vault:locked" && a.launcher != nil {
 		a.launcher.Close()
 	}
+}
+
+// cacheDir is where the app keeps files it can make again (the Settings helper on macOS); empty when the OS has none.
+func cacheDir() string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "vvterm")
 }
