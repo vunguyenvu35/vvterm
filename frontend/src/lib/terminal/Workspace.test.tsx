@@ -1,7 +1,7 @@
 import {createEvent, fireEvent, render} from '@testing-library/react'
 import {host} from '../../test/fakeBackend'
 import {DEFAULT_SETTINGS} from '../settings/defaults'
-import {graftTab, hasPane, leaves, newTab, paneRects, popPane, setDraggingTab, sideOf, splitPane, TAB_DRAG} from '../layout'
+import {draggingPane, graftTab, hasPane, leaves, newTab, PANE_DRAG, paneRects, popPane, setDraggingPane, setDraggingTab, sideOf, splitPane, TAB_DRAG} from '../layout'
 import type {ITheme} from '@xterm/xterm'
 
 const seen: Array<{hostId: string; bg?: string}> = []
@@ -90,6 +90,126 @@ describe('Workspace: a tab dragged onto a pane', () => {
     expect(container.querySelector('.drop-hint')).toBeNull()
     over('drop', wrap, t, 380, 100)
     expect(onDropTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('Workspace: which pane has the keyboard', () => {
+  beforeEach(() => { seen.length = 0 })
+  const tabOf = () => { const t = {...newTab('h1', 'web'), id: 't1'}; return splitPane(t, t.activePane, 'row') }
+
+  it('with several panes the focused one is marked and the others are not, and it follows the focus', () => {
+    const tab = tabOf()
+    const [a, b] = leaves(tab.root)
+    const {container, rerender} = render(<Workspace {...base} tabs={[{...tab, activePane: a.id}]} activeTab="t1" />)
+    const wrap = (id: string) => container.querySelector(`[data-pane="${id}"]`)!
+    expect(wrap(a.id)).toHaveClass('multi', 'active')
+    expect(wrap(a.id)).toHaveAttribute('data-focused', 'true')
+    expect(wrap(b.id)).toHaveClass('multi')
+    expect(wrap(b.id)).not.toHaveClass('active')
+    expect(wrap(b.id)).toHaveAttribute('data-focused', 'false')
+    rerender(<Workspace {...base} tabs={[{...tab, activePane: b.id}]} activeTab="t1" />)
+    expect(wrap(b.id)).toHaveClass('active')
+    expect(wrap(a.id)).not.toHaveClass('active')
+  })
+
+  it('the bar of a pane has a drag handle and no tooltip of its own over the name', () => {
+    const tab = tabOf()
+    const {container} = render(<Workspace {...base} tabs={[tab]} activeTab="t1" onMovePane={vi.fn()} />)
+    const head = container.querySelector('.pane-head')!
+    expect(head.querySelector('.pane-grip svg')).not.toBeNull() // the six dots that say "drag me"
+    expect(head.getAttribute('title')).toBeNull() // a native tooltip would sit on top of the name
+    expect(head.querySelector('.pane-grip')).toHaveAttribute('aria-hidden', 'true')
+    expect(head.querySelector('.pane-btn.close')).toHaveAttribute('aria-label', 'Close pane')
+  })
+
+  it('a single pane is not framed or dimmed: there is nothing to tell apart', () => {
+    const tab = {...newTab('h1', 'web'), id: 't1'}
+    const {container} = render(<Workspace {...base} tabs={[tab]} activeTab="t1" />)
+    const wrap = container.querySelector(`[data-pane="${tab.activePane}"]`)!
+    expect(wrap).not.toHaveClass('multi')
+    expect(wrap).not.toHaveClass('active')
+    expect(wrap).not.toHaveAttribute('data-focused')
+  })
+
+  it('the styles frame the focused pane in the accent colour, dim the others and mark the name', () => {
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../styles.css'), 'utf8') as string
+    expect(css).toMatch(/\.pane-wrap\.multi\.active::before \{[^}]*border: 2px solid var\(--accent\)/)
+    expect(css).toMatch(/\.pane-wrap\.multi:not\(\.active\)::after \{[^}]*rgba\(0, 0, 0, \.34\)/)
+    expect(css).toMatch(/\.pane-wrap\.multi\.active \.pane-label b::before/)
+  })
+})
+
+describe('Workspace: a pane dragged by its header', () => {
+  beforeEach(() => { seen.length = 0; setDraggingPane(null) })
+  afterEach(() => setDraggingPane(null))
+  const dt = () => {
+    const data: Record<string, string> = {}
+    return {data, types: [] as string[], effectAllowed: '', dropEffect: '', setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+  }
+  const rect = {left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0, toJSON() {}}
+  const over = (kind: 'dragOver' | 'drop', el: Element, d: unknown, x: number, y: number) => {
+    const e = createEvent[kind](el, {dataTransfer: d})
+    Object.defineProperty(e, 'clientX', {value: x})
+    Object.defineProperty(e, 'clientY', {value: y})
+    fireEvent(el, e)
+  }
+  const split = () => {
+    const t = {...newTab('h1', 'web'), id: 't1'}
+    return splitPane(t, t.activePane, 'col')
+  }
+
+  it('the header is the handle (only with several panes and a handler); dragging it says which pane', () => {
+    const tab = split()
+    const [a, b] = leaves(tab.root)
+    const {container, rerender} = render(<Workspace {...base} tabs={[tab]} activeTab="t1" onMovePane={vi.fn()} />)
+    const heads = container.querySelectorAll('.pane-head')
+    expect(heads).toHaveLength(2)
+    expect(heads[0]).toHaveAttribute('draggable', 'true')
+    const t = dt()
+    fireEvent.dragStart(heads[1], {dataTransfer: t})
+    expect(draggingPane()).toEqual({tabId: 't1', paneId: b.id})
+    expect(t.data[PANE_DRAG]).toBe(b.id)
+    fireEvent.dragEnd(heads[1])
+    expect(draggingPane()).toBeNull()
+    rerender(<Workspace {...base} tabs={[tab]} activeTab="t1" />)
+    expect(container.querySelector('.pane-head')).toHaveAttribute('draggable', 'false') // nowhere to drop it
+    expect(a.id).not.toBe(b.id)
+  })
+
+  it('lights up the side nearest to the pointer over another pane and tells the app where the pane goes', () => {
+    const tab = split()
+    const [a, b] = leaves(tab.root)
+    const onMovePane = vi.fn()
+    const {container} = render(<Workspace {...base} tabs={[tab]} activeTab="t1" onMovePane={onMovePane} />)
+    const wrap = container.querySelector(`[data-pane="${a.id}"]`)!
+    Object.defineProperty(wrap, 'getBoundingClientRect', {value: () => rect})
+    const t = dt()
+    t.setData(PANE_DRAG, b.id)
+    setDraggingPane({tabId: 't1', paneId: b.id})
+    over('dragOver', wrap, t, 380, 100)
+    expect(container.querySelector('.drop-hint')).toHaveAttribute('data-side', 'right')
+    over('dragOver', wrap, t, 200, 5)
+    expect(container.querySelector('.drop-hint')).toHaveAttribute('data-side', 'top')
+    over('drop', wrap, t, 20, 100)
+    expect(onMovePane).toHaveBeenCalledWith('t1', b.id, 't1', a.id, 'left')
+    expect(container.querySelector('.drop-hint')).toBeNull()
+    expect(draggingPane()).toBeNull()
+  })
+
+  it('a pane dropped on itself, or dragged without a handler, shows and does nothing', () => {
+    const tab = split()
+    const [a] = leaves(tab.root)
+    const onMovePane = vi.fn()
+    const {container} = render(<Workspace {...base} tabs={[tab]} activeTab="t1" onMovePane={onMovePane} />)
+    const wrap = container.querySelector(`[data-pane="${a.id}"]`)!
+    Object.defineProperty(wrap, 'getBoundingClientRect', {value: () => rect})
+    const t = dt()
+    t.setData(PANE_DRAG, a.id)
+    setDraggingPane({tabId: 't1', paneId: a.id})
+    over('dragOver', wrap, t, 380, 100)
+    over('drop', wrap, t, 380, 100)
+    expect(container.querySelector('.drop-hint')).toBeNull()
+    expect(onMovePane).not.toHaveBeenCalled()
   })
 })
 

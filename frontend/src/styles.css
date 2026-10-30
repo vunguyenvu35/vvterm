@@ -1013,3 +1013,36 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .suggest-text { font-family: Menlo, Monaco, 'Courier New', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .suggest-src { flex: none; color: var(--muted); font-size: 11px; }
 .suggest-empty { padding: 6px 8px; color: var(--muted); }
+
+/* a pane header is the handle to drag a pane: onto another pane's side, onto the tab bar (a tab of its own) or onto a tab */
+.pane-head[draggable=true] { cursor: grab; }
+.pane-head[draggable=true]:active { cursor: grabbing; }
+.pane-head .pane-btn { cursor: pointer; }
+.topbar.pane-drop { box-shadow: inset 0 -2px 0 0 #2f7bf5; background: color-mix(in srgb, #2f7bf5 10%, var(--bg-2)); }
+.topbar > .tab.drop-into { background: #2f7bf533; box-shadow: inset 0 0 0 1px #2f7bf5; }
+
+/* which pane has the keyboard: with several panes the focused one has a frame in the accent colour and a dot by its
+   name, the others are dimmed (a little less under the pointer, as an invitation to click) */
+.pane-wrap.multi::before, .pane-wrap.multi::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.pane-wrap.multi.active::before { border: 2px solid var(--accent); border-radius: 2px; }
+.pane-wrap.multi:not(.active)::after { background: rgba(0, 0, 0, .34); transition: background .12s; }
+.pane-wrap.multi:not(.active):hover::after { background: rgba(0, 0, 0, .14); }
+.pane-wrap.multi.broadcasting.active::before { border-color: var(--env-dev); }
+.pane-wrap.multi.active .pane-label b::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: 1px; }
+
+/* the bar of a pane (shown over a pane of a split): a handle to drag by, the name, a small tag for what it is, and quiet buttons */
+.pane-head { height: 32px; gap: 4px; padding: 0 6px 0 4px; font-size: 12px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg-2) 95%, transparent), color-mix(in srgb, var(--bg-2) 84%, transparent));
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 8px 16px -10px rgba(0, 0, 0, .6); backdrop-filter: blur(10px) saturate(1.2); }
+.pane-grip { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 24px; border-radius: 6px; color: var(--muted); opacity: .5; transition: opacity .12s, background .12s; }
+.pane-head:hover .pane-grip { opacity: .85; }
+.pane-grip:hover { opacity: 1; color: var(--text); background: var(--bg-3); }
+.pane-label { gap: 8px; }
+.pane-label b { font-weight: 600; letter-spacing: .1px; }
+.pane-detail { padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; color: var(--muted); background: color-mix(in srgb, var(--muted) 15%, transparent); }
+.pane-btn { height: 24px; border-radius: 7px; transition: background .12s, color .12s; }
+.pane-btn.icon { width: 26px; justify-content: center; padding: 0; }
+.pane-btn.close:hover { color: #ff6b6b; background: color-mix(in srgb, #ff6b6b 16%, transparent); }
+:root[data-theme='light'] .pane-wrap.multi:not(.active)::after { background: rgba(0, 0, 0, .16); }
+:root[data-theme='light'] .pane-wrap.multi:not(.active):hover::after { background: rgba(0, 0, 0, .07); }
+:root[data-theme='light'] .pane-head { box-shadow: 0 8px 14px -10px rgba(0, 0, 0, .28); }

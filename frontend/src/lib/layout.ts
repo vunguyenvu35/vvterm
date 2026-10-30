@@ -175,14 +175,39 @@ export type DropSide = 'left' | 'right' | 'top' | 'bottom'
  */
 export function graftTab(target: Tab, paneId: string, source: Tab, side: DropSide): Tab {
   if (!isTerminalTab(target) || !isTerminalTab(source) || target.id === source.id || !hasPane(target, paneId)) return target
-  const incoming = source.root
+  return graftNode(target, paneId, source.root, leaves(source.root).find(l => l.id === source.activePane)?.id ?? leaves(source.root)[0].id, side)
+}
+
+/** `incoming` (a pane or a whole split) placed next to the pane `paneId` of `target`, on the given side; the focus goes to `active`. */
+function graftNode(target: Tab, paneId: string, incoming: Node, active: string, side: DropSide): Tab {
   const dir: Dir = side === 'left' || side === 'right' ? 'row' : 'col'
   const before = side === 'left' || side === 'top'
   const walk = (n: Node): Node => {
     if (n.type === 'leaf') return n.id === paneId ? {type: 'split', id: uid('split'), dir, a: before ? incoming : n, b: before ? n : incoming} : n
     return {...n, a: walk(n.a), b: walk(n.b)}
   }
-  return {...target, root: walk(target.root), activePane: leaves(incoming).find(l => l.id === source.activePane)?.id ?? leaves(incoming)[0].id, zoomPane: undefined}
+  return {...target, root: walk(target.root), activePane: active, zoomPane: undefined}
+}
+
+/**
+ * One pane (dragged by its header) moved next to another pane, in the same tab or in another one. It is the very same pane
+ * (same id), so its session goes on without a reconnect. When it was the only pane of its tab, that tab is gone. Returns
+ * the new list of tabs, or null when nothing can be done (not two terminal tabs, the pane onto itself, an unknown pane,
+ * or the only pane of a tab onto its own tab).
+ */
+export function movePane(tabs: Tab[], fromTabId: string, paneId: string, toTabId: string, toPaneId: string, side: DropSide): Tab[] | null {
+  const from = tabs.find(t => t.id === fromTabId), to = tabs.find(t => t.id === toTabId)
+  if (!from || !to || !isTerminalTab(from) || !isTerminalTab(to) || paneId === toPaneId) return null
+  const leaf = leaves(from.root).find(l => l.id === paneId)
+  if (!leaf || !hasPane(to, toPaneId)) return null
+  const rest = closePane(from, paneId)
+  if (from.id === to.id) {
+    if (!rest) return null
+    return tabs.map(t => (t.id === from.id ? tidy(graftNode(rest, toPaneId, leaf, leaf.id, side)) : t))
+  }
+  const joined = graftNode(to, toPaneId, leaf, leaf.id, side)
+  const out = tabs.map(t => (t.id === to.id ? joined : t))
+  return rest ? out.map(t => (t.id === from.id ? rest : t)) : out.filter(t => t.id !== from.id)
 }
 
 /** What a dragged tab carries, and which tab it is (a drag cannot be read before it is dropped). */
@@ -190,6 +215,12 @@ export const TAB_DRAG = 'application/x-vvterm-tab'
 let dragging = ''
 export const setDraggingTab = (id: string) => { dragging = id }
 export const draggingTab = () => dragging
+
+/** What a dragged pane header carries (a drag cannot be read before it is dropped, so the pane is also kept here). */
+export const PANE_DRAG = 'application/x-vvterm-pane'
+let draggedPane: {tabId: string; paneId: string} | null = null
+export const setDraggingPane = (p: {tabId: string; paneId: string} | null) => { draggedPane = p }
+export const draggingPane = () => draggedPane
 
 /** The side of a box a pointer is nearest to: where a dropped tab would split it. */
 export function sideOf(x: number, y: number, w: number, h: number): DropSide {

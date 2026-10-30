@@ -1,7 +1,7 @@
 import {createEvent, fireEvent, render, screen, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {TopBar} from './TopBar'
-import {newTab} from '../layout'
+import {newTab, PANE_DRAG, setDraggingPane} from '../layout'
 import {host} from '../../test/fakeBackend'
 
 const base = {snippets: [], onRunSnippet: vi.fn(), onSplit: vi.fn(), onNew: vi.fn(), onSettings: vi.fn()}
@@ -279,5 +279,65 @@ describe('TopBar: dragging tabs', () => {
   it('is not draggable without a handler', () => {
     render(<TopBar {...base} tabs={[a]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} />)
     expect(tab('A')).not.toHaveAttribute('draggable', 'true')
+  })
+})
+
+describe('TopBar: a pane header dragged up to the bar', () => {
+  const dt = () => {
+    const data: Record<string, string> = {}
+    return {data, types: [] as string[], effectAllowed: '', dropEffect: '', setData(k: string, v: string) { data[k] = v; this.types = [k] }, getData: (k: string) => data[k]}
+  }
+  const a = {...newTab('h1', 'A'), id: 'a'}, b = {...newTab('h2', 'B'), id: 'b'}, sftp = {...newTab('', 'SFTP'), id: 'sftp-main', pinned: true, kind: 'sftp' as const}
+  const bar = () => screen.getByRole('tablist', {name: 'Open tabs'})
+  const tab = (name: string) => screen.getByRole('tab', {name})
+  const carry = () => { const t = dt(); t.setData(PANE_DRAG, 'p1'); return t }
+  afterEach(() => setDraggingPane(null))
+
+  it('lights up the bar and, dropped there, asks for the pane to become a tab of its own', () => {
+    const onPaneOut = vi.fn(), onPaneToTab = vi.fn()
+    render(<TopBar {...base} tabs={[sftp, a, b]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} onPaneOut={onPaneOut} onPaneToTab={onPaneToTab} />)
+    setDraggingPane({tabId: 'a', paneId: 'p1'})
+    const t = carry()
+    fireEvent.dragOver(bar(), {dataTransfer: t})
+    expect(bar()).toHaveClass('pane-drop')
+    fireEvent.drop(bar(), {dataTransfer: t})
+    expect(onPaneOut).toHaveBeenCalledWith('a', 'p1')
+    expect(onPaneToTab).not.toHaveBeenCalled()
+    expect(bar()).not.toHaveClass('pane-drop')
+  })
+
+  it('dropped on another terminal tab it joins that tab; on its own tab it becomes a tab; a file-browser tab is not a place for it', () => {
+    const onPaneOut = vi.fn(), onPaneToTab = vi.fn()
+    render(<TopBar {...base} tabs={[sftp, a, b]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} onPaneOut={onPaneOut} onPaneToTab={onPaneToTab} />)
+    setDraggingPane({tabId: 'a', paneId: 'p1'})
+    const t = carry()
+    fireEvent.dragOver(tab('B'), {dataTransfer: t})
+    expect(tab('B')).toHaveClass('drop-into')
+    expect(bar()).not.toHaveClass('pane-drop')
+    fireEvent.drop(tab('B'), {dataTransfer: t})
+    expect(onPaneToTab).toHaveBeenCalledWith('a', 'p1', 'b')
+    expect(onPaneOut).not.toHaveBeenCalled()
+    setDraggingPane({tabId: 'a', paneId: 'p1'})
+    fireEvent.drop(tab('A'), {dataTransfer: t}) // its own tab: falls to the bar
+    expect(onPaneOut).toHaveBeenCalledWith('a', 'p1')
+    onPaneOut.mockClear(); onPaneToTab.mockClear()
+    setDraggingPane({tabId: 'a', paneId: 'p1'})
+    fireEvent.drop(tab('SFTP'), {dataTransfer: t}) // not a terminal: the bar's rule, a tab of its own
+    expect(onPaneToTab).not.toHaveBeenCalled()
+    expect(onPaneOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing when no pane is being dragged, or without the handlers', () => {
+    const onPaneOut = vi.fn()
+    const {rerender} = render(<TopBar {...base} tabs={[a, b]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} onPaneOut={onPaneOut} />)
+    const t = carry()
+    fireEvent.dragOver(bar(), {dataTransfer: t}) // nothing is being dragged: only the type is there
+    fireEvent.drop(bar(), {dataTransfer: t})
+    expect(bar()).not.toHaveClass('pane-drop')
+    expect(onPaneOut).not.toHaveBeenCalled()
+    setDraggingPane({tabId: 'a', paneId: 'p1'})
+    rerender(<TopBar {...base} tabs={[a, b]} active="a" onHome={vi.fn()} onSelect={vi.fn()} onClose={vi.fn()} />)
+    fireEvent.dragOver(bar(), {dataTransfer: t})
+    expect(bar()).not.toHaveClass('pane-drop')
   })
 })

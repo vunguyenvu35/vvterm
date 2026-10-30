@@ -55,7 +55,7 @@ Dependencies point inward (`app → usecase → domain`, adapters implement the 
 
 The complete list of cases is generated into [TestInventory.md](TestInventory.md); the plan and the manual pre-release checklist are in [TestPlan.md](TestPlan.md).
 
-**E2E notes.** `make e2e` starts `wails dev -browser` on a **free port** with a throw-away data directory, so it never collides with a `wails dev` you already have open, plus two demo SSH servers on 2201/2202 (stop `docker compose --profile dev` first: the containers use the same ports; `run.sh` checks). Never open the E2E server's URL yourself while it runs: its backend is shared, so a second tab disturbs the run.
+**E2E notes.** `wails dev -browser` opens your default browser at the dev server, so the scripts make `open` do nothing for it (an extra tab on the unlock screen has a focused password field, and macOS then turns on secure input for every app, which stops input tools such as OpenKey). If you start `wails dev -browser` yourself, do the same or close that tab. `make e2e` starts `wails dev -browser` on a **free port** with a throw-away data directory, so it never collides with a `wails dev` you already have open, plus two demo SSH servers on 2201/2202 (stop `docker compose --profile dev` first: the containers use the same ports; `run.sh` checks). Never open the E2E server's URL yourself while it runs: its backend is shared, so a second tab disturbs the run.
 
 ## Docker
 

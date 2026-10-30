@@ -1,10 +1,10 @@
-import {draggingTab, isTerminalTab, leaves, paneRects, sideOf, TAB_DRAG, type DropSide, type Rect, type Tab} from '../layout'
+import {draggingPane, draggingTab, isTerminalTab, leaves, PANE_DRAG, paneRects, setDraggingPane, sideOf, TAB_DRAG, type DropSide, type Rect, type Tab} from '../layout'
 import {useState} from 'react'
 import {SftpBrowser} from '../sftp/SftpBrowser'
 import {writeToPane} from './panes'
 import {formatCombo} from '../shortcuts/shortcuts'
 import {OsIcon} from '../ui/OsIcon'
-import {IconBroadcast, IconClose, IconMaximizePane, IconMinimizePane, IconPopOut} from '../ui/Icons'
+import {IconBroadcast, IconClose, IconGrip, IconMaximizePane, IconMinimizePane, IconPopOut} from '../ui/Icons'
 import {TerminalPane} from './TerminalPane'
 import {NewTabScreen} from '../shell/NewTabScreen'
 import {ProtocolScreen, type Protocol} from './ProtocolScreen'
@@ -34,6 +34,8 @@ interface Props {
   onPopPane?(tabId: string, paneId: string): void
   /** a tab was dropped on a side of a pane: split the pane there */
   onDropTab?(targetTabId: string, paneId: string, sourceTabId: string, side: DropSide): void
+  /** a pane, dragged by its header, was dropped on a side of another pane (of this tab or of another one) */
+  onMovePane?(fromTabId: string, paneId: string, toTabId: string, toPaneId: string, side: DropSide): void
   /** a tab that asked which protocol to use got its answer */
   onProtocol?(tabId: string, protocol: Protocol): void
   /** a blank tab: a host was picked, or an open tab */
@@ -90,9 +92,18 @@ export function Workspace(p: Props) {
     const rect = zoomed ? {x: 0, y: 0, w: 100, h: 100} : box
     const hidden = !shown || (!!zoom && !zoomed)
     return (
-      <div key={n.id} className={'pane-wrap' + (tab.broadcast ? ' broadcasting' : '')}
+      <div key={n.id} className={'pane-wrap' + (tab.broadcast ? ' broadcasting' : '') + (many ? ' multi' : '') + (many && tab.activePane === n.id ? ' active' : '')}
+        // with several panes, the one that has the keyboard is the one with the accent frame; the others are dimmed
+        data-focused={many ? String(tab.activePane === n.id) : undefined}
         style={{position: 'absolute', left: rect.x + '%', top: rect.y + '%', width: rect.w + '%', height: rect.h + '%', display: hidden ? 'none' : undefined}} data-pane={n.id}
         onDragOver={e => {
+          const dp = draggingPane()
+          if (dp && p.onMovePane && dp.paneId !== n.id && isTerminalTab(tab) && Array.from(e.dataTransfer.types).includes(PANE_DRAG)) {
+            e.preventDefault()
+            const r = e.currentTarget.getBoundingClientRect()
+            setDropAt({pane: n.id, side: sideOf(e.clientX - r.left, e.clientY - r.top, r.width, r.height)})
+            return
+          }
           const from = draggingTab()
           if (!p.onDropTab || !from || from === tab.id || !isTerminalTab(tab) || !Array.from(e.dataTransfer.types).includes(TAB_DRAG)) return
           e.preventDefault()
@@ -101,10 +112,17 @@ export function Workspace(p: Props) {
         }}
         onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDropAt(h => (h?.pane === n.id ? null : h)) }}
         onDrop={e => {
-          const from = e.dataTransfer.getData(TAB_DRAG)
           const r = e.currentTarget.getBoundingClientRect()
           const side = sideOf(e.clientX - r.left, e.clientY - r.top, r.width, r.height)
           setDropAt(null)
+          const dp = draggingPane()
+          if (dp && p.onMovePane && dp.paneId !== n.id && Array.from(e.dataTransfer.types).includes(PANE_DRAG)) {
+            e.preventDefault()
+            setDraggingPane(null)
+            p.onMovePane(dp.tabId, dp.paneId, tab.id, n.id, side)
+            return
+          }
+          const from = e.dataTransfer.getData(TAB_DRAG)
           if (!p.onDropTab || !from || from === tab.id) return
           e.preventDefault()
           p.onDropTab(tab.id, n.id, from, side)
@@ -117,7 +135,12 @@ export function Workspace(p: Props) {
           cursorStyle={p.settings.cursor_style} cursorBlink={p.settings.cursor_blink} scrollback={p.settings.scrollback}
           onTyped={tab.broadcast ? data => all.forEach(l => { if (l.id !== n.id) writeToPane(l.id, data) }) : undefined}
           onFocus={() => p.onFocusPane(tab.id, n.id)} onExit={() => p.onPaneExit(tab.id, n.id)} />
-        {many && <div className="pane-head" role="toolbar" aria-label={'Pane ' + d.label}>
+        {many && <div className="pane-head" role="toolbar" aria-label={'Pane ' + d.label}
+          // the header is the handle: drag it onto a side of another pane to move the pane there, onto the tab bar to make it a tab
+          draggable={!!p.onMovePane && isTerminalTab(tab)}
+          onDragStart={e => { setDraggingPane({tabId: tab.id, paneId: n.id}); e.dataTransfer.setData(PANE_DRAG, n.id); e.dataTransfer.effectAllowed = 'move' }}
+          onDragEnd={() => { setDraggingPane(null); setDropAt(null) }}>
+          <span className="pane-grip" aria-hidden="true"><IconGrip size={14} /></span>
           <span className="pane-label">
             {d.os && <OsIcon os={d.os} size={14} />}
             <b>{d.label} ({index})</b>
@@ -133,7 +156,7 @@ export function Workspace(p: Props) {
             title={zoomed ? 'Show all panes' : 'Show only this pane'} onClick={() => p.onToggleZoom?.(tab.id, n.id)}>
             {zoomed ? <IconMinimizePane size={14} /> : <IconMaximizePane size={14} />}
           </button>
-          <button className="pane-btn icon" aria-label="Close pane" title="Close pane" onClick={() => p.onClosePane(tab.id, n.id)}><IconClose size={14} /></button>
+          <button className="pane-btn icon close" aria-label="Close pane" title="Close pane" onClick={() => p.onClosePane(tab.id, n.id)}><IconClose size={14} /></button>
         </div>}
       </div>
     )

@@ -1,4 +1,4 @@
-import {closePane, hasPane, leaves, moveTab, newTab, pinnedSftpTab, splitPane} from './layout'
+import {closePane, hasPane, leaves, moveTab, movePane, newTab, pinnedSftpTab, splitPane} from './layout'
 
 describe('pane layout', () => {
   it('starts with one leaf', () => {
@@ -151,5 +151,63 @@ describe('moveTab', () => {
     expect(moveTab(t, 'x', 'a')).toBe(t)
     expect(moveTab(t, 'a', 'x')).toBe(t)
     expect(moveTab(t, 'a', 'a')).toBe(t)
+  })
+})
+
+describe('movePane (a pane dragged by its header)', () => {
+  const two = () => {
+    const t = {...newTab('h1', 'web'), id: 'tw'}
+    const first = t.activePane
+    const split = splitPane(t, first, 'col')
+    return {tab: split, first, second: split.activePane}
+  }
+  const ids = (t: {root: Parameters<typeof leaves>[0]}) => leaves(t.root).map(l => l.id)
+
+  it('puts a pane on a side of another pane of the same tab, keeping its id (its session goes on)', () => {
+    const {tab, first, second} = two()
+    const third = splitPane(tab, second, 'row')
+    const c = third.activePane
+    const out = movePane([third], third.id, c, third.id, first, 'left')!
+    expect(out).toHaveLength(1)
+    expect(ids(out[0])).toEqual([c, first, second]) // c is now to the left of the first pane
+    expect(out[0].activePane).toBe(c)
+    expect(leaves(out[0].root).find(l => l.id === c)!.hostId).toBe('h1')
+  })
+
+  it('moves a pane to another tab, which gets it as a split; the tab it left keeps its other panes', () => {
+    const {tab, first, second} = two()
+    const other = {...newTab('h2', 'db'), id: 'tb'}
+    const out = movePane([tab, other], tab.id, second, other.id, other.activePane, 'right')!
+    expect(ids(out.find(t => t.id === 'tw')!)).toEqual([first])
+    expect(ids(out.find(t => t.id === 'tb')!)).toEqual([other.activePane, second])
+    expect(out.find(t => t.id === 'tb')!.activePane).toBe(second)
+  })
+
+  it('a tab whose only pane is moved away is gone', () => {
+    const lone = {...newTab('h1', 'one'), id: 'tl'}
+    const other = {...newTab('h2', 'db'), id: 'tb'}
+    const out = movePane([lone, other], lone.id, lone.activePane, other.id, other.activePane, 'bottom')!
+    expect(out.map(t => t.id)).toEqual(['tb'])
+    expect(ids(out[0])).toEqual([other.activePane, lone.activePane])
+  })
+
+  it('changes nothing for a pane onto itself, an unknown pane, the only pane onto its own tab, or a tab that is not a terminal', () => {
+    const {tab, first} = two()
+    const lone = {...newTab('h1', 'one'), id: 'tl'}
+    expect(movePane([tab], tab.id, first, tab.id, first, 'left')).toBeNull()
+    expect(movePane([tab], tab.id, 'nope', tab.id, first, 'left')).toBeNull()
+    expect(movePane([tab], tab.id, first, tab.id, 'nope', 'left')).toBeNull()
+    expect(movePane([lone], lone.id, lone.activePane, lone.id, lone.activePane, 'left')).toBeNull()
+    expect(movePane([tab, pinnedSftpTab()], tab.id, first, 'sftp-main', 'x', 'left')).toBeNull()
+  })
+
+  it('leaves the zoomed view, and a tab left with one pane has no broadcast', () => {
+    const {tab, second} = two()
+    const other = {...newTab('h2', 'db'), id: 'tb'}
+    const zoomed = {...tab, broadcast: true, zoomPane: second}
+    const out = movePane([zoomed, other], zoomed.id, second, other.id, other.activePane, 'left')!
+    expect(out.find(t => t.id === 'tw')!.broadcast).toBeUndefined()
+    expect(out.find(t => t.id === 'tw')!.zoomPane).toBeUndefined()
+    expect(out.find(t => t.id === 'tb')!.zoomPane).toBeUndefined()
   })
 })

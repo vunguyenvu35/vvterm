@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
 import {IconClose, IconFolder, IconGear, IconKey, IconPlus, IconSidebar, IconSplitH, IconSplitV} from '../ui/Icons'
-import {isTerminalTab, setDraggingTab, TAB_DRAG, type Tab} from '../layout'
+import {draggingPane, isTerminalTab, PANE_DRAG, setDraggingPane, setDraggingTab, TAB_DRAG, type Tab} from '../layout'
 import {TabStatus} from './TabStatus'
 import {OS_INFO, OsIcon} from '../ui/OsIcon'
 import {leaves} from '../layout'
@@ -30,6 +30,10 @@ interface Props {
   hosts?: Host[]
   /** a tab was dragged to another place: before `targetId`, or after it */
   onMoveTab?(id: string, targetId: string, after: boolean): void
+  /** a pane header was dropped on the tab bar: the pane becomes a tab of its own */
+  onPaneOut?(tabId: string, paneId: string): void
+  /** a pane header was dropped on another terminal tab: the pane joins that tab */
+  onPaneToTab?(fromTabId: string, paneId: string, targetTabId: string): void
   snippets: Snippet[]
   onRunSnippet(s: Snippet, execute: boolean): void
   /** the panel on the right of a terminal (hosts, snippets, history, themes) */
@@ -45,6 +49,12 @@ export function TopBar(p: Props) {
   // a tab being dragged, and the tab it is over (with the side the drop would land on)
   const [dragId, setDragId] = useState('')
   const [over, setOver] = useState<{id: string; after: boolean} | null>(null)
+  // a pane header dragged over the bar (to become a tab) or over a terminal tab (to join it)
+  const [paneOver, setPaneOver] = useState(false)
+  const [paneTab, setPaneTab] = useState('')
+  const paneDragging = () => (p.onPaneOut ? draggingPane() : null)
+  const hasPane = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes(PANE_DRAG)
+  const endPaneDrag = () => { setPaneOver(false); setPaneTab(''); setDraggingPane(null) }
   const [editing, setEditing] = useState<{id: string; value: string} | null>(null)
   const [menu, setMenu] = useState<{id: string; x: number; y: number} | null>(null)
   // the menu goes away on any click, Esc, or when the window loses focus
@@ -75,19 +85,30 @@ export function TopBar(p: Props) {
   }
   const inTerminal = !!current && isTerminalTab(current)
   return (
-    <div className="topbar" role="tablist" aria-label="Open tabs" onDoubleClick={e => {
+    <div className={'topbar' + (paneOver ? ' pane-drop' : '')} role="tablist" aria-label="Open tabs" onDoubleClick={e => {
       if (!(e.target as HTMLElement).closest('.tab, button, .top-tools, .snippet-picker, [role="menu"]')) p.onToggleMaximise?.()
-    }}>
+    }}
+      onDragOver={e => { if (paneDragging() && hasPane(e)) { e.preventDefault(); setPaneOver(true) } }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setPaneOver(false); setPaneTab('') } }}
+      onDrop={e => {
+        const dp = paneDragging()
+        if (!dp || !hasPane(e)) return
+        e.preventDefault()
+        endPaneDrag()
+        p.onPaneOut?.(dp.tabId, dp.paneId)
+      }}>
       <div className="traffic-space" />
       <button role="tab" aria-selected={p.active === 'home'} className={'tab tab-home' + (p.active === 'home' ? ' active' : '')} onClick={p.onHome}>
         <IconKey size={15} /> <span>Vaults</span>
       </button>
       {p.tabs.map(t => (
-        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '') + (dragId === t.id ? ' dragging' : '') + (over?.id === t.id && dragId !== t.id ? (over.after ? ' drop-after' : ' drop-before') : '')} onClick={() => p.onSelect(t.id)}
+        <div key={t.id} role="tab" aria-selected={t.id === p.active} className={'tab' + (t.pinned ? ' pinned' : '') + (t.id === p.active ? ' active' : '') + (dragId === t.id ? ' dragging' : '') + (paneTab === t.id ? ' drop-into' : '') + (over?.id === t.id && dragId !== t.id ? (over.after ? ' drop-after' : ' drop-before') : '')} onClick={() => p.onSelect(t.id)}
           draggable={!t.pinned && !!p.onMoveTab && editing?.id !== t.id}
           onDragStart={e => { setDragId(t.id); setDraggingTab(t.id); e.dataTransfer.setData(TAB_DRAG, t.id); e.dataTransfer.effectAllowed = 'move' }}
           onDragEnd={() => { setDragId(''); setDraggingTab(''); setOver(null) }}
           onDragOver={e => {
+            const dp = paneDragging()
+            if (dp && hasPane(e) && p.onPaneToTab && isTerminalTab(t) && dp.tabId !== t.id) { e.preventDefault(); e.stopPropagation(); setPaneOver(false); setPaneTab(t.id); return }
             if (!dragId || dragId === t.id || !Array.from(e.dataTransfer.types).includes(TAB_DRAG)) return
             e.preventDefault()
             const r = e.currentTarget.getBoundingClientRect()
@@ -95,6 +116,8 @@ export function TopBar(p: Props) {
           }}
           onDragLeave={() => setOver(o => (o?.id === t.id ? null : o))}
           onDrop={e => {
+            const dp = paneDragging()
+            if (dp && hasPane(e) && p.onPaneToTab && isTerminalTab(t) && dp.tabId !== t.id) { e.preventDefault(); e.stopPropagation(); endPaneDrag(); p.onPaneToTab(dp.tabId, dp.paneId, t.id); return }
             const id = e.dataTransfer.getData(TAB_DRAG)
             if (!id || id === t.id) return
             e.preventDefault()

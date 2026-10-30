@@ -29,7 +29,7 @@ import {Nav, Page} from './lib/shell/Nav'
 import {TopBar} from './lib/shell/TopBar'
 import {IconPlus, IconSerial, IconTerminal} from './lib/ui/Icons'
 import {recordRecent} from './lib/hosts/recent'
-import {closePane, connectBlankTab, graftTab, moveTab, popPane, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
+import {closePane, connectBlankTab, graftTab, moveTab, movePane, popPane, duplicateOf, hasPane, isTerminalTab, newBlankTab, leaves, MAX_TAB_TITLE, newTab, pinnedSftpTab, SFTP_TAB_ID, splitPane, Tab, toggleBroadcast, toggleZoom, uniqueTitle} from './lib/layout'
 import {capture, effective, formatCombo, isChord, keyOf, matches, sameStep, stepMatches, stepsOf} from './lib/shortcuts/shortcuts'
 import {errMsg} from './lib/util'
 import {useToast} from './lib/ui/Toast'
@@ -278,6 +278,21 @@ export default function App({initial}: {/** an app window opened for this place 
     setActive(targetId)
     if (lastTerm === sourceId) setLastTerm(targetId)
   }
+  // a pane dragged by its header onto a side of another pane: it moves there (same pane, so its session goes on)
+  const movePaneTo = (fromTabId: string, paneId: string, toTabId: string, toPaneId: string, side: DropSide) => {
+    const next = movePane(tabs, fromTabId, paneId, toTabId, toPaneId, side)
+    if (!next) return
+    setTabs(next)
+    setActive(toTabId)
+    if (lastTerm === fromTabId && !next.some(t => t.id === fromTabId)) setLastTerm(toTabId)
+  }
+  // ...or onto another terminal tab of the bar: it joins that tab, next to the pane in focus there
+  const paneToTab = (fromTabId: string, paneId: string, toTabId: string) => {
+    const to = tabs.find(t => t.id === toTabId)
+    if (!to) return
+    const target = leaves(to.root).some(l => l.id === to.activePane) ? to.activePane : leaves(to.root)[0]?.id
+    if (target) movePaneTo(fromTabId, paneId, toTabId, target, 'right')
+  }
   // a pane out of its split into a tab of its own (its session goes with it)
   const popPaneOut = (tabId: string, paneId: string) => {
     const tab = tabs.find(t => t.id === tabId)
@@ -453,6 +468,7 @@ export default function App({initial}: {/** an app window opened for this place 
   return (
     <div className="shell">
       <TopBar tabs={tabs} active={onHome ? 'home' : termActive} onHome={() => goHome()} onSelect={setActive} onClose={closeTab}
+        onPaneOut={popPaneOut} onPaneToTab={paneToTab}
         onNew={openBlankTab}
         onSplit={split} onSettings={() => openSettings()} onToggleMaximise={() => void be.system.toggleMaximise()} onRename={renameTab} onMoveTab={moveTabTo} onDuplicate={duplicateTab} onDuplicateWindow={duplicateWindow} onSplitTab={splitTab} snippets={snippets} hosts={hosts} onRunSnippet={runSnippet}
         sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} updateVersion={newVersion} onUpdate={() => setDialog({k: 'about', check: true})} />
@@ -507,7 +523,7 @@ export default function App({initial}: {/** an app window opened for this place 
           {dialog?.k === 'key' && <KeyPanel key={dialog.mode} mode={dialog.mode} onClose={close} onChanged={() => void refreshData()} onDraft={setDraft} />}
           {dialog?.k === 'snippet' && <SnippetForm key={dialog.snippet?.id ?? 'new'} snippet={dialog.snippet} onClose={close} onSaved={() => { close(); void refreshData() }} />}
         </div>
-        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onDropTab={dropTab} onPopPane={popPaneOut} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
+        <Workspace tabs={tabs} activeTab={onHome ? '' : termActive} settings={settings} appearance={appearance} shortcuts={bindings} hosts={hosts} onFocusPane={focusPane} onPaneExit={paneExit} onClosePane={closePaneAsk} onToggleBroadcast={broadcastTab} onToggleZoom={zoomPane} onDropTab={dropTab} onMovePane={movePaneTo} onPopPane={popPaneOut} onProtocol={chooseProtocol} onOpenFromNewTab={openFromBlank} onLocalFromNewTab={localFromBlank} onSelectTab={id => setActive(id)} groups={groups} onCloseTab={closeTab} onShowLogs={() => goHome('logs')} />
         {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
           <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} groups={groups} tabs={tabs} activeTab={termActive} onSelectTab={id => setActive(id)} onCloseTab={closeTab} snippets={snippets} settings={settings} appearance={appearance}
             onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings}

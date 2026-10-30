@@ -1,4 +1,4 @@
-import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import {createEvent, act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {host, makeFake, Providers} from './test/fakeBackend'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
@@ -1308,6 +1308,72 @@ describe('App: dragging a tab onto a pane', () => {
     // the same panes, not new ones: they were not taken apart and built again, so their sessions never noticed
     const after = screen.getAllByTestId('terminal')
     expect(before.every(el => after.includes(el) && document.body.contains(el))).toBe(true)
+  })
+
+  describe('a pane dragged by its header', () => {
+    const heads = () => Array.from(document.querySelectorAll('.pane-head')) as HTMLElement[]
+    const panesOf = () => Array.from(document.querySelectorAll('.pane-wrap')) as HTMLElement[]
+    /** a drag event with a pointer position (jsdom has none) */
+    const at = (kind: 'dragOver' | 'drop', el: Element, d: unknown, x: number, y: number) => {
+      const e = createEvent[kind](el, {dataTransfer: d})
+      Object.defineProperty(e, 'clientX', {value: x})
+      Object.defineProperty(e, 'clientY', {value: y})
+      fireEvent(el, e)
+    }
+    const open = async () => {
+      const be = setup()
+      await unlock(be)
+      await userEvent.dblClick(hostCard('web-1'))
+      await userEvent.click(screen.getByLabelText('Split right')) // web-1: two panes
+      await userEvent.dblClick(hostCard('db-1')) // db-1: one pane
+      await userEvent.click(screen.getByRole('tab', {name: /web-1/}))
+      return {be, before: screen.getAllByTestId('terminal')}
+    }
+    const same = (before: HTMLElement[]) => { const after = screen.getAllByTestId('terminal'); return before.length === after.length && before.every(el => after.includes(el) && document.body.contains(el)) }
+
+    it('onto the tab bar: it becomes a tab of its own, selected, without a reconnect', async () => {
+      const {before} = await open()
+      const bar = screen.getByRole('tablist', {name: 'Open tabs'})
+      const t = dt()
+      fireEvent.dragStart(heads()[1], {dataTransfer: t})
+      fireEvent.dragOver(bar, {dataTransfer: t})
+      expect(bar).toHaveClass('pane-drop')
+      fireEvent.drop(bar, {dataTransfer: t})
+      await waitFor(() => expect(screen.getAllByRole('tab', {name: /web-1/})).toHaveLength(2))
+      expect(screen.getAllByRole('tab', {name: /web-1/}).filter(x => x.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+      expect(heads()).toHaveLength(0) // every tab has a single pane now
+      expect(same(before)).toBe(true)
+    })
+
+    it('onto another terminal tab: it joins that tab next to its pane', async () => {
+      const {before} = await open()
+      const t = dt()
+      fireEvent.dragStart(heads()[1], {dataTransfer: t})
+      const db = screen.getByRole('tab', {name: /db-1/})
+      fireEvent.dragOver(db, {dataTransfer: t})
+      expect(db).toHaveClass('drop-into')
+      fireEvent.drop(db, {dataTransfer: t})
+      await waitFor(() => expect(screen.getByRole('tab', {name: /db-1/, selected: true})).toBeInTheDocument())
+      expect(heads()).toHaveLength(2) // db-1 has two panes, web-1 one
+      expect(screen.getAllByRole('tab', {name: /web-1/})).toHaveLength(1)
+      expect(same(before)).toBe(true)
+    })
+
+    it('onto the side of another pane: it moves there', async () => {
+      const {before} = await open()
+      const [left, right] = panesOf().filter(w => w.style.display !== 'none')
+      expect(Number.parseFloat(left.style.left)).toBeLessThan(Number.parseFloat(right.style.left))
+      const rect = {left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0, toJSON() {}}
+      Object.defineProperty(left, 'getBoundingClientRect', {value: () => rect})
+      const t = dt()
+      fireEvent.dragStart(right.querySelector('.pane-head')!, {dataTransfer: t}) // the right pane...
+      at('dragOver', left, t, 20, 100)
+      expect(left.querySelector('.drop-hint')).toHaveAttribute('data-side', 'left')
+      at('drop', left, t, 20, 100) // ...onto the left side of the left one
+      await waitFor(() => expect(Number.parseFloat(right.style.left)).toBeLessThan(Number.parseFloat(left.style.left)))
+      expect(document.querySelectorAll('.divider-abs')).toHaveLength(1)
+      expect(same(before)).toBe(true)
+    })
   })
 
   it('a pane can be taken back out of the split into a tab of its own, again without a reconnect', async () => {

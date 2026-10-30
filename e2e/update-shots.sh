@@ -21,7 +21,13 @@ HTTP_PID=$!
 PORT="$(free_port)"
 URL="http://127.0.0.1:$PORT"
 cd "$ROOT"
-VVTERM_UPDATE_URL="http://127.0.0.1:$GH_PORT/latest" VVTERM_NO_NATIVE_DIALOGS=1 VVTERM_DATA_DIR="$WORK/data" \
+# `wails dev -browser` opens the default browser at the dev server. The walkthrough drives its own Chromium, and an extra tab
+# showing the unlock screen (a focused password field) makes macOS turn on secure input for every app, which stops input
+# tools such as OpenKey and GoTiengViet. `open` and `xdg-open` do nothing for the wails process.
+mkdir -p "$WORK/noopen"
+for c in open xdg-open; do printf '#!/bin/sh\nexit 0\n' > "$WORK/noopen/$c"; chmod +x "$WORK/noopen/$c"; done
+
+PATH="$WORK/noopen:$PATH" VVTERM_UPDATE_URL="http://127.0.0.1:$GH_PORT/latest" VVTERM_NO_NATIVE_DIALOGS=1 VVTERM_DATA_DIR="$WORK/data" \
   wails dev -browser -devserver "127.0.0.1:$PORT" -skipbindings -loglevel error -ldflags "-X vvterm/app.Version=1.1.0" > "$WORK/wails.log" 2>&1 &
 WAILS_PID=$!
 UP=0
