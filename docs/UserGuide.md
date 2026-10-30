@@ -2,7 +2,7 @@
 
 # VVTerm user guide
 
-Every screenshot here comes from the automated end-to-end walkthrough (`make e2e`) running against the real application, so they match the current interface.
+A step-by-step guide to every screen of VVTerm, from creating your vault to connecting, transferring files and getting help. The screenshots show the app as it looks today.
 
 ## Contents
 
