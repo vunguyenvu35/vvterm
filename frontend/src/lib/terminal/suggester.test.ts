@@ -28,7 +28,7 @@ function setup(o: {line?: string; cursorX?: number; type?: string; enabled?: boo
   const raw = createSuggester({
     term, container, send: d => sent.push(d),
     sources: () => ({typed: o.typed ?? ['git status', 'git stash', 'ls -la'], snippets: o.snippets ?? [], host: []}),
-    enabled: () => state.enabled, ready: () => state.ready, popupCombo: () => 'Ctrl+Space', onCommand: c => commands.push(c),
+    enabled: () => state.enabled, ready: () => state.ready, popupCombo: () => 'Ctrl+Space', throttleMs: 0, onCommand: c => commands.push(c),
   })
   const s = {
     feed: (d: string) => { raw.feed(d); flush() },
@@ -310,6 +310,54 @@ describe('createSuggester', () => {
       t.s.feed('\x1b[C')
       t.s.feed('\r')
       expect(t.commands).toEqual([])
+    })
+  })
+
+  describe('while a program writes a lot of output', () => {
+    it('does next to nothing when nothing is typed: no layout read, no work', () => {
+      const t = setup()
+      const rect = vi.spyOn(t.container, 'getBoundingClientRect')
+      for (let i = 0; i < 200; i++) t.s.refresh()
+      expect(rect).not.toHaveBeenCalled()
+    })
+
+    it('looks at once after a quiet moment, then at most once per throttle period', () => {
+      vi.useFakeTimers()
+      try {
+        const container = document.createElement('div')
+        const element = document.createElement('div')
+        const screen = document.createElement('div')
+        screen.className = 'xterm-screen'
+        const reads = vi.fn(() => ({left: 0, top: 0, width: 800, height: 480, right: 0, bottom: 0, x: 0, y: 0, toJSON() {}}) as DOMRect)
+        screen.getBoundingClientRect = reads
+        container.getBoundingClientRect = reads
+        element.append(screen)
+        document.body.append(container)
+        const term = {element, cols: 80, rows: 24, options: {}, buffer: {active: {type: 'normal', baseY: 0, cursorX: 8, cursorY: 0, getLine: () => ({translateToString: () => '$ git st'})}}} as unknown as SuggestTerm
+        const s = createSuggester({term, container, send: () => {}, sources: () => ({typed: ['git status'], snippets: [], host: []}), enabled: () => true, ready: () => true, popupCombo: () => 'Ctrl+Space', throttleMs: 80})
+        s.feed('git st'); flush()
+        const afterKeys = reads.mock.calls.length
+        expect(afterKeys).toBeGreaterThan(0) // a key is drawn at once
+        s.refresh(); flush() // the first chunk after a quiet moment (the echo of the key) is looked at at once
+        const afterEcho = reads.mock.calls.length
+        expect(afterEcho).toBeGreaterThan(afterKeys)
+        for (let i = 0; i < 500; i++) s.refresh() // 500 more chunks of output arrive
+        flush()
+        expect(reads.mock.calls.length).toBe(afterEcho) // nothing: waiting for the pause to end
+        vi.advanceTimersByTime(81); flush()
+        const afterPause = reads.mock.calls.length
+        expect(afterPause).toBeGreaterThan(afterEcho) // once, for all of them
+        expect(afterPause - afterEcho).toBeLessThan(afterEcho - afterKeys + 3)
+        vi.advanceTimersByTime(500); flush()
+        expect(reads.mock.calls.length).toBe(afterPause) // and not again without new output
+        s.dispose()
+      } finally { vi.useRealTimers() }
+    })
+
+    it('suggests nothing for a very long line (a paste) and stays quick', () => {
+      const t = setup({typed: ['x'.repeat(10) + ' ok']})
+      t.type('x'.repeat(5000))
+      expect(t.pop().hidden).toBe(true)
     })
   })
 

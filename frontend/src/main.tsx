@@ -1,5 +1,5 @@
+import {lazy, Suspense} from 'react'
 import {createRoot} from 'react-dom/client'
-import App from './App'
 import SettingsApp from './lib/settings/SettingsApp'
 import {BackendContext, bridgeBackend, inSettingsWindow, inTerminalWindow, installWindowBridge, wailsBackend, windowTarget} from './lib/backend'
 import {ToastProvider} from './lib/ui/Toast'
@@ -8,6 +8,9 @@ import {CapsLockWarning} from './lib/ui/CapsLockWarning'
 import {installNoNativeMenu} from './lib/ui/noNativeMenu'
 import {installSecureInputGuard} from './lib/ui/secureInput'
 import './styles.css'
+
+// the app (terminals, panels, xterm) is not loaded by the Settings window, which only needs its own page
+const App = lazy(() => import('./App'))
 
 installNoNativeMenu() // an app, not a web page: no Look Up / Translate / Inspect Element menu
 installSecureInputGuard() // a password field must not leave macOS's secure input on (it stops input tools such as OpenKey in every app)
@@ -27,7 +30,7 @@ async function boot() {
     <BackendContext.Provider value={settingsWindow ? bridgeBackend() : wailsBackend()}>
       <ToastProvider>
         <ConfirmProvider>
-          {settingsWindow ? <SettingsApp /> : <App initial={initial} />}
+          {settingsWindow ? <SettingsApp /> : <Suspense fallback={<div className="gate" />}><App initial={initial} /></Suspense>}
           <CapsLockWarning />
         </ConfirmProvider>
       </ToastProvider>

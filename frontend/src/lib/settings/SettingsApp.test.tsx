@@ -47,20 +47,46 @@ describe('SettingsApp (the Settings window process)', () => {
     await waitFor(() => expect(be.state.settings.reduce_motion).toBe(false))
   })
 
-  it('reads the settings again whenever the window is focused (the main window may have changed them)', async () => {
-    const be = setup()
-    await within(await screen.findByRole('dialog', {name: 'Settings'})).findByLabelText('Zoom level')
-    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
-    be.state.settings = {...be.state.settings, zoom: 130}
-    act(() => { fireEvent.focus(window) })
-    await waitFor(() => expect(screen.getByLabelText('Zoom level')).toHaveTextContent('130%'))
+  it('reads the settings again when the window is focused again (the main window may have changed them), but not on every focus', async () => {
+    vi.useFakeTimers({toFake: ['Date']})
+    try {
+      const be = setup()
+      await within(await screen.findByRole('dialog', {name: 'Settings'})).findByLabelText('Zoom level')
+      const gets = vi.spyOn(be.settings, 'get')
+      be.state.settings = {...be.state.settings, zoom: 130}
+      act(() => { fireEvent.focus(window) }) // a moment after the first read: left alone
+      expect(gets).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+      vi.setSystemTime(Date.now() + 4000)
+      act(() => { fireEvent.focus(window) })
+      await waitFor(() => expect(screen.getByLabelText('Zoom level')).toHaveTextContent('130%'))
+      expect(gets).toHaveBeenCalledTimes(1)
+    } finally { vi.useRealTimers() }
   })
 
-  it('shows a loading state, then nothing breaks when the main window is gone', async () => {
+  it('shows its window and menu at once, before the main process has answered, and the pages wait for the data', async () => {
+    const be = makeFake()
+    let answer: (v: any) => void = () => {}
+    be.vault.status = () => new Promise(r => { answer = r })
+    render(<Providers be={be}><SettingsApp /></Providers>)
+    const win = screen.getByRole('dialog', {name: 'Settings'}) // there, not a blank "Loading…" screen
+    const tab = within(win).getByRole('tab', {name: /^Terminal/})
+    await userEvent.click(tab)
+    expect(tab).toHaveAttribute('aria-selected', 'true') // the menu answers while the data is on its way
+    expect(within(win).getByRole('status')).toHaveTextContent('Loading…')
+    expect(within(win).queryByLabelText('Scrollback lines')).toBeNull()
+    expect(within(win).getByRole('combobox', {name: /^Theme/})).toBeDisabled() // nothing can overwrite the saved settings with placeholders
+    expect(be.state.calls.some(c => c[0] === 'settings.save')).toBe(false)
+    await act(async () => { answer({exists: true, unlocked: true, keychain_enabled: false, auto_lock_minutes: 15}) })
+    expect(await within(win).findByLabelText('Scrollback lines')).toHaveValue(10000)
+    expect(within(win).getByRole('tab', {name: /^Terminal/})).toHaveAttribute('aria-selected', 'true') // the tab chosen meanwhile stays
+  })
+
+  it('stays on its loading page, and nothing breaks, when the main window is gone', async () => {
     const be = makeFake()
     be.vault.status = async () => { throw new Error('VVTerm is not running') }
     render(<Providers be={be}><SettingsApp /></Providers>)
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', {name: 'Settings'})).getByRole('status')).toHaveTextContent('Loading…')
   })
 })
 

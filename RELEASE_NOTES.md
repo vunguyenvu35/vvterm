@@ -4,6 +4,13 @@
 
 Release date: 2026-10-30 · Platform: macOS (arm64 build verified) · Status: beta. Read [Known issues](#known-issues) first.
 
+## Unreleased
+
+- **The Settings window answers at once when it opens.** Until now it showed a blank "Loading…" page until the main process had answered, so a busy main process left the menu missing or unclickable for seconds. The window and its menu now appear immediately and work while the saved settings are on their way; the pages (and the Theme switch, which would otherwise save placeholder values) wait for them. Measured in the system web view with a main process made 4 s slow: the menu appeared after 25 ms instead of 4 s, and every click was answered in under 15 ms.
+- **Less loaded on first open.** The Settings window no longer loads the terminal app's code (the page it needs went from 210 KB to 67 KB compressed), and the AI assistant, Sync and Support pages are loaded when first opened. Focusing the window again re-reads the data at most every 3 seconds.
+- **The AI tools are looked up when first needed**, not at start-up: starting each CLI takes seconds of CPU, which used to compete with a Settings window opened just after the app launched.
+- **Command suggestions cost next to nothing while a program writes a lot of output**, and nothing is looked up for a pasted line of hundreds of characters.
+
 ## What's new in 1.1.1
 
 A patch release: fixes for typing and for the macOS input tools, and two new things in the terminal and in Settings.

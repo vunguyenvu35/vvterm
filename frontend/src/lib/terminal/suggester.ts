@@ -26,6 +26,8 @@ export interface SuggesterOptions {
   ready(): boolean
   /** key that opens the list (Settings → Shortcuts) */
   popupCombo(): string
+  /** at most one redraw this often (ms) for what the terminal itself does (output, cursor moves); keys redraw at once. Default 80, 0 = none */
+  throttleMs?: number
   /** a command was finished with Enter while the screen showed it on the line: it goes into the history */
   onCommand?(line: string): void
 }
@@ -35,6 +37,9 @@ const SETTLE_MS = 200
 
 /** how many rows the list that shows by itself has */
 const AUTO_ROWS = 6
+
+/** a line this long is a paste, not a command being typed: nothing is suggested for it (and nothing is looked through) */
+const MAX_PREFIX = 400
 
 const SOURCE_NAME = {typed: 'typed', snippet: 'snippet', host: 'host'} as const
 
@@ -159,6 +164,9 @@ export function createSuggester(o: SuggesterOptions) {
   const draw = () => {
     raf = 0
     if (!o.ready()) return hideAll()
+    // nothing typed, nothing shown and no list asked for: there is nothing to do (this is what runs while a program
+    // writes a lot of output, so it must cost next to nothing)
+    if (tracker.state.known && tracker.state.prefix === '' && !popupOpen && pop.hidden && !anchor) return
     syncWithScreen() // the history needs it too, with suggestions off
     if (!live()) return hideAll()
     const g = geometry()
@@ -167,7 +175,7 @@ export function createSuggester(o: SuggesterOptions) {
     const trusted = known && prefix !== '' && echoed(prefix) && nothingAfterCursor()
 
     // what matches what is typed
-    const all = trusted ? suggest(prefix, o.sources()) : []
+    const all = trusted && prefix.length <= MAX_PREFIX ? suggest(prefix, o.sources()) : []
     if (prefix !== lastPrefix) { lastPrefix = prefix; if (!popupOpen) selected = -1 }
     auto = !popupOpen && !listOff && all.length >= 1
 
@@ -210,6 +218,17 @@ export function createSuggester(o: SuggesterOptions) {
     }
   }
   const schedule = () => { if (!raf) raf = window.requestAnimationFrame(draw) }
+  // the terminal drew something: look at once when it has been quiet (the echo of a key), but not on every frame of a
+  // long output: what arrives during the pause is looked at once, when it ends
+  let throttled = 0
+  let missed = false
+  const refresh = () => {
+    const ms = o.throttleMs ?? 80
+    if (!ms) return schedule()
+    if (throttled) { missed = true; return }
+    schedule()
+    throttled = window.setTimeout(() => { throttled = 0; if (missed) { missed = false; schedule() } }, ms)
+  }
 
   function accept(s: Suggestion) {
     const {prefix, known} = tracker.state
@@ -245,12 +264,13 @@ export function createSuggester(o: SuggesterOptions) {
         const buf = o.term.buffer?.active
         lost = {at: Date.now(), shown: (buf?.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? '') + '|' + (buf?.cursorX ?? 0)}
         window.clearTimeout(settle)
+      window.clearTimeout(throttled)
         settle = window.setTimeout(schedule, SETTLE_MS + 20)
       }
       schedule()
     },
     /** the terminal drew something (output arrived or the cursor moved) */
-    refresh: schedule,
+    refresh,
     /** a key went to the terminal: true when the suggestions used it */
     handleKey(e: KeyboardEvent): boolean {
       if (e.type !== 'keydown' || !live()) return false

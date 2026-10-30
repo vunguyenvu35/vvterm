@@ -1,6 +1,5 @@
-import {PointerEvent as ReactPointerEvent, useEffect, useRef, useState} from 'react'
+import {lazy, PointerEvent as ReactPointerEvent, Suspense, useEffect, useRef, useState} from 'react'
 import {useBackend, type UpdateInfo} from '../backend'
-import {SupportPanel} from '../panels/SupportPanel'
 import {useToast} from '../ui/Toast'
 import {useConfirm} from '../ui/Confirm'
 import {Switch} from '../ui/Switch'
@@ -8,14 +7,18 @@ import {Select} from '../ui/Select'
 import {biometricName, errMsg} from '../util'
 import {ThemePicker} from './ThemePicker'
 import {resolveTerminalTheme} from '../terminal/themes'
-import {SyncPanel} from '../panels/SyncPanel'
 import {IconArrowUpRight, IconUser} from '../ui/Icons'
 import {formatBytes} from '../sftp/format'
 import {ShortcutsEditor} from './ShortcutsEditor'
-import {AssistantSettings} from './AssistantSettings'
 import {capture, formatCombo, matches} from '../shortcuts/shortcuts'
 import type {Appearance} from './appearance'
 import type {CursorStyle, Settings, ThemeMode, VaultStatus} from '../types'
+
+// what is not on the first page is loaded when it is first needed, so the window opens and answers clicks at once
+const SupportPanel = lazy(() => import('../panels/SupportPanel').then(m => ({default: m.SupportPanel})))
+const SyncPanel = lazy(() => import('../panels/SyncPanel').then(m => ({default: m.SyncPanel})))
+const AssistantSettings = lazy(() => import('./AssistantSettings').then(m => ({default: m.AssistantSettings})))
+const Loading = () => <div className="muted" role="status">Loading…</div>
 
 /** what this computer calls the place that keeps the vault key for quick unlock */
 const keychainName = () => {
@@ -60,6 +63,8 @@ interface Props {
   onClose(): void
   /** Rendered inside its own native window (the Settings process): no floating chrome, the OS provides it. */
   native?: boolean
+  /** false while the saved settings are still being fetched (the window is already up): the menu works, the pages wait */
+  ready?: boolean
 }
 
 /**
@@ -69,7 +74,7 @@ interface Props {
  * title bar to move it and the bottom-right corner to resize. Wails v2 can only create one OS window, so
  * this is an in-app window layer rather than a second native window. Changes apply immediately.
  */
-export function SettingsWindow({settings: s, appearance, vault, onSettings, onVault, onChanged, onClose, native = false}: Props) {
+export function SettingsWindow({settings: s, appearance, vault, onSettings, onVault, onChanged, onClose, native = false, ready = true}: Props) {
   const be = useBackend()
   const toast = useToast()
   const confirm = useConfirm()
@@ -138,7 +143,14 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
   const endDrag = () => { drag.current = null }
   const toggleMax = () => { setMaximized(m => !m); setRolledUp(false); setOffset({x: 0, y: 0}) }
 
+  // the fields that start from the saved values are filled in again when those arrive
+  useEffect(() => {
+    if (!ready) return
+    setScroll(String(s.scrollback)); setAuto(String(vault.auto_lock_minutes)); setHint(vault.hint ?? ''); setName(s.account_name); setEmail(s.account_email)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready])
   const update = async (patch: Partial<Settings>) => {
+    if (!ready) return // never save the placeholder values over the real ones
     try { onSettings(await be.settings.save({...s, ...patch})) } catch (e) { toast.error(errMsg(e)) }
   }
   const guard = async (fn: () => Promise<void>, ok: string) => {
@@ -209,7 +221,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
               <div className="win-sep" />
               <div className="win-row">
                 <span>Theme</span>
-                <Select className="inline" label="Theme" value={s.theme} onChange={v => update({theme: v as ThemeMode})}
+                <Select className="inline" label="Theme" value={s.theme} onChange={v => update({theme: v as ThemeMode})} disabled={!ready}
                   options={[{value: 'auto', label: 'Auto'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]} />
               </div>
               {LINKS.map(([label, url]) => (
@@ -225,6 +237,7 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
             </nav>
 
             <div className="win-content">
+              {!ready ? <Loading /> : <>
               {cat === 'general' && (
                 <>
                   <section className="card-section">
@@ -429,9 +442,9 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                 </>
               )}
 
-              {cat === 'assistant' && <AssistantSettings />}
+              {cat === 'assistant' && <Suspense fallback={<Loading />}><AssistantSettings /></Suspense>}
 
-              {cat === 'sync' && <SyncPanel page vault={vault} onClose={() => {}} onChanged={onChanged} />}
+              {cat === 'sync' && <Suspense fallback={<Loading />}><SyncPanel page vault={vault} onClose={() => {}} onChanged={onChanged} /></Suspense>}
 
               {cat === 'shortcuts' && <ShortcutsEditor overrides={s.shortcuts ?? {}} onChange={shortcuts => update({shortcuts})} />}
 
@@ -450,11 +463,12 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
               )}
 
               {err && cat === 'account' && <div className="error" role="alert">{err}</div>}
+              </>}
             </div>
           </div>
         )}
       </div>
-      {supportOpen && <SupportPanel onClose={() => setSupportOpen(false)} />}
+      {supportOpen && <Suspense fallback={null}><SupportPanel onClose={() => setSupportOpen(false)} /></Suspense>}
     </div>
   )
 }
