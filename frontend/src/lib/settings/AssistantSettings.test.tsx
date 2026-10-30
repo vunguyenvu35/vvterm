@@ -289,3 +289,15 @@ describe('AssistantSettings: MCP servers', () => {
     await waitFor(() => expect(calls(be, 'assistant.mcp.remove')).toEqual([['assistant.mcp.remove', 'm1']]))
   })
 })
+
+describe('AssistantSettings: while the tools are being looked for', () => {
+  it('keeps what is being typed and does not read the rest of the page again', async () => {
+    const be = setup(b => { b.state.ai.checking = 3 })
+    const pats = await screen.findByLabelText('Extra redaction patterns')
+    const settings = vi.spyOn(be.assistant, 'settings')
+    await userEvent.type(pats, 'EMP-1')
+    await waitFor(() => expect(within(screen.getByTestId('provider-claude')).getByText('Ready')).toBeInTheDocument(), {timeout: 4000})
+    expect(pats).toHaveValue('EMP-1')
+    expect(settings).not.toHaveBeenCalled()
+  })
+})

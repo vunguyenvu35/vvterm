@@ -244,6 +244,9 @@ func readOnlyCall(service, method string) bool {
 	if service == "SessionService" || service == "SftpService" || service == "LocalService" || service == "SerialService" || service == "LogService" {
 		return true
 	}
+	if service == "AssistantService" && (method == "Providers" || method == "Settings" || method == "Models") {
+		return true // the Settings page asks again while the tools are being looked for: no window needs to refresh for that
+	}
 	for _, p := range []string{"List", "Get", "Status", "Info", "Home", "Search", "Dump", "Export"} {
 		if strings.HasPrefix(method, p) {
 			return true

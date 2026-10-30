@@ -377,3 +377,14 @@ func TestBridgeRefusesBrowserOriginsAndForeignHostNames(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+func TestReadOnlyCallAssistantPolling(t *testing.T) {
+	for _, m := range []string{"Providers", "Settings", "Models"} {
+		if !readOnlyCall("AssistantService", m) {
+			t.Errorf("AssistantService.%s must not broadcast a change", m)
+		}
+	}
+	if readOnlyCall("AssistantService", "SetProviderEnabled") {
+		t.Error("SetProviderEnabled changes data")
+	}
+}

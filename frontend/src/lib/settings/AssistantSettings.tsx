@@ -43,9 +43,10 @@ export function AssistantSettings() {
   const checking = !!providers?.some(p => p.status.state === '')
   useEffect(() => {
     if (!checking) return
-    const t = window.setTimeout(() => { void load() }, 600)
+    // only the providers are asked again: the rest of the page (and what is being typed in it) stays as it is
+    const t = window.setTimeout(() => { void be.assistant.providers().then(setProviders).catch(() => {}) }, 600)
     return () => window.clearTimeout(t)
-  }, [checking, providers, load])
+  }, [be, checking, providers])
   // Settings is its own window: what changed in the main window (hosts, providers) is read again when it is focused
   useEffect(() => {
     const again = () => { void load() }
