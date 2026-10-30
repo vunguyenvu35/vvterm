@@ -13,36 +13,38 @@ const MenuEvent = "menu:action"
 
 // Actions the menu can ask for. The frontend (App.tsx) handles exactly these.
 const (
-	ActNewHost      = "new_host"
-	ActNewGroup     = "new_group"
-	ActNewTerminal  = "new_terminal"
-	ActSerial       = "serial"
-	ActImport       = "import"
-	ActSettings     = "open_settings"
-	ActCloseTab     = "close_tab"
-	ActClosePane    = "close_pane"
-	ActLock         = "lock_vault"
-	ActZoomIn       = "zoom_in"
-	ActZoomOut      = "zoom_out"
-	ActZoomReset    = "zoom_reset"
-	ActPagePrefix   = "page:"
-	ActBroadcast    = "broadcast_input"
-	ActSplitRight   = "split_right"
-	ActSplitDown    = "split_down"
-	ActDuplicateTab = "duplicate_tab"
-	ActNewTab       = "new_connection"
-	ActNextTab      = "next_tab"
-	ActPrevTab      = "prev_tab"
-	ActVaults       = "go_vaults"
-	ActAbout        = "about"
-	ActCheckUpdate  = "check_update"
-	ActSupport      = "support"
+	ActNewHost       = "new_host"
+	ActNewGroup      = "new_group"
+	ActNewTerminal   = "new_terminal"
+	ActSerial        = "serial"
+	ActImport        = "import"
+	ActSettings      = "open_settings"
+	ActCloseTab      = "close_tab"
+	ActClosePane     = "close_pane"
+	ActLock          = "lock_vault"
+	ActZoomIn        = "zoom_in"
+	ActZoomOut       = "zoom_out"
+	ActZoomReset     = "zoom_reset"
+	ActPagePrefix    = "page:"
+	ActBroadcast     = "broadcast_input"
+	ActToggleSuggest = "toggle_suggest"
+	ActSuggestPopup  = "suggest_popup"
+	ActSplitRight    = "split_right"
+	ActSplitDown     = "split_down"
+	ActDuplicateTab  = "duplicate_tab"
+	ActNewTab        = "new_connection"
+	ActNextTab       = "next_tab"
+	ActPrevTab       = "prev_tab"
+	ActVaults        = "go_vaults"
+	ActAbout         = "about"
+	ActCheckUpdate   = "check_update"
+	ActSupport       = "support"
 )
 
 // MenuActions lists every action name, for tests and for the frontend to stay in step.
 var MenuActions = []string{
 	ActNewHost, ActNewGroup, ActNewTerminal, ActSerial, ActImport, ActSettings, ActCloseTab, ActClosePane, ActLock,
-	ActZoomIn, ActZoomOut, ActZoomReset, ActBroadcast, ActSplitRight, ActSplitDown, ActDuplicateTab,
+	ActZoomIn, ActZoomOut, ActZoomReset, ActBroadcast, ActToggleSuggest, ActSuggestPopup, ActSplitRight, ActSplitDown, ActDuplicateTab,
 	ActNewTab, ActNextTab, ActPrevTab, ActVaults, ActAbout, ActCheckUpdate, ActSupport,
 	ActPagePrefix + "hosts", ActPagePrefix + "keychain", ActPagePrefix + "forwards", ActPagePrefix + "snippets",
 	ActPagePrefix + "sftp", ActPagePrefix + "knownhosts", ActPagePrefix + "logs",
@@ -62,6 +64,7 @@ var menuShortcut = map[string]string{
 	ActNewTerminal: "new_local_terminal", ActNewHost: "new_host", ActSettings: "open_settings", ActNewTab: "new_connection",
 	ActCloseTab: "close_tab", ActClosePane: "close_pane", ActLock: "lock_vault", ActNextTab: "next_tab", ActPrevTab: "prev_tab",
 	ActZoomIn: "zoom_in", ActZoomOut: "zoom_out", ActZoomReset: "zoom_reset", ActSplitRight: "split_right", ActSplitDown: "split_down",
+	ActToggleSuggest: "toggle_suggest", ActSuggestPopup: "suggest_popup",
 	ActBroadcast: "broadcast_input", ActDuplicateTab: "duplicate_tab", ActVaults: "go_vaults",
 	ActPagePrefix + "hosts": "go_hosts", ActPagePrefix + "keychain": "go_keychain", ActPagePrefix + "forwards": "go_forwards",
 	ActPagePrefix + "snippets": "go_snippets", ActPagePrefix + "sftp": "open_sftp", ActPagePrefix + "knownhosts": "go_knownhosts",
@@ -155,6 +158,8 @@ func BuildMenu(h MenuHooks) *menu.Menu {
 	view.Append(act("Split Pane Right", ActSplitRight, nil))
 	view.Append(act("Split Pane Down", ActSplitDown, nil))
 	view.Append(act("Broadcast Input", ActBroadcast, nil))
+	view.Append(act("Command Suggestions", ActToggleSuggest, nil))
+	view.Append(act("Show Suggestions", ActSuggestPopup, nil))
 	view.Append(menu.Separator())
 	view.Append(act("Back to Vaults", ActVaults, nil))
 	for _, p := range []struct{ label, id string }{

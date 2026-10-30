@@ -310,7 +310,7 @@
 - TestServerLogoutIsACleanEndAndCloseIsToo
 - TestConnectionRefusedIsReported
 
-### `internal/usecase` (140)
+### `internal/usecase` (146)
 
 - TestLogRecordsConnectingAndClosingATab
 - TestLogRecordsAFailedConnectionAndALostOne
@@ -365,6 +365,12 @@
 - TestTelnetHasItsOwnLoginAndSavedPassword
 - TestTelnetLatin1ServersAreConvertedBothWays
 - TestTerminalActivityKeepsTheVaultUnlocked
+- TestParseShellHistoryKeepsNewestFirstWithoutRepeats
+- TestParseShellHistoryDropsMultiLineAndSecretsAndHugeLines
+- TestHostHistoryIsOffWhenSuggestionsAreOff
+- TestSuggestSettingsDefaultAndPersist
+- TestHistoryFromFilesReadsZshAndBashNewestFirst
+- TestReadTailStartsAtALineAndKeepsTheEnd
 - TestAddKeyPairAcceptsAMatchingPublicKeyAndCertificate
 - TestAddKeyPairWithoutThePublicPartsIsAnOrdinaryImport
 - TestAddKeyPairRefusesWhatDoesNotBelong
@@ -479,7 +485,7 @@
 - TestHintTooLongIsRejected
 - TestKeychainNeedsTheAuthenticator
 
-**Go test functions: 410** (table-driven cases and sub-tests are extra).
+**Go test functions: 416** (table-driven cases and sub-tests are extra).
 
 ## Frontend (Vitest)
 

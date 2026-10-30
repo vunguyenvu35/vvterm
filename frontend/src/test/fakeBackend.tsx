@@ -24,6 +24,8 @@ export interface Fake extends Backend {
     local: Record<string, {dir: boolean; size: number}>
     /** true: openSettings succeeds like the real app (a native window opens); false: it rejects (browser mode) */
     nativeSettings: boolean
+    /** what the shell history of the server holds */
+    hostHistory: string[]
     /** what Clear cache reports */
     cache: CacheReport
     /** serial devices the Serial panel finds */
@@ -106,6 +108,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       '/Users/me/notes.txt': {dir: false, size: 300}, '/Users/me/.zshrc': {dir: false, size: 120}, '/Users/me/Documents/cv.pdf': {dir: false, size: 40960},
     },
     nativeSettings: false,
+    hostHistory: [],
     cache: {files: 3, bytes: 5120},
     serialPorts: ['/dev/cu.usbserial-1410', '/dev/cu.usbmodem1101'],
     clipboard: '',
@@ -191,6 +194,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       resize: async () => {},
       reconnect: async s => { rec('session.reconnect', s) },
       close: async s => { rec('session.close', s) },
+      hostHistory: async s => { rec('session.hostHistory', s); return [...state.hostHistory] },
       trustHostKey: async (s, f) => { rec('session.trustHostKey', s, f) },
       testConnection: async (h, p, k) => { rec('session.testConnection', h, p, k); return state.testResult },
     },

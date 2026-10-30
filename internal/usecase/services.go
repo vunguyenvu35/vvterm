@@ -100,6 +100,8 @@ func (s *SettingsService) Save(in Settings) (Settings, error) {
 	s.c.settings.ReduceMotion = in.ReduceMotion
 	s.c.settings.AutoUpdateCheck = in.AutoUpdateCheck
 	s.c.settings.BiometricOnOpen = in.BiometricOnOpen
+	s.c.settings.Suggest = in.Suggest
+	s.c.settings.SuggestHost = in.SuggestHost
 	s.c.settings.AccountName = strings.TrimSpace(in.AccountName)
 	s.c.settings.AccountEmail = strings.TrimSpace(in.AccountEmail)
 	s.c.settings.Shortcuts = cloneShortcuts(in.Shortcuts)

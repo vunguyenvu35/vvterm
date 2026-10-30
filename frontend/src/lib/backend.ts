@@ -51,6 +51,8 @@ export interface Backend {
     resize(sid: string, cols: number, rows: number): Promise<void>
     reconnect(sid: string, cols: number, rows: number): Promise<void>
     close(sid: string): Promise<void>
+    /** commands in the shell history of the server, newest first (only when Suggest from host history is on) */
+    hostHistory(sid: string): Promise<string[]>
     trustHostKey(sid: string, fingerprint: string): Promise<void>
     testConnection(host: Partial<Host>, password: string, promptKey: string): Promise<ConnectionTest>
   }
@@ -261,6 +263,7 @@ export function wailsBackend(): Backend {
       resize: (s, c, r) => u('SessionService', 'Resize', s, c, r),
       reconnect: (s, c, r) => u('SessionService', 'Reconnect', s, c, r),
       close: s => u('SessionService', 'Close', s),
+      hostHistory: async s => (await u<string[]>('SessionService', 'HostHistory', s)) ?? [],
       trustHostKey: (s, f) => u('SessionService', 'TrustHostKey', s, f),
       testConnection: (h, p, k) => u('SessionService', 'TestConnection', h, p, k),
     },

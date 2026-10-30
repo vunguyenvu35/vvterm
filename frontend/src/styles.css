@@ -1005,3 +1005,11 @@ input[type='password']::-webkit-credentials-auto-fill-button { visibility: hidde
 .list-toolbar .search-box.grow { flex: 1 1 auto; max-width: none; min-width: 160px; }
 .list-toolbar .search-box.grow input { width: 100%; }
 .list-toolbar .view-menu { margin-right: 0; }
+
+/* command suggestions over a terminal: the dimmed rest of the line, and the list of matches */
+.suggest-pop { position: absolute; z-index: 40; width: 360px; max-height: 240px; overflow: auto; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); font-size: 13px; }
+.suggest-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 28px; padding: 0 8px; border-radius: 6px; cursor: pointer; }
+.suggest-item.on, .suggest-item:hover { background: var(--bg-3); }
+.suggest-text { font-family: Menlo, Monaco, 'Courier New', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest-src { flex: none; color: var(--muted); font-size: 11px; }
+.suggest-empty { padding: 6px 8px; color: var(--muted); }

@@ -135,6 +135,13 @@ Snippets are commands you reuse. **Snippets → New snippet**: a label, an optio
 
 A terminal must be open and connected. Snippets sync with Git and are included in backups.
 
+**Command suggestions.** While you type in a terminal, a **list** of the commands you used before that match appears under the cursor, each row marked *typed*, *snippet* or *host*: **↓ ↑** choose a row, then **Enter** or **Tab** put it on the line (it is never run for you), **Esc** closes the list until the next line. A row is only taken when you chose it with the arrows: until then Enter runs what you typed, **Tab** is the shell's own completion and the arrows go to the shell, as always. **⌘⇧J** (Ctrl+Shift+J on Windows and Linux; changeable in Settings → Shortcuts) opens the list by hand, also for an empty line; with nothing to show it says "No matching commands". **Ctrl/⌘+Shift+G** turns suggestions off and on at once and tells you which. Both are also in the **View** menu (*Command Suggestions* and *Show Suggestions*), which shows their keys.
+
+- The suggestions come from the commands you ran in VVTerm (the command that ran, as the screen shows it: a line completed with Tab or finished with the shell's own suggestion is kept whole), the shell history of this computer (`~/.zsh_history` and `~/.bash_history`) in the **local** terminal, your Snippets of **one line** (a snippet of several lines is never suggested, because its first lines would run at once; a snippet is also found by its name) and, if you turn it on, the shell history of an SSH server.
+- **Settings → Terminal → Suggest commands** switches it all off. **Suggest from the host's shell history** is off by default and is about SSH servers: it reads the last 3000 commands of `~/.bash_history` and `~/.zsh_history` over the open SSH connection when the terminal opens, keeps them in memory only, and leaves out any command that holds a secret.
+- A suggestion is only offered when VVTerm is sure what is on the line and the screen shows it at the cursor: not in vim or htop, not at a password prompt, and not while the shell is changing the line (after Tab or an arrow key the line is read from the screen again). A line that looks like a password, token or key is never suggested.
+
+
 ## 8. Split panes and search
 
 Use the two buttons at the top right to split the focused pane right or down. Every pane is its own session to the same host. **Ctrl/Cmd+F** searches the scrollback. When a shell exits (`exit`) its pane closes; closing the last pane closes the tab.
@@ -399,6 +406,9 @@ All of them can be changed in **Settings → Shortcuts**. ⌘ on a Mac is Ctrl e
 | ⌘ D / ⌘ Shift D | Split right / down |
 | ⌘ B | Broadcast input to every pane of the tab |
 | ⌘ F | Search the terminal's scrollback |
+| ↓ then Enter or Tab | Put a row of the suggestion list on the line |
+| ⌘ ⇧ J | Open the list of command suggestions |
+| ⌘ ⇧ G | Turn command suggestions off or on |
 | ⌘ ⇧ M | Switch the AI assistant to its next model |
 
 The SFTP file lists have a **right-click menu**: Open, Open with…, Copy to target directory, Rename, Delete, Refresh, New Folder and **Edit Permissions** (a grid of read / write / execute, or the octal number).

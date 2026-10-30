@@ -118,7 +118,7 @@ func TestViewMenuZoomsSplitsAndShowsPages(t *testing.T) {
 	view := submenu(BuildMenu(p.hooks()), "View")
 	for _, c := range []struct{ label, action string }{
 		{"Zoom In", ActZoomIn}, {"Zoom Out", ActZoomOut}, {"Actual Size", ActZoomReset}, {"Split Pane Right", ActSplitRight},
-		{"Split Pane Down", ActSplitDown}, {"Broadcast Input", ActBroadcast}, {"Hosts", "page:hosts"}, {"Keychain", "page:keychain"},
+		{"Split Pane Down", ActSplitDown}, {"Broadcast Input", ActBroadcast}, {"Command Suggestions", ActToggleSuggest}, {"Show Suggestions", ActSuggestPopup}, {"Hosts", "page:hosts"}, {"Keychain", "page:keychain"},
 		{"Port Forwarding", "page:forwards"}, {"Snippets", "page:snippets"}, {"SFTP", "page:sftp"}, {"Known Hosts", "page:knownhosts"}, {"Logs", "page:logs"},
 	} {
 		p.actions = nil

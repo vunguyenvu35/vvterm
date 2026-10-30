@@ -44,6 +44,10 @@ type Settings struct {
 	AutoUpdateCheck bool `json:"auto_update_check"`
 	// BiometricOnOpen: the lock screen asks for Touch ID / Windows Hello by itself (on by default)
 	BiometricOnOpen bool `json:"biometric_on_open"`
+	// Suggest shows a command suggestion while typing in a terminal (on by default); SuggestHost also reads the
+	// shell history of an SSH host for it (off by default: it opens a file on the server).
+	Suggest     bool `json:"suggest"`
+	SuggestHost bool `json:"suggest_host"`
 
 	// Account: a local profile today, the hook for sign-in and team features later
 	AccountName  string `json:"account_name"`
@@ -57,7 +61,7 @@ type Settings struct {
 func defaultSettings() Settings {
 	return Settings{Theme: "dark", TerminalTheme: "auto", FontSize: 13, FontFamily: "Menlo, Monaco, 'Courier New', monospace",
 		CursorStyle: "block", CursorBlink: true, CopyOnSelect: true, RightClick: "paste", Scrollback: 10000, AutoLockMinutes: 15,
-		Zoom: 100, Highlight: true, AskProtocol: true, BiometricOnOpen: true, AutoUpdateCheck: true, Shortcuts: map[string]string{}}
+		Zoom: 100, Highlight: true, AskProtocol: true, BiometricOnOpen: true, AutoUpdateCheck: true, Suggest: true, Shortcuts: map[string]string{}}
 }
 
 // Core wires the packages together; the services below share one instance.

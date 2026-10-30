@@ -106,6 +106,8 @@ export interface Settings {
   ask_protocol: boolean
   /** the lock screen asks for Touch ID / Windows Hello by itself, without a click */
   biometric_on_open: boolean
+  suggest: boolean // show command suggestions while typing in a terminal
+  suggest_host: boolean // also read the shell history of an SSH host for them
   /** colour URLs, IP addresses, paths and error / warning / success words in terminal output */
   highlight: boolean
   reduce_motion: boolean

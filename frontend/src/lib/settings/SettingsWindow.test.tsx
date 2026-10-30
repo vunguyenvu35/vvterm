@@ -551,3 +551,19 @@ describe('SettingsWindow: Storage', () => {
     expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
   })
 })
+
+describe('SettingsWindow: Suggest commands', () => {
+  it('is on, reads no host history by default, and the history switch waits for the first one', async () => {
+    const {be} = setup()
+    await tab('Terminal')
+    const on = screen.getByRole('switch', {name: 'Suggest commands'})
+    const host = screen.getByRole('switch', {name: "Suggest from the host's shell history"})
+    expect(on).toHaveAttribute('aria-checked', 'true')
+    expect(host).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(host)
+    expect(be.state.settings.suggest_host).toBe(true)
+    await userEvent.click(on)
+    expect(be.state.settings.suggest).toBe(false)
+    expect(screen.getByRole('switch', {name: "Suggest from the host's shell history"})).toBeDisabled()
+  })
+})

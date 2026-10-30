@@ -22,6 +22,7 @@ import {SettingsWindow} from './lib/settings/SettingsWindow'
 import {useAppearance} from './lib/settings/appearance'
 import {CLOSE_HOST_TAB} from './lib/sftp/SftpBrowser'
 import {AI_NEXT_MODEL} from './lib/assistant/AssistantTab'
+import {SUGGEST_POPUP} from './lib/terminal/suggester'
 import {SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, SidebarTab, TerminalSidebar} from './lib/terminal/Sidebar'
 import {DEFAULT_SETTINGS} from './lib/settings/defaults'
 import {Nav, Page} from './lib/shell/Nav'
@@ -424,6 +425,7 @@ export default function App({initial}: {/** an app window opened for this place 
     close_pane: () => { if (activeTabObj && inTerminalTab && !onHome) void closePaneAsk(activeTabObj.id, activeTabObj.activePane) },
     broadcast_input: () => { if (activeTabObj && inTerminalTab && !onHome) broadcastTab(activeTabObj.id) },
     ai_next_model: () => { window.dispatchEvent(new Event(AI_NEXT_MODEL)) },
+    toggle_suggest: () => { const on = !settings.suggest; saveSettings({suggest: on}); toast.info(on ? 'Command suggestions on' : 'Command suggestions off') },
     split_right: () => { if (inTerminalTab) split('row') },
     split_down: () => { if (inTerminalTab) split('col') },
     zoom_in: () => zoomBy(10),
@@ -442,6 +444,7 @@ export default function App({initial}: {/** an app window opened for this place 
     else if (action === 'support') setDialog({k: 'support'})
     else if (action === 'open_settings') openSettings()
     else if (action === 'duplicate_tab') { if (activeTabObj && !onHome) duplicateTab(activeTabObj.id) }
+    else if (action === 'suggest_popup') window.dispatchEvent(new Event(SUGGEST_POPUP))
     else if (action === 'page:sftp') setActive(SFTP_TAB_ID)
     else if (action.startsWith('page:')) goHome(action.slice('page:'.length) as Page)
     else act.current[action]?.()

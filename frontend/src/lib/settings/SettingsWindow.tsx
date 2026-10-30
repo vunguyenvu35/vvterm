@@ -354,6 +354,14 @@ export function SettingsWindow({settings: s, appearance, vault, onSettings, onVa
                       <Switch label="Highlight output" checked={s.highlight} onChange={v => update({highlight: v})} />
                     </div>
                     <div className="setting-row">
+                      <div><b>Suggest commands</b><div className="muted">While you type, a list of the commands that match appears under the cursor (↓ ↑ choose a row, Enter or Tab put it on the line, Esc closes it), and ⌘⇧J (Ctrl+Shift+J elsewhere) opens it by hand. It uses the commands you ran in VVTerm, the shell history of this computer (~/.zsh_history, ~/.bash_history) in the local terminal, and your Snippets of one line; it is not offered in vim or at a password prompt, and a line that looks like a secret is never suggested.</div></div>
+                      <Switch label="Suggest commands" checked={s.suggest} onChange={v => update({suggest: v})} />
+                    </div>
+                    <div className="setting-row">
+                      <div><b>Suggest from the host's shell history</b><div className="muted">Also read the last 3000 commands of ~/.bash_history and ~/.zsh_history on an SSH host, once when its terminal opens. They are kept in memory only, and a command with a secret in it is left out.</div></div>
+                      <Switch label="Suggest from the host's shell history" checked={s.suggest_host} disabled={!s.suggest} onChange={v => update({suggest_host: v})} />
+                    </div>
+                    <div className="setting-row">
                       <div><b>Scrollback</b><div className="muted">Lines kept per terminal (500 to 100000).</div></div>
                       <input aria-label="Scrollback lines" className="control narrow" type="number" value={scroll}
                         onChange={e => setScroll(e.target.value)} onBlur={() => update({scrollback: Number(scroll)})}

@@ -651,6 +651,18 @@ describe('App: keyboard shortcuts', () => {
     await waitFor(() => expect(be.state.settings.zoom).toBe(100))
   })
 
+  it('the suggestion shortcut turns command suggestions off and on and says which', async () => {
+    const be = setup()
+    await unlock(be)
+    expect(be.state.settings.suggest).toBe(true)
+    press({key: 'g', code: 'KeyG', ctrlKey: true, shiftKey: true})
+    await waitFor(() => expect(be.state.settings.suggest).toBe(false))
+    expect(await screen.findByText('Command suggestions off')).toBeInTheDocument()
+    press({key: 'g', code: 'KeyG', ctrlKey: true, shiftKey: true})
+    await waitFor(() => expect(be.state.settings.suggest).toBe(true))
+    expect(await screen.findByText('Command suggestions on')).toBeInTheDocument()
+  })
+
   it('next/previous tab cycle through Vaults and the open tabs; close tab does not ask', async () => {
     const be = setup()
     await unlock(be)
@@ -1008,7 +1020,7 @@ describe('App: tab menu, broadcast and maximise', () => {
 describe('App: the application menu bar', () => {
   // the actions of app/menu.go (MenuActions): the Go test keeps that list in step with the menu itself
   const GO_ACTIONS = ['new_host', 'new_group', 'new_terminal', 'serial', 'import', 'about', 'check_update', 'support', 'open_settings', 'close_tab', 'close_pane', 'lock_vault', 'zoom_in', 'zoom_out', 'zoom_reset',
-    'broadcast_input', 'split_right', 'split_down', 'duplicate_tab', 'page:hosts', 'page:keychain', 'page:forwards', 'page:snippets', 'page:sftp', 'page:knownhosts', 'page:logs']
+    'broadcast_input', 'toggle_suggest', 'suggest_popup', 'split_right', 'split_down', 'duplicate_tab', 'page:hosts', 'page:keychain', 'page:forwards', 'page:snippets', 'page:sftp', 'page:knownhosts', 'page:logs']
   const menu = (be: ReturnType<typeof makeFake>, action: string) => act(() => be.emit('menu:action', action))
 
   it('opens the panels the File menu names', async () => {
@@ -1149,7 +1161,7 @@ describe('App: the application menu bar', () => {
     const be = setup()
     await unlock(be)
     for (const a of GO_ACTIONS) menu(be, a) // none of them may throw
-    expect(GO_ACTIONS).toHaveLength(26)
+    expect(GO_ACTIONS).toHaveLength(28)
   })
 })
 

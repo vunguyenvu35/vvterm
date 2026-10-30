@@ -1,23 +1,6 @@
-import {clearHistory, createLineTracker, getHistory, MAX_HISTORY, recordCommand, subscribeHistory} from './history'
+import {clearHistory, getHistory, MAX_HISTORY, recordCommand, subscribeHistory} from './history'
 
 beforeEach(() => clearHistory())
-
-describe('createLineTracker', () => {
-  it('reports each line finished with Enter, applying Backspace', () => {
-    const t = createLineTracker()
-    expect(t('ls -l')).toEqual([])
-    expect(t('a\x7f\r')).toEqual(['ls -l'])
-    expect(t('pwd\rwhoami\r')).toEqual(['pwd', 'whoami'])
-  })
-  it('drops a line on Ctrl-C and Ctrl-U, ignores arrows, empty lines and control keys', () => {
-    const t = createLineTracker()
-    expect(t('abc\x03\r')).toEqual([])
-    expect(t('abc\x15ls\r')).toEqual(['ls'])
-    expect(t('\x1b[A\x1b[B\r')).toEqual([])
-    expect(t('  \r')).toEqual([])
-    expect(t('x\x1b[1;5Cy\r')).toEqual(['xy'])
-  })
-})
 
 describe('command history', () => {
   it('keeps newest first, moves a repeated command up and trims it', () => {

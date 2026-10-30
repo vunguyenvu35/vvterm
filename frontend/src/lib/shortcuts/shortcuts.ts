@@ -38,6 +38,8 @@ export const ACTIONS: ActionDef[] = [
   {id: 'terminal_copy', label: 'Copy the selection', group: 'Terminal', default: 'Mod+Shift+C', defaultMac: 'Mod+C'},
   {id: 'terminal_paste', label: 'Paste into the terminal', group: 'Terminal', default: 'Mod+Shift+V', defaultMac: 'Mod+V'},
   {id: 'terminal_search', label: 'Search the terminal scrollback', group: 'Terminal', default: 'Mod+F'},
+  {id: 'suggest_popup', label: 'Show command suggestions', group: 'Terminal', default: 'Mod+Shift+J'},
+  {id: 'toggle_suggest', label: 'Turn command suggestions on or off', group: 'Terminal', default: 'Mod+Shift+G'},
   {id: 'zoom_in', label: 'Zoom in', group: 'View', default: 'Mod+='},
   {id: 'zoom_out', label: 'Zoom out', group: 'View', default: 'Mod+-'},
   {id: 'zoom_reset', label: 'Reset zoom', group: 'View', default: 'Mod+0'},

@@ -43,27 +43,3 @@ export function clearHistory() {
   save()
 }
 
-/**
- * Follows what is typed and reports each line that was finished with Enter. Backspace edits the line,
- * Ctrl-C / Ctrl-U drop it, and escape sequences (arrows, function keys) are skipped.
- */
-export function createLineTracker(): (data: string) => string[] {
-  let buf = ''
-  let esc = false
-  return data => {
-    const done: string[] = []
-    for (const ch of data) {
-      if (esc) {
-        // a CSI/SS3 sequence ends with a letter or "~"
-        if (/[A-Za-z~]/.test(ch) && ch !== 'O' && ch !== '[') esc = false
-        continue
-      }
-      if (ch === '\x1b') esc = true
-      else if (ch === '\r' || ch === '\n') { if (buf.trim()) done.push(buf); buf = '' }
-      else if (ch === '\x7f' || ch === '\b') buf = buf.slice(0, -1)
-      else if (ch === '\x03' || ch === '\x15') buf = ''
-      else if (ch >= ' ') buf += ch
-    }
-    return done
-  }
-}

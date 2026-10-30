@@ -1,4 +1,6 @@
-import {createLineTracker, recordCommand} from './history'
+import {getHistory, recordCommand} from './history'
+import {createSuggester, SUGGEST_POPUP, type Suggester, type SuggestTerm} from './suggester'
+import type {Snippet} from '../types'
 import {ConnectScreen} from './ConnectScreen'
 import {useEffect, useRef, useState} from 'react'
 import {ITheme, Terminal} from '@xterm/xterm'
@@ -39,6 +41,12 @@ interface Props {
   /** keys the app owns and the terminal must let through to it (Next / Previous tab): xterm would send them to the shell and swallow them */
   appCombos?: string[]
   pasteCombo?: string
+  /** command suggestions while typing (the Suggest setting; default on) */
+  suggest?: boolean
+  /** also read the shell history of the server for them */
+  suggestHost?: boolean
+  /** key that opens the list of suggestions */
+  suggestCombo?: string
   /** who this pane connects to: drawn on the connecting screen */
   connect?: {label: string; os?: string; subtitle: string}
   onShowLogs?(): void
@@ -143,6 +151,15 @@ export function TerminalPane(p: Props) {
   copyOnSelect.current = p.copyOnSelect ?? true
   rightClick.current = p.rightClick ?? 'paste'
   const [menu, setMenu] = useState<{x: number; y: number} | null>(null)
+  const focusedRef = useRef(p.focused && p.visible)
+  focusedRef.current = p.focused && p.visible
+  const suggestOn = useRef(p.suggest ?? true)
+  suggestOn.current = p.suggest ?? true
+  const suggestCombo = useRef(p.suggestCombo ?? 'Mod+Shift+J')
+  suggestCombo.current = p.suggestCombo ?? 'Mod+Shift+J'
+  const suggestHost = useRef(p.suggestHost ?? false)
+  suggestHost.current = p.suggestHost ?? false
+  const hostCmds = useRef<string[]>([])
   const onTyped = useRef(p.onTyped)
   onTyped.current = p.onTyped
   onExit.current = p.onExit
@@ -194,6 +211,22 @@ export function TerminalPane(p: Props) {
     const unfollowIme = followReplacements(t as unknown as ComposingTerm)
     try { f.fit() } catch { /* hidden */ }
 
+    // Command suggestions: the sources are the commands typed here, the snippets and (when asked) the host's history
+    let snippets: Snippet[] = []
+    const loadSnippets = () => { void be.snippets.list().then(l => { snippets = l }).catch(() => {}) }
+    loadSnippets()
+    window.addEventListener('focus', loadSnippets)
+    let suggester: Suggester | null = null
+    const popupFromMenu = () => { if (focusedRef.current) suggester?.togglePopup() }
+    window.addEventListener(SUGGEST_POPUP, popupFromMenu)
+    if (host.current?.parentElement) {
+      suggester = createSuggester({
+        term: t as unknown as SuggestTerm, container: host.current.parentElement, send: d => sendKeys(d),
+        sources: () => ({typed: getHistory(), snippets, host: hostCmds.current}),
+        enabled: () => suggestOn.current, ready: () => stateRef.current === 'ready', popupCombo: () => suggestCombo.current, onCommand: recordCommand,
+      })
+    }
+
     // Termius-style colouring of finished lines, a moment after output stops arriving
     const hl = createHighlighter(t as unknown as HighlightTerm)
     highlighter.current = hl
@@ -201,6 +234,7 @@ export function TerminalPane(p: Props) {
     const hlSub = (t as unknown as {onWriteParsed?(cb: () => void): {dispose(): void}}).onWriteParsed?.(() => {
       window.clearTimeout(hlTimer)
       hlTimer = window.setTimeout(() => hl.scan(), 60)
+      suggester?.refresh()
     })
     if (p.highlight === false) hl.dispose()
 
@@ -235,24 +269,12 @@ export function TerminalPane(p: Props) {
         setSt('closed')
       })
     }
-    const track = createLineTracker()
     t.onData(raw => {
       const d = composedInput(raw)
       if (stateRef.current === 'ready') {
+        suggester?.feed(d)
         sendKeys(d)
         onTyped.current?.(d)
-        for (const line of track(d)) {
-          // only what the terminal echoed: a password prompt shows nothing, so nothing is remembered. The echo
-          // comes back from the server a moment after the keys, so look a moment later, a few lines up.
-          const tail = line.trim().slice(-20)
-          window.setTimeout(() => {
-            const buf = t.buffer?.active
-            if (!buf || buf.type !== 'normal') return
-            for (let y = buf.baseY + buf.cursorY, n = 0; y >= 0 && n < 8; y--, n++) {
-              if (buf.getLine(y)?.translateToString(true).includes(tail)) { recordCommand(line); return }
-            }
-          }, 250)
-        }
       } else if (stateRef.current === 'closed' && (d === '\r' || d === '\n')) {
         retry.current()
       }
@@ -261,6 +283,7 @@ export function TerminalPane(p: Props) {
     const unregister = p.paneId ? registerPane(p.paneId, text => {
       if (stateRef.current !== 'ready') return false
       sendKeys(text)
+      suggester?.feed(text)
       return true
     }) : () => {}
     t.onResize(({cols, rows}) => {
@@ -268,6 +291,7 @@ export function TerminalPane(p: Props) {
     })
     t.attachCustomKeyEventHandler(e => {
       if (e.type !== 'keydown') return true
+      if (suggester?.handleKey(e)) return false
       if (matches(e, searchCombo.current)) {
         setShowSearch(v => !v)
         return false
@@ -287,6 +311,8 @@ export function TerminalPane(p: Props) {
       if (appCombos.current.some(c => matches(e, c))) return false // not for the shell: the app's own handler gets it
       return true
     })
+
+    const cursorSub = (t as unknown as {onCursorMove?(cb: () => void): {dispose(): void}}).onCursorMove?.(() => suggester?.refresh())
 
     // copy on select: once the selection stops changing
     let selTimer = 0
@@ -330,6 +356,10 @@ export function TerminalPane(p: Props) {
       window.clearTimeout(hlTimer)
       window.clearTimeout(selTimer)
       hlSub?.dispose()
+      cursorSub?.dispose()
+      suggester?.dispose()
+      window.removeEventListener('focus', loadSnippets)
+      window.removeEventListener(SUGGEST_POPUP, popupFromMenu)
       selSub?.dispose()
       unfollowIme()
       hl.dispose()
@@ -357,6 +387,14 @@ export function TerminalPane(p: Props) {
     t.options.scrollback = p.scrollback
     try { fit.current?.fit() } catch { /* hidden */ }
   }, [p.fontSize, p.fontFamily, p.termTheme, p.cursorStyle, p.cursorBlink, p.scrollback])
+
+  // the shell history is read once the session is ready: this computer's for the local terminal, a server's when asked for
+  useEffect(() => {
+    if (state !== 'ready' || !sid.current || p.suggest === false) { hostCmds.current = []; return }
+    let gone = false
+    void be.session.hostHistory(sid.current).then(l => { if (!gone) hostCmds.current = l }).catch(() => { if (!gone) hostCmds.current = [] }) // refused: an SSH host while that setting is off
+    return () => { gone = true }
+  }, [be, state, p.suggest, p.suggestHost])
 
   // the Highlight output switch in Settings
   useEffect(() => {
