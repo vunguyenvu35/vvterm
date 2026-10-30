@@ -88,8 +88,11 @@ type RemoteFS interface {
 	Rename(from, to string) error
 	Chmod(path string, mode uint32) error
 	Remove(path string, recursive bool) error
-	Upload(local, remote string, overwrite bool, progress func(done, total int64)) error
-	Download(remote, local string, overwrite bool, progress func(done, total int64)) error
+	Stat(path string) (domain.RemoteEntry, error)
+	// Upload and Download stop when ctx is cancelled. A transfer that stops early keeps its partial file and
+	// continues from it next time, unless the cancellation cause is domain.ErrTransferDiscarded.
+	Upload(ctx context.Context, local, remote string, overwrite bool, progress func(done, total int64)) error
+	Download(ctx context.Context, remote, local string, overwrite bool, progress func(done, total int64)) error
 	Close() error
 }
 

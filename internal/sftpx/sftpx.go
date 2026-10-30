@@ -1,17 +1,23 @@
 // Package sftpx adapts github.com/pkg/sftp to the app's RemoteFS port: directory listing, folders,
 // rename, delete, and file upload/download with progress. Transfers are written to a temporary file
-// and moved into place, so an interrupted transfer never leaves a half-written target.
+// and moved into place, so an interrupted transfer never leaves a half-written target. The temporary
+// file is named after the size and time of the source, so a transfer that was interrupted (a lost
+// connection, Pause) continues from the bytes already written when it is started again, and only when
+// the source has not changed in between.
 package sftpx
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -26,7 +32,26 @@ var (
 	ErrBadPath = errors.New("invalid path")
 )
 
-const partSuffix = ".vvterm-part"
+const (
+	partSuffix = ".vvterm-part"
+	// rewind is how much of an interrupted file is written again when a transfer continues: the last
+	// chunk may have been cut short.
+	rewind = 64 << 10
+)
+
+// fingerprint names the version of a source file, so a partial copy of another version is never continued.
+func fingerprint(size int64, mod time.Time) string {
+	h := fnv.New32a()
+	fmt.Fprintf(h, "%d/%d", size, mod.UnixNano())
+	return fmt.Sprintf("%08x", h.Sum32())
+}
+
+func resumeOffset(have, size int64) int64 {
+	if have > size || have < rewind {
+		return 0
+	}
+	return have - rewind
+}
 
 // FS is an SFTP session over an SSH connection.
 type FS struct{ c *sftp.Client }
@@ -89,6 +114,19 @@ func (f *FS) List(dir string) ([]domain.RemoteEntry, error) {
 	return out, nil
 }
 
+// Stat describes one remote file or directory.
+func (f *FS) Stat(p string) (domain.RemoteEntry, error) {
+	p, err := remote(p, true)
+	if err != nil {
+		return domain.RemoteEntry{}, err
+	}
+	fi, err := f.c.Stat(p)
+	if err != nil {
+		return domain.RemoteEntry{}, err
+	}
+	return domain.RemoteEntry{Name: fi.Name(), Path: p, Size: fi.Size(), Mode: fi.Mode().String(), ModTime: fi.ModTime(), IsDir: fi.IsDir()}, nil
+}
+
 func (f *FS) Mkdir(p string) error {
 	p, err := remote(p, false)
 	if err != nil {
@@ -133,23 +171,44 @@ func (f *FS) Remove(p string, recursive bool) error {
 	return f.c.Remove(p)
 }
 
-type progressWriter struct {
-	w          io.Writer
-	done, size int64
-	fn         func(done, total int64)
+// copyCtx copies src to dst, stopping with the context's cause as soon as it is cancelled. progress is
+// told the bytes written so far (counting from base, the bytes a continued transfer already had).
+func copyCtx(ctx context.Context, dst io.Writer, src io.Reader, base, size int64, progress func(done, total int64)) error {
+	buf := make([]byte, 128<<10)
+	done := base
+	for {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+		n, rerr := src.Read(buf)
+		if n > 0 {
+			w, werr := dst.Write(buf[:n])
+			done += int64(w)
+			if progress != nil {
+				progress(done, size)
+			}
+			if werr != nil {
+				return werr
+			}
+		}
+		if rerr == io.EOF {
+			return nil
+		}
+		if rerr != nil {
+			return rerr
+		}
+	}
 }
 
-func (p *progressWriter) Write(b []byte) (int, error) {
-	n, err := p.w.Write(b)
-	p.done += int64(n)
-	if p.fn != nil {
-		p.fn(p.done, p.size)
-	}
-	return n, err
+// discard is true when the transfer was cancelled for good (not paused, not interrupted): its partial
+// file is then deleted instead of kept for a later continue.
+func discard(ctx context.Context) bool {
+	return errors.Is(context.Cause(ctx), domain.ErrTransferDiscarded)
 }
 
 // Upload copies a local file to the remote path. Without overwrite an existing remote file is an error.
-func (f *FS) Upload(local, rpath string, overwrite bool, progress func(done, total int64)) (err error) {
+// An interrupted upload leaves its partial file next to the target and continues from it next time.
+func (f *FS) Upload(ctx context.Context, local, rpath string, overwrite bool, progress func(done, total int64)) (err error) {
 	rpath, err = remote(rpath, false)
 	if err != nil {
 		return err
@@ -175,27 +234,51 @@ func (f *FS) Upload(local, rpath string, overwrite bool, progress func(done, tot
 	}
 	defer src.Close()
 
-	tmp := rpath + partSuffix
-	dst, err := f.c.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	tmp := rpath + partSuffix + "-" + fingerprint(st.Size(), st.ModTime())
+	var offset int64
+	if have, serr := f.c.Stat(tmp); serr == nil && have.Mode().IsRegular() {
+		offset = resumeOffset(have.Size(), st.Size())
+	}
+	flags := os.O_WRONLY | os.O_CREATE
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	}
+	dst, err := f.c.OpenFile(tmp, flags)
 	if err != nil {
 		return err
 	}
+	closed := false
 	defer func() {
-		if err != nil {
+		if !closed {
 			_ = dst.Close()
+		}
+		if err != nil && discard(ctx) {
 			_ = f.c.Remove(tmp)
 		}
 	}()
-	if _, err = io.Copy(&progressWriter{w: dst, size: st.Size(), fn: progress}, src); err != nil {
+	if offset > 0 {
+		if _, err = src.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+		if _, err = dst.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+	}
+	if err = copyCtx(ctx, dst, src, offset, st.Size(), progress); err != nil {
 		return err
 	}
+	closed = true
 	if err = dst.Close(); err != nil {
 		return err
 	}
 	if overwrite {
+		old, serr := f.c.Stat(rpath)                       // the replacement keeps the permissions of the file it replaces
 		if err = f.c.PosixRename(tmp, rpath); err != nil { // servers without the extension: replace by hand
 			_ = f.c.Remove(rpath)
 			err = f.c.Rename(tmp, rpath)
+		}
+		if err == nil && serr == nil {
+			_ = f.c.Chmod(rpath, old.Mode().Perm())
 		}
 		return err
 	}
@@ -203,7 +286,8 @@ func (f *FS) Upload(local, rpath string, overwrite bool, progress func(done, tot
 }
 
 // Download copies a remote file to the local path. Without overwrite an existing local file is an error.
-func (f *FS) Download(rpath, local string, overwrite bool, progress func(done, total int64)) (err error) {
+// An interrupted download leaves a hidden partial file next to the target and continues from it next time.
+func (f *FS) Download(ctx context.Context, rpath, local string, overwrite bool, progress func(done, total int64)) (err error) {
 	rpath, err = remote(rpath, false)
 	if err != nil {
 		return err
@@ -228,24 +312,44 @@ func (f *FS) Download(rpath, local string, overwrite bool, progress func(done, t
 		return err
 	}
 	defer src.Close()
-	tmp, err := os.CreateTemp(filepath.Dir(local), ".vvterm-*.part")
+	partPath := filepath.Join(filepath.Dir(local), "."+filepath.Base(local)+partSuffix+"-"+fingerprint(st.Size(), st.ModTime()))
+	var offset int64
+	if have, serr := os.Stat(partPath); serr == nil && have.Mode().IsRegular() {
+		offset = resumeOffset(have.Size(), st.Size())
+	}
+	tmp, err := os.OpenFile(partPath, os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		return err
 	}
+	closed := false
 	defer func() {
-		if err != nil {
+		if !closed {
 			_ = tmp.Close()
-			_ = os.Remove(tmp.Name())
+		}
+		if err != nil && discard(ctx) {
+			_ = os.Remove(partPath)
 		}
 	}()
-	if _, err = io.Copy(&progressWriter{w: tmp, size: st.Size(), fn: progress}, src); err != nil {
+	if err = tmp.Truncate(offset); err != nil {
+		return err
+	}
+	if _, err = tmp.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+	if offset > 0 {
+		if _, err = src.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+	}
+	if err = copyCtx(ctx, tmp, src, offset, st.Size(), progress); err != nil {
 		return err
 	}
 	if err = tmp.Chmod(0o644); err != nil {
 		return err
 	}
+	closed = true
 	if err = tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), local)
+	return os.Rename(partPath, local)
 }

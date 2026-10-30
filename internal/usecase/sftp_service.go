@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -26,11 +27,15 @@ type sftpSession struct {
 	client *sshx.Client
 	stop   chan struct{}
 	once   sync.Once
+	q      *transferQueue
+	edits  *editWatches
 }
 
 func (s *sftpSession) close() {
 	s.once.Do(func() {
 		close(s.stop)
+		s.q.closeAll()
+		s.edits.stopAll()
 		_ = s.fs.Close()
 		_ = s.client.Close()
 	})
@@ -74,9 +79,11 @@ func (s *SftpService) Open(hostID, promptKey string) (SftpInfo, error) {
 		_ = cl.Close()
 		return SftpInfo{}, fmt.Errorf("read the remote home directory: %w", err)
 	}
-	sess := &sftpSession{hostID: host.ID, label: host.Label, fs: fs, client: cl, stop: make(chan struct{})}
-	s.c.record(domain.ActSFTP, host.ID, host.Label, "SFTP connection opened", true)
 	sid := domain.NewID()
+	sess := &sftpSession{hostID: host.ID, label: host.Label, fs: fs, client: cl, stop: make(chan struct{})}
+	sess.q = newTransferQueue(s, sid, sess)
+	sess.edits = newEditWatches(s, sid, sess)
+	s.c.record(domain.ActSFTP, host.ID, host.Label, "SFTP connection opened", true)
 	s.mu.Lock()
 	s.sessions[sid] = sess
 	s.mu.Unlock()
@@ -176,7 +183,7 @@ func (s *SftpService) Upload(sid, local, remoteDir string, overwrite bool) (stri
 		return "", errors.New("invalid local file")
 	}
 	dest := path.Join(remoteDir, name)
-	return dest, x.fs.Upload(local, dest, overwrite, s.progress(sid, name, "upload"))
+	return dest, x.fs.Upload(context.Background(), local, dest, overwrite, s.progress(sid, name, "upload"))
 }
 
 // Download saves a remote file to the absolute local path.
@@ -185,7 +192,7 @@ func (s *SftpService) Download(sid, remote, local string, overwrite bool) error 
 	if err != nil {
 		return err
 	}
-	return x.fs.Download(remote, local, overwrite, s.progress(sid, path.Base(remote), "download"))
+	return x.fs.Download(context.Background(), remote, local, overwrite, s.progress(sid, path.Base(remote), "download"))
 }
 
 func (s *SftpService) Close(sid string) error {

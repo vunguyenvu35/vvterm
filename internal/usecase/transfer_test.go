@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -238,11 +239,14 @@ func (f *fakeRemote) List(dir string) ([]domain.RemoteEntry, error) {
 	}
 	return nil, errors.New("no such directory")
 }
-func (f *fakeRemote) Mkdir(string) error                                     { return nil }
-func (f *fakeRemote) Rename(a, b string) error                               { return nil }
-func (f *fakeRemote) Remove(string, bool) error                              { return nil }
-func (f *fakeRemote) Upload(l, r string, o bool, p func(int64, int64)) error { return nil }
-func (f *fakeRemote) Download(r, l string, o bool, p func(int64, int64)) error {
+func (f *fakeRemote) Mkdir(string) error                      { return nil }
+func (f *fakeRemote) Rename(a, b string) error                { return nil }
+func (f *fakeRemote) Remove(string, bool) error               { return nil }
+func (f *fakeRemote) Stat(string) (domain.RemoteEntry, error) { return domain.RemoteEntry{}, nil }
+func (f *fakeRemote) Upload(_ context.Context, l, r string, o bool, p func(int64, int64)) error {
+	return nil
+}
+func (f *fakeRemote) Download(_ context.Context, r, l string, o bool, p func(int64, int64)) error {
 	f.mu.Lock()
 	f.got = append(f.got, l)
 	f.mu.Unlock()

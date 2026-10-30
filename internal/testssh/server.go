@@ -35,6 +35,9 @@ type Config struct {
 	// SFTPSeed pre-creates entries: a path ending in "/" is a directory, otherwise a file with that content.
 	SFTP     bool
 	SFTPSeed map[string]string
+	// SFTPRealFS serves the real file system of the test process instead of the in-memory one, for the few tests
+	// that need what that one lacks (permissions). Tests must keep to their own temporary folders.
+	SFTPRealFS bool
 }
 
 type Server struct {
@@ -298,8 +301,13 @@ func (s *Server) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 				}
 				r.Reply(true, nil)
 				go func() {
-					srv := sftp.NewRequestServer(ch, s.handlers)
-					srv.Serve()
+					if s.cfg.SFTPRealFS {
+						if srv, err := sftp.NewServer(ch); err == nil {
+							_ = srv.Serve()
+						}
+					} else {
+						sftp.NewRequestServer(ch, s.handlers).Serve()
+					}
 					ch.Close()
 				}()
 			case "pty-req":

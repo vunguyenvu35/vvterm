@@ -14,6 +14,10 @@ const MaxJumpDepth = 8
 // ErrNotFound is returned when a referenced record does not exist.
 var ErrNotFound = errors.New("record not found")
 
+// ErrTransferDiscarded is the cancellation cause of a transfer that was cancelled for good: its partial
+// file is deleted. A transfer stopped any other way (Pause, a lost connection) keeps it to continue from.
+var ErrTransferDiscarded = errors.New("transfer cancelled")
+
 // IsLoopback reports whether addr is a loopback IP or "localhost".
 func IsLoopback(addr string) bool {
 	if strings.EqualFold(addr, "localhost") {

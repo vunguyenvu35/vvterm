@@ -2,6 +2,7 @@ package sftpx
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -16,6 +17,8 @@ import (
 	"vvterm/internal/sshx"
 	"vvterm/internal/testssh"
 )
+
+var bg = context.Background()
 
 func newFS(t *testing.T, seed map[string]string) *FS {
 	t.Helper()
@@ -86,7 +89,7 @@ func TestUploadDownloadRoundTripKeepsBytesAndReportsProgress(t *testing.T) {
 	}
 	var seen []int64
 	var total int64
-	if err := fs.Upload(src, "/blob.bin", false, func(done, tot int64) { seen = append(seen, done); total = tot }); err != nil {
+	if err := fs.Upload(bg, src, "/blob.bin", false, func(done, tot int64) { seen = append(seen, done); total = tot }); err != nil {
 		t.Fatal(err)
 	}
 	if total != int64(len(data)) || len(seen) < 2 || seen[len(seen)-1] != total {
@@ -102,7 +105,7 @@ func TestUploadDownloadRoundTripKeepsBytesAndReportsProgress(t *testing.T) {
 		t.Fatalf("temporary file left behind or wrong size: %+v", list)
 	}
 	dst := filepath.Join(t.TempDir(), "copy.bin")
-	if err := fs.Download("/blob.bin", dst, false, nil); err != nil {
+	if err := fs.Download(bg, "/blob.bin", dst, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(dst)
@@ -114,20 +117,20 @@ func TestUploadDownloadRoundTripKeepsBytesAndReportsProgress(t *testing.T) {
 func TestOverwriteIsRefusedUnlessRequested(t *testing.T) {
 	fs := newFS(t, map[string]string{"/a.txt": "old"})
 	up := local(t, "a.txt", "new content")
-	if err := fs.Upload(up, "/a.txt", false, nil); !errors.Is(err, ErrExists) {
+	if err := fs.Upload(bg, up, "/a.txt", false, nil); !errors.Is(err, ErrExists) {
 		t.Fatalf("upload over existing: %v", err)
 	}
-	if err := fs.Upload(up, "/a.txt", true, nil); err != nil {
+	if err := fs.Upload(bg, up, "/a.txt", true, nil); err != nil {
 		t.Fatalf("overwrite upload: %v", err)
 	}
 	dst := local(t, "d.txt", "keep me")
-	if err := fs.Download("/a.txt", dst, false, nil); !errors.Is(err, ErrExists) {
+	if err := fs.Download(bg, "/a.txt", dst, false, nil); !errors.Is(err, ErrExists) {
 		t.Fatalf("download over existing: %v", err)
 	}
 	if b, _ := os.ReadFile(dst); string(b) != "keep me" {
 		t.Fatal("a refused download changed the local file")
 	}
-	if err := fs.Download("/a.txt", dst, true, nil); err != nil {
+	if err := fs.Download(bg, "/a.txt", dst, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(dst); string(b) != "new content" {
@@ -142,7 +145,7 @@ func TestOverwriteIsRefusedUnlessRequested(t *testing.T) {
 func TestFailedDownloadLeavesNoPartFile(t *testing.T) {
 	fs := newFS(t, nil)
 	dir := t.TempDir()
-	if err := fs.Download("/missing.txt", filepath.Join(dir, "x.txt"), false, nil); err == nil {
+	if err := fs.Download(bg, "/missing.txt", filepath.Join(dir, "x.txt"), false, nil); err == nil {
 		t.Fatal("download of a missing file succeeded")
 	}
 	ents, _ := os.ReadDir(dir)
@@ -198,20 +201,20 @@ func TestPathValidation(t *testing.T) {
 			t.Errorf("operation on the root must be refused, got %v", err)
 		}
 	}
-	if err := fs.Upload("relative.txt", "/x", false, nil); !errors.Is(err, ErrBadPath) {
+	if err := fs.Upload(bg, "relative.txt", "/x", false, nil); !errors.Is(err, ErrBadPath) {
 		t.Errorf("relative local path: %v", err)
 	}
-	if err := fs.Download("/x", "relative.txt", false, nil); !errors.Is(err, ErrBadPath) {
+	if err := fs.Download(bg, "/x", "relative.txt", false, nil); !errors.Is(err, ErrBadPath) {
 		t.Errorf("relative local path: %v", err)
 	}
-	if err := fs.Upload(t.TempDir(), "/dir", false, nil); err == nil {
+	if err := fs.Upload(bg, t.TempDir(), "/dir", false, nil); err == nil {
 		t.Error("uploading a directory succeeded")
 	}
 }
 
 func TestDownloadOfDirectoryIsRefused(t *testing.T) {
 	fs := newFS(t, map[string]string{"/d/": ""})
-	if err := fs.Download("/d", filepath.Join(t.TempDir(), "d"), false, nil); err == nil || !strings.Contains(err.Error(), "directory") {
+	if err := fs.Download(bg, "/d", filepath.Join(t.TempDir(), "d"), false, nil); err == nil || !strings.Contains(err.Error(), "directory") {
 		t.Fatalf("%v", err)
 	}
 }
@@ -219,11 +222,11 @@ func TestDownloadOfDirectoryIsRefused(t *testing.T) {
 func TestUploadedFileContentOnServer(t *testing.T) {
 	fs := newFS(t, nil)
 	up := local(t, "hello.txt", "héllo wörld\n")
-	if err := fs.Upload(up, "/hello.txt", false, nil); err != nil {
+	if err := fs.Upload(bg, up, "/hello.txt", false, nil); err != nil {
 		t.Fatal(err)
 	}
 	dst := filepath.Join(t.TempDir(), "back.txt")
-	if err := fs.Download("/hello.txt", dst, false, nil); err != nil {
+	if err := fs.Download(bg, "/hello.txt", dst, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(dst); !bytes.Equal(b, []byte("héllo wörld\n")) {

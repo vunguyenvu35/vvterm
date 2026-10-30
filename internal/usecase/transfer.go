@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -35,6 +36,8 @@ type job struct {
 	dst  string
 	rel  string // shown to the user, relative to the folder that was dragged
 	size int64
+	// quiet: a folder that is only made sure of (the target of a sync), not counted as one made
+	quiet bool
 }
 
 // safeName refuses names a hostile server could use to escape the destination folder.
@@ -46,106 +49,123 @@ func isExists(err error) bool { return err != nil && strings.Contains(err.Error(
 
 func newResult() TransferResult { return TransferResult{Skipped: []string{}, Ignored: []string{}} }
 
-// UploadAll sends files and folders (with everything inside) into remoteDir. Folders merge with ones that
-// already exist; files that exist are skipped unless overwrite is true.
-func (s *SftpService) UploadAll(sid string, locals []string, remoteDir string, overwrite bool) (res TransferResult, err error) {
-	res = newResult()
-	x, err := s.get(sid)
-	if err != nil {
-		return res, err
-	}
-	defer func() { s.logTransfer(x, "Uploaded", "upload", res, remoteDir, err) }()
-	if len(locals) == 0 {
-		return res, errors.New("nothing to upload")
-	}
-	jobs, err := planUpload(locals, remoteDir, &res)
-	if err != nil {
-		return res, err
-	}
-	var total int64
-	for _, j := range jobs {
-		total += j.size
-	}
-	var done int64
-	prog := s.batchProgress(sid, "upload", &total)
-	for _, j := range jobs {
+// execState is how far a plan has got. A transfer that is paused or fails keeps it, so it continues with the
+// file it stopped in (whose partial copy is continued too) and does not start over.
+type execState struct {
+	next int   // index of the next job to run
+	done int64 // bytes of the files finished so far
+	res  TransferResult
+}
+
+// execute runs jobs[st.next:] in order. A cancelled ctx stops it with the context's cause. step is told after
+// every finished job, prog while a file is copied.
+func (x *sftpSession) execute(ctx context.Context, direction string, jobs []job, overwrite bool, st *execState, prog func(name string, done int64), step func()) error {
+	upload := direction == "upload" || direction == "sync-up"
+	for ; st.next < len(jobs); st.next++ {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+		j := jobs[st.next]
 		if j.dir {
-			if err := mkdirExisting(x.fs.Mkdir, func(p string) error { _, err := x.fs.List(p); return err }, j.dst); err != nil {
-				return res, fmt.Errorf("%s: %w", j.rel, err)
+			var err error
+			if upload {
+				err = mkdirExisting(x.fs.Mkdir, func(p string) error { _, err := x.fs.List(p); return err }, j.dst)
+			} else {
+				err = os.MkdirAll(j.dst, 0o755)
 			}
-			res.Dirs++
+			if err != nil {
+				return fmt.Errorf("%s: %w", j.rel, err)
+			}
+			if !j.quiet {
+				st.res.Dirs++
+			}
+			step()
 			continue
 		}
-		base := done
-		err := x.fs.Upload(j.src, j.dst, overwrite, func(d, _ int64) { prog(j.rel, base+d) })
+		if !upload && !overwrite {
+			if _, err := os.Lstat(j.dst); err == nil {
+				st.res.Skipped = append(st.res.Skipped, j.rel)
+				st.done += j.size
+				step()
+				continue
+			}
+		}
+		base := st.done
+		report := func(d, _ int64) { prog(j.rel, base+d) }
+		var err error
+		if upload {
+			err = x.fs.Upload(ctx, j.src, j.dst, overwrite, report)
+		} else {
+			err = x.fs.Download(ctx, j.src, j.dst, overwrite, report)
+		}
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
 		switch {
 		case isExists(err):
-			res.Skipped = append(res.Skipped, j.rel)
+			st.res.Skipped = append(st.res.Skipped, j.rel)
 		case err != nil:
-			return res, fmt.Errorf("%s: %w", j.rel, err)
+			return fmt.Errorf("%s: %w", j.rel, err)
 		default:
-			res.Files++
-			res.Bytes += j.size
+			st.res.Files++
+			st.res.Bytes += j.size
 		}
-		done += j.size
-		prog(j.rel, done)
+		st.done += j.size
+		prog(j.rel, st.done)
+		step()
 	}
-	return res, nil
+	return nil
+}
+
+func totalSize(jobs []job) (n int64) {
+	for _, j := range jobs {
+		n += j.size
+	}
+	return n
+}
+
+// UploadAll sends files and folders (with everything inside) into remoteDir and waits until they are there.
+// Folders merge with ones that already exist; files that exist are skipped unless overwrite is true. The
+// screens use Enqueue instead, which runs the same plan in the background.
+func (s *SftpService) UploadAll(sid string, locals []string, remoteDir string, overwrite bool) (res TransferResult, err error) {
+	return s.runNow(sid, "upload", "Uploaded", remoteDir, overwrite, func(x *sftpSession, res *TransferResult) ([]job, error) {
+		if len(locals) == 0 {
+			return nil, errors.New("nothing to upload")
+		}
+		return planUpload(locals, remoteDir, res)
+	})
 }
 
 // DownloadAll saves remote files and folders into localDir. Names come from the server, so each one is
 // checked before it becomes a local path.
 func (s *SftpService) DownloadAll(sid string, remotes []string, localDir string, overwrite bool) (res TransferResult, err error) {
+	return s.runNow(sid, "download", "Saved", localDir, overwrite, func(x *sftpSession, res *TransferResult) ([]job, error) {
+		if len(remotes) == 0 {
+			return nil, errors.New("nothing to download")
+		}
+		if !filepath.IsAbs(localDir) || strings.ContainsRune(localDir, 0) {
+			return nil, errors.New("the local folder must be an absolute path")
+		}
+		return planDownload(x.fs, remotes, filepath.Clean(localDir), res)
+	})
+}
+
+func (s *SftpService) runNow(sid, direction, verb, where string, overwrite bool, plan func(*sftpSession, *TransferResult) ([]job, error)) (res TransferResult, err error) {
 	res = newResult()
 	x, err := s.get(sid)
 	if err != nil {
 		return res, err
 	}
-	defer func() { s.logTransfer(x, "Saved", "download", res, localDir, err) }()
-	if len(remotes) == 0 {
-		return res, errors.New("nothing to download")
-	}
-	if !filepath.IsAbs(localDir) || strings.ContainsRune(localDir, 0) {
-		return res, errors.New("the local folder must be an absolute path")
-	}
-	jobs, err := planDownload(x.fs, remotes, filepath.Clean(localDir), &res)
+	defer func() { s.logTransfer(x, verb, direction, res, where, err) }()
+	jobs, err := plan(x, &res)
 	if err != nil {
 		return res, err
 	}
-	var total int64
-	for _, j := range jobs {
-		total += j.size
-	}
-	var done int64
-	prog := s.batchProgress(sid, "download", &total)
-	for _, j := range jobs {
-		if j.dir {
-			if err := os.MkdirAll(j.dst, 0o755); err != nil {
-				return res, fmt.Errorf("%s: %w", j.rel, err)
-			}
-			res.Dirs++
-			continue
-		}
-		if _, err := os.Lstat(j.dst); err == nil && !overwrite {
-			res.Skipped = append(res.Skipped, j.rel)
-			done += j.size
-			continue
-		}
-		base := done
-		err := x.fs.Download(j.src, j.dst, overwrite, func(d, _ int64) { prog(j.rel, base+d) })
-		switch {
-		case isExists(err):
-			res.Skipped = append(res.Skipped, j.rel)
-		case err != nil:
-			return res, fmt.Errorf("%s: %w", j.rel, err)
-		default:
-			res.Files++
-			res.Bytes += j.size
-		}
-		done += j.size
-		prog(j.rel, done)
-	}
-	return res, nil
+	total := totalSize(jobs)
+	prog := s.batchProgress(sid, direction, &total)
+	st := execState{res: res}
+	err = x.execute(context.Background(), direction, jobs, overwrite, &st, prog, func() {})
+	return st.res, err
 }
 
 // batchProgress emits one progress stream for the whole batch: the file being worked on, and bytes done
