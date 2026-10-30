@@ -33,7 +33,7 @@ An honest comparison of what was built with [Architecture.md](Architecture.md), 
 | Project structure and binding API (§8) | Done, adapted | services live in `internal/usecase`, Wails glue in `app/` (ADR-0002). Extra methods added: `Attach`, `Reconnect`, `EnableBiometric`, forward CRUD, settings |
 | CLI `vvt` (§9 open question 1 mentions the name) | Not built | no CLI in scope of the listed requirements |
 | `settings.json` keyboard shortcuts (§4) | **Done** | configurable in Settings → Shortcuts; overrides stored in `settings.json`, validated by `ValidateShortcuts`, conflicts refused |
-| SFTP (not in the original scope) | **Added** | `SftpService` over a dedicated SSH connection (jump chain supported), `sftpx` adapter, atomic transfers, no silent overwrite; files only |
+| SFTP (not in the original scope) | **Added** | `SftpService` over a dedicated SSH connection (jump chain supported), `sftpx` adapter, atomic transfers that resume, no silent overwrite, a background queue, folder sync and edit-and-save-back |
 | Settings: General, Account, zoom, maximise (not in the original scope) | **Added** | interface zoom, reduce motion, confirm close, local profile; sign-in is a disabled placeholder |
 | Decide Svelte vs React (§9) | Decided: React + TypeScript | |
 | Platforms (§1) | macOS only built | Windows/Linux not built or tested, as the design allows |
@@ -57,7 +57,7 @@ An honest comparison of what was built with [Architecture.md](Architecture.md), 
 | G13 | Settings is a second native window implemented as a second process (Wails v2 has one window per process), connected by a local token-protected bridge. | A second Dock icon while open; a new local attack surface (loopback, token, allow-list). The native window was not exercised visually in this environment. | Wails v3 multi-window would remove the extra process. |
 | G14 | A saved host cannot pick its own terminal theme; the theme is global. | Less flexible than Termius. | Add `terminal_theme` to the host record. |
 | G15 | Replacing a host's saved password creates a new identity; the old one stays in Keychain. | Orphan identities until deleted by hand. | Offer to update the existing identity's secret. |
-| G17 | SFTP has no transfer queue or resume (several files and folders, drag and drop and a replace question per batch are supported). | A transfer interrupted halfway starts over. | A queue with resume. |
+| G17 | SFTP does not preserve the modification time of copied files, and does not clean up the hidden `.vvterm-part-…` files of transfers that were abandoned. Remote change detection while editing uses size and time to the second. | A sync can copy a file again that has the same content; a conflict made within one second of the same size goes unnoticed. | Set the time after a copy; sweep old part files; compare a checksum when the server offers one. |
 | G18 | Account is a local profile; Sign in is a placeholder. | No cloud features yet (by design). | Define the account service before enabling it. |
 | G16 | Sync after a vault reset: the Git repository still holds the old vault. | `Sync now` fails with a different-key error. | Use a new repository (documented). |
 

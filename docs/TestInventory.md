@@ -192,8 +192,15 @@
 - TestPortsReturnsASortedList
 - TestReadsAndWritesThroughADevice
 
-### `internal/sftpx` (8)
+### `internal/sftpx` (15)
 
+- TestUploadContinuesAnInterruptedCopy
+- TestUploadDoesNotContinueACopyOfAnotherVersion
+- TestCancelForGoodDeletesThePartialUpload
+- TestDownloadContinuesAnInterruptedCopy
+- TestCancelForGoodDeletesThePartialDownload
+- TestOverwriteKeepsThePermissionsOfTheReplacedFile
+- TestStatDescribesAFileAndRefusesBadPaths
 - TestHomeAndListSortsDirectoriesFirst
 - TestUploadDownloadRoundTripKeepsBytesAndReportsProgress
 - TestOverwriteIsRefusedUnlessRequested
@@ -310,7 +317,7 @@
 - TestServerLogoutIsACleanEndAndCloseIsToo
 - TestConnectionRefusedIsReported
 
-### `internal/usecase` (146)
+### `internal/usecase` (164)
 
 - TestLogRecordsConnectingAndClosingATab
 - TestLogRecordsAFailedConnectionAndALostOne
@@ -381,6 +388,24 @@
 - TestLocalMkdirRenameDeleteNeverOverwrite
 - TestLocalProtectsRootAndHome
 - TestLocalChmodChangesTheBitsAndRefusesNonsense
+- TestQueueUploadsAFolderInTheBackgroundAndReportsIt
+- TestQueueDownloadsAFolder
+- TestConflictsListWhatWouldBeReplaced
+- TestQueueWithoutOverwriteSkipsAndWithOverwriteReplaces
+- TestSyncUpCopiesOnlyWhatIsNewOrChangedAndNeverDeletes
+- TestSyncDownIntoAFolderThatDoesNotExistYet
+- TestSyncPlanRefusesUnsafeFolders
+- TestEditSavesBackToTheServerAndHoldsBackOnConflict
+- TestEditStartRefusesBadInput
+- TestQueuePauseContinuesWhereItStopped
+- TestQueueCancelDiscardsAndRetryStartsAgain
+- TestQueueCancelOfAPausedJobRemovesItsPartialFile
+- TestQueueFailureKeepsProgressAndRetryContinues
+- TestQueueRunsTwoAtATime
+- TestQueueClearFinishedKeepsTheRest
+- TestQueuePausedBeforeItStartsAndEventsCarryTheList
+- TestQueueClosingTheSessionStopsRunningJobs
+- TestEnqueueRefusesNonsense
 - TestForwardOnDedicatedConnection
 - TestForwardAutoStartRidesSessionAndDiesWithIt
 - TestAutoStartForwardIsRebuiltAfterReconnect
@@ -485,7 +510,7 @@
 - TestHintTooLongIsRejected
 - TestKeychainNeedsTheAuthenticator
 
-**Go test functions: 416** (table-driven cases and sub-tests are extra).
+**Go test functions: 441** (table-driven cases and sub-tests are extra).
 
 ## Frontend (Vitest)
 

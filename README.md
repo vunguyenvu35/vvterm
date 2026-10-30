@@ -20,7 +20,7 @@
 - **Work in tabs and split panes**, through one or more jump hosts, with keep-alive and one-key reconnect. Drag tabs to order them, drag a tab onto a pane to split it (sessions keep running), open a host in a **new window**, and see at a glance which tabs are connected.
 - **A sidebar beside every terminal**: hosts, snippets (run or paste), command history, and terminal themes and font.
 - **More than SSH**: a shell on this computer, serial ports and Telnet (with its own login), a Termius-style *Choose protocol* and connecting screen, Known Hosts and Logs pages.
-- **Browse and transfer files with SFTP** in a tab of its own: two panes, several files and folders at once, drag and drop, right-click menu with permissions, with confirmation before anything is replaced.
+- **Browse and transfer files with SFTP** in a tab of its own (and in the terminal sidebar): two panes, several files and folders at once, drag and drop, and a **transfer queue** with pause, resume (a copy is continued from the bytes already sent, also after a lost connection), cancel and retry. Compare and **sync folders** (nothing is ever deleted), **edit a remote file** and have it saved back when you save, and a right-click menu with permissions. Nothing is replaced without asking.
 - **Ask an AI about your terminal** with the tool you already use (Claude Code, Codex CLI, Gemini CLI): the screen is sent with every secret replaced by `*******`, the assistant only suggests commands, and you decide what runs. Add MCP servers for extra tools. See the [user guide](docs/UserGuide.md#22-ai-assistant) and the [design](docs/AIAssistant.md).
 - **Save snippets** of commands you run often and type them into any terminal with a click.
 - **Make it yours**: 26 terminal colour themes, light / dark / auto appearance, font, cursor and scrollback, interface zoom, your own keyboard shortcuts, all in a Settings window of its own.
@@ -100,7 +100,7 @@ Back up regularly with **Import / Export → Encrypted backup**.
 - "Keychain unlock" stores the vault key in the macOS Keychain; it does **not** require Touch ID yet.
 - The vault does not lock when the Mac sleeps (only on idle).
 - Settings opens as a second window of the app (a second process): it shows a second Dock icon while open and needs the main app running.
-- SFTP transfers single files only (no folder transfer, queue or resume yet).
+- SFTP does not keep the modification time of copied files, and a transfer you abandon leaves a hidden `.vvterm-part-…` file next to its target.
 - Git sync was tested with local repositories, not yet with every hosting provider.
 - `ProxyCommand` and `Match` blocks in `~/.ssh/config` are reported as warnings on import and skipped.
 

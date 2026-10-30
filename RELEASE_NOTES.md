@@ -6,6 +6,16 @@ Release date: 2026-10-30 · Platform: macOS (arm64 build verified) · Status: be
 
 ## Unreleased
 
+### SFTP is complete
+
+- **A transfer queue.** Uploads and downloads run in the background, two at a time, and are listed in a **Transfers** panel with a bar for each one and **Pause**, **Resume**, **Cancel**, **Retry** and **Clear finished**. You can keep browsing, or start more transfers, while they run. The batch still asks **once** before replacing files that already exist.
+- **Resume.** A transfer that is paused, fails or is cut by a lost connection continues from the bytes already copied instead of starting over, for uploads and downloads. The partial copy is named after the size and time of the source, so it is only continued when the file has not changed; the last 64 KB are written again in case the last chunk was cut short. **Cancel** deletes the partial file.
+- **Sync folders.** Compare a local folder with a remote one (either direction), see what is new or changed, then copy it through the queue. Nothing is ever deleted at the target; the files only it has are listed.
+- **Edit and save back.** Right-click a remote file → **Edit and save back**: it is opened on your computer and uploaded again each time you save, keeping the permissions of the file it replaces. If the server's copy changed meanwhile, you are asked before it is replaced.
+- **Files in the terminal sidebar.** A **Files (SFTP)** section beside every SSH terminal: browse, upload, download, with the same queue.
+- Replacing a file over SFTP now keeps its permissions (a `0600` key stays `0600`).
+- **For developers:** `RemoteFS.Upload` and `Download` take a context; `RemoteFS.Stat` is new; new `SftpService` calls `Enqueue`, `Queue`, `Pause`, `Resume`, `Cancel`, `Retry`, `ClearFinished`, `Conflicts`, `SyncPlan`, `EditStart`, `EditPush`, `EditStop` and events `sftp:queue:<sid>`, `sftp:edit:<sid>` (see Architecture notes in `internal/usecase/queue.go`). `testssh` can serve the real file system for tests that need permissions.
+
 - **Panes can be dragged by their header.** The bar with the host name that shows over a pane of a split is now a handle: drop it on a side of another pane to move the pane there (also into another tab), **on the tab bar to make it a tab of its own**, or on another terminal tab to join it. The pane keeps its session, nothing reconnects. The "Move pane to its own tab" button is still there.
 - **It is now clear which pane has the keyboard.** In a tab with several panes the focused pane has a frame in the accent colour and a dot by its name on the pane bar, and the other panes are dimmed (a little less under the pointer, as an invitation to click). A tab with one pane looks as before.
 - **A tidier bar on each pane.** The bar that shows over a pane of a split has a handle (six dots) to drag the pane by, the name in bold with a small tag for what it is, quieter buttons (the close button turns red under the pointer) and no tooltip over the name.
