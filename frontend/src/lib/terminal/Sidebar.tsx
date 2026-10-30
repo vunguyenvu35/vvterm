@@ -2,13 +2,14 @@ import {PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState}
 import {clearHistory, getHistory, subscribeHistory} from './history'
 import {TERMINAL_THEMES, resolveTerminalTheme} from './themes'
 import {AssistantTab} from '../assistant/AssistantTab'
-import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconSparkle, IconTrash} from '../ui/Icons'
+import {FilesTab} from '../sftp/SidebarFiles'
+import {IconBraces, IconChevron, IconChevronDown, IconClock, IconClose, IconFolder, IconMinus, IconPalette, IconPlus, IconRocket, IconSearch, IconServer, IconSparkle, IconTrash} from '../ui/Icons'
 import {buildTree, countHosts, countOpen, filterTree, type GroupNode} from '../hosts/tree'
 import {isTerminalTab, leaves, type Tab} from '../layout'
 import type {Group, Host, Settings, Snippet} from '../types'
 import type {Appearance} from '../settings/appearance'
 
-export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'themes' | 'assistant'
+export type SidebarTab = 'hosts' | 'snippets' | 'history' | 'files' | 'themes' | 'assistant'
 
 /** The sidebar can be dragged wider or narrower; these keep both the sidebar and the terminal usable. */
 export const SIDE_MIN = 260
@@ -42,6 +43,8 @@ interface Props {
   onSettings?(patch: Partial<Settings>): void
   /** the focused pane: the AI assistant reads and helps this terminal */
   paneId?: string
+  /** the host of the focused pane ('local', 'serial:…' and 'telnet:…' for the others): the Files section browses it over SFTP */
+  hostId?: string
   /** the assistant asks the user to enable a provider */
   onOpenSettings?(): void
   /** the width the user chose (remembered by the caller) */
@@ -54,6 +57,7 @@ const TABS: {id: SidebarTab; label: string; icon: JSX.Element}[] = [
   {id: 'hosts', label: 'Hosts', icon: <IconRocket size={17} />},
   {id: 'snippets', label: 'Snippets', icon: <IconBraces size={17} />},
   {id: 'history', label: 'History', icon: <IconClock size={17} />},
+  {id: 'files', label: 'Files (SFTP)', icon: <IconFolder size={17} />},
   {id: 'themes', label: 'Themes and font', icon: <IconPalette size={17} />},
   {id: 'assistant', label: 'AI assistant', icon: <IconSparkle size={17} />},
 ]
@@ -71,7 +75,7 @@ export function ThemeThumb({colors}: {colors: {bg: string; fg: string; green: st
 
 /**
  * The panel on the right of a terminal, like Termius: hosts to open, snippets to run, the commands typed
- * before, and the colours and font of the terminal.
+ * before, the files on the server, and the colours and font of the terminal.
  */
 export function TerminalSidebar(p: Props) {
   const [width, setWidth] = useState(p.width ?? SIDE_DEFAULT)
@@ -111,6 +115,7 @@ export function TerminalSidebar(p: Props) {
         {p.tab === 'hosts' && <HostsTab hosts={p.hosts} groups={p.groups ?? []} tabs={p.tabs ?? []} activeTab={p.activeTab ?? ''} onConnect={p.onConnect} onSelectTab={p.onSelectTab} onCloseTab={p.onCloseTab} />}
         {p.tab === 'snippets' && <SnippetsTab snippets={p.snippets} onInsert={p.onInsert} onNew={p.onNewSnippet} />}
         {p.tab === 'history' && <HistoryTab onInsert={p.onInsert} />}
+        {p.tab === 'files' && <FilesTab host={p.hosts.find(h => h.id === p.hostId) ?? null} />}
         {p.tab === 'themes' && <ThemesTab settings={p.settings} appearance={p.appearance} onSettings={p.onSettings} />}
         {p.tab === 'assistant' && <AssistantTab paneId={p.paneId ?? ''} onOpenSettings={() => p.onOpenSettings?.()} />}
       </div>

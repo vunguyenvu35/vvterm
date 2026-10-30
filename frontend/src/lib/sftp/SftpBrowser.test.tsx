@@ -23,6 +23,8 @@ const viaActions = async (pane: HTMLElement, name: string) => { await userEvent.
 const row = (pane: HTMLElement, n: string) => within(pane).getByRole('row', {name: new RegExp('^' + n.replace('.', '\\.'))})
 const pick = (pane: HTMLElement, n: string) => userEvent.click(row(pane, n))
 const calls = (be: Fake, n: string) => be.state.calls.filter(c => c[0] === n)
+/** the specs of everything queued so far */
+const queued = (be: Fake) => calls(be, 'sftp.enqueue').map(c => c[2] as {direction: string; sources: string[]; destDir: string; overwrite: boolean})
 const ready = async () => { await waitFor(() => expect(names(L())).toHaveLength(2)); await waitFor(() => expect(names(R())).toHaveLength(2)) }
 
 /** A minimal DataTransfer, which jsdom does not provide. */
@@ -152,8 +154,8 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await pick(L(), 'notes.txt')
     await viaActions(L(), 'Upload')
     await waitFor(() => expect(names(R())).toContain('notes.txt'))
-    expect(calls(be, 'sftp.uploadAll')[0].slice(2)).toEqual([['/Users/me/notes.txt'], '/', false])
-    expect(screen.getByRole('status', {name: 'Transfer progress'})).toHaveTextContent('Uploading notes.txt')
+    expect(queued(be)).toEqual([{direction: 'upload', sources: ['/Users/me/notes.txt'], destDir: '/', overwrite: false}])
+    expect(within(screen.getByRole('region', {name: 'Transfers'})).getByRole('listitem', {name: 'notes.txt'})).toHaveTextContent('Done')
   })
 
   it('Download saves the selected remote file into the local folder and lists it', async () => {
@@ -163,7 +165,7 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await pick(R(), 'readme.txt')
     await userEvent.click(screen.getByRole('button', {name: 'Download selected'}))
     await waitFor(() => expect(names(L())).toContain('readme.txt'))
-    expect(calls(be, 'sftp.downloadAll')[0].slice(2)).toEqual([['/readme.txt'], '/Users/me', false])
+    expect(queued(be)).toEqual([{direction: 'download', sources: ['/readme.txt'], destDir: '/Users/me', overwrite: false}])
   })
 
   it('a whole folder goes with everything inside, and the summary says how much', async () => {
@@ -191,8 +193,8 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await shift(L(), 'notes.txt') // the range: all three
     expect(within(L()).getByRole('status')).toHaveTextContent('3 selected')
     await viaActions(L(), 'Upload')
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
-    expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/Documents', '/Users/me/.zshrc', '/Users/me/notes.txt'])
+    await waitFor(() => expect(queued(be)).toHaveLength(1))
+    expect(queued(be)[0].sources).toEqual(['/Users/me/Documents', '/Users/me/.zshrc', '/Users/me/notes.txt'])
     // select all with the keyboard
     await userEvent.click(row(R(), 'projects'))
     fireEvent.keyDown(row(R(), 'projects'), {key: 'a', ctrlKey: true})
@@ -205,12 +207,12 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await pick(L(), 'Documents')
     await ctrl(L(), 'notes.txt')
     drag(row(L(), 'Documents'), within(R()).getByRole('table', {name: 'Remote files'}))
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
-    expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/Documents', '/Users/me/notes.txt'])
+    await waitFor(() => expect(queued(be)).toHaveLength(1))
+    expect(queued(be)[0].sources).toEqual(['/Users/me/Documents', '/Users/me/notes.txt'])
     await pick(L(), 'Documents')
     drag(row(L(), 'notes.txt'), within(R()).getByRole('table', {name: 'Remote files'})) // not in the selection
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(2))
-    expect(calls(be, 'sftp.uploadAll')[1][2]).toEqual(['/Users/me/notes.txt'])
+    await waitFor(() => expect(queued(be)).toHaveLength(2))
+    expect(queued(be)[1].sources).toEqual(['/Users/me/notes.txt'])
   })
 
   it('asks once for the whole batch before replacing, and leaves files alone when declined', async () => {
@@ -224,11 +226,14 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     await viaActions(L(), 'Upload')
     await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
     expect(confirm.mock.calls[0][0]).toMatch(/2 files already exist in \/ \(.*notes\.txt.*\)\. Replace them\?/)
-    expect(calls(be, 'sftp.uploadAll').map(c => c[4])).toEqual([false]) // declined: nothing replaced
+    await waitFor(() => expect(queued(be).map(q => q.overwrite)).toEqual([false])) // declined: queued without replacing
+    expect(be.state.remote['/notes.txt'].size).toBe(5)
     expect(await screen.findByText(/2 left as they were/)).toBeInTheDocument()
     await viaActions(L(), 'Upload')
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll').map(c => c[4])).toEqual([false, false, true]))
+    await waitFor(() => expect(queued(be).map(q => q.overwrite)).toEqual([false, true]))
     expect(confirm).toHaveBeenCalledTimes(2)
+    expect(calls(be, 'sftp.conflicts')).toHaveLength(2) // one question per batch, not per file
+    await waitFor(() => expect(be.state.remote['/notes.txt'].size).toBe(300))
   })
 
   it('a single existing file gets the single-file question', async () => {
@@ -246,11 +251,11 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const be = setup()
     await ready()
     drag(row(L(), 'notes.txt'), within(R()).getByRole('table', {name: 'Remote files'}))
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
+    await waitFor(() => expect(queued(be)).toHaveLength(1))
     await waitFor(() => expect(names(R())).toContain('notes.txt'))
     drag(row(R(), 'projects'), within(L()).getByRole('table', {name: 'Local files'})) // a remote folder
-    await waitFor(() => expect(calls(be, 'sftp.downloadAll')).toHaveLength(1))
-    expect(calls(be, 'sftp.downloadAll')[0].slice(2)).toEqual([['/projects'], '/Users/me', false])
+    await waitFor(() => expect(queued(be)).toHaveLength(2))
+    expect(queued(be)[1]).toEqual({direction: 'download', sources: ['/projects'], destDir: '/Users/me', overwrite: false})
     await waitFor(() => expect(names(L())).toContain('projects'))
     expect(be.state.local['/Users/me/projects/app.log']).toBeDefined()
   })
@@ -262,8 +267,7 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     fireEvent.dragStart(row(L(), 'notes.txt'), {dataTransfer: dt})
     fireEvent.dragOver(within(L()).getByRole('table', {name: 'Local files'}), {dataTransfer: dt})
     fireEvent.drop(within(L()).getByRole('table', {name: 'Local files'}), {dataTransfer: dt})
-    expect(calls(be, 'sftp.uploadAll')).toHaveLength(0)
-    expect(calls(be, 'sftp.downloadAll')).toHaveLength(0)
+    expect(queued(be)).toHaveLength(0)
     fireEvent.dragOver(within(R()).getByRole('table', {name: 'Remote files'}), {dataTransfer: dt})
     expect(R().classList.contains('drop-target') || R().querySelector('.fpane')?.classList.contains('drop-target')).toBe(true)
     fireEvent.dragLeave(within(R()).getByRole('table', {name: 'Remote files'}))
@@ -277,12 +281,12 @@ describe('SftpBrowser: moving files and folders between the panes', () => {
     const dt = {types: ['Files'], getData: () => '', dropEffect: ''}
     fireEvent.dragOver(table, {dataTransfer: dt})
     fireEvent.drop(table, {dataTransfer: dt})
-    expect(calls(be, 'sftp.uploadAll')).toHaveLength(0)
+    expect(queued(be)).toHaveLength(0)
   })
 
-  it('shows the error from a failed transfer, and still refreshes the receiving side', async () => {
+  it('shows the error when a transfer cannot even be queued', async () => {
     const be = setup()
-    be.sftp.uploadAll = async () => { throw 'notes.txt: permission denied' }
+    be.sftp.enqueue = async () => { throw 'notes.txt: permission denied' }
     await ready()
     await pick(L(), 'notes.txt')
     await viaActions(L(), 'Upload')
@@ -469,7 +473,7 @@ describe('SftpBrowser: right-click menu', () => {
   const menuOf = () => screen.getByRole('menu')
   const items = () => within(menuOf()).getAllByRole('menuitem').map(i => i.textContent)
 
-  const FULL = ['Open', 'Open with…', 'Download', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close']
+  const FULL = ['Open', 'Open with…', 'Edit and save back', 'Download', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close']
 
   it('a file has the full list: Open … Select All and Close', async () => {
     setup()
@@ -552,8 +556,8 @@ describe('SftpBrowser: right-click menu', () => {
     await pick(L(), 'notes.txt')
     fireEvent.contextMenu(row(L(), 'notes.txt'))
     await userEvent.click(within(menuOf()).getByRole('menuitem', {name: 'Upload'}))
-    await waitFor(() => expect(calls(be, 'sftp.uploadAll')).toHaveLength(1))
-    expect(calls(be, 'sftp.uploadAll')[0][2]).toEqual(['/Users/me/notes.txt'])
+    await waitFor(() => expect(queued(be)).toHaveLength(1))
+    expect(queued(be)[0].sources).toEqual(['/Users/me/notes.txt'])
   })
 
   it('Rename and New Folder open the name box, Delete asks first', async () => {
@@ -609,5 +613,210 @@ describe('SftpBrowser: sort', () => {
     await userEvent.click(within(R()).getByRole('button', {name: 'Filter'}))
     await userEvent.type(within(R()).getByLabelText('Remote filter'), 'txt')
     expect(names(R())).toEqual(['b.txt', 'c.txt', 'a.txt'])
+  })
+})
+
+describe('SftpBrowser: transfer queue', () => {
+  const sidOf = (be: Fake) => calls(be, 'sftp.list')[0][1] as string
+  const panel = () => screen.getByRole('region', {name: 'Transfers'})
+  const job = (name: string) => within(panel()).getByRole('listitem', {name})
+  const buttons = (name: string) => within(job(name)).queryAllByRole('button').map(b => b.textContent)
+  const upload = async (be: Fake) => {
+    await ready()
+    await pick(L(), 'notes.txt')
+    await viaActions(L(), 'Upload')
+    await screen.findByRole('region', {name: 'Transfers'})
+    return {sid: sidOf(be), id: () => be.jobs(sidOf(be))[0].id}
+  }
+
+  it('shows a job with its progress, and only the buttons its state allows', async () => {
+    const be = setup({holdQueue: true})
+    const {sid, id} = await upload(be)
+    await waitFor(() => expect(job('notes.txt')).toHaveTextContent('Uploading · 40%'))
+    expect(within(job('notes.txt')).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40')
+    expect(buttons('notes.txt')).toEqual(['Pause', 'Cancel'])
+
+    await userEvent.click(within(job('notes.txt')).getByRole('button', {name: 'Pause notes.txt'}))
+    expect(calls(be, 'sftp.pause')[0].slice(1)).toEqual([sid, id()])
+    await waitFor(() => expect(job('notes.txt')).toHaveTextContent('Paused'))
+    expect(buttons('notes.txt')).toEqual(['Resume', 'Cancel'])
+
+    await userEvent.click(within(job('notes.txt')).getByRole('button', {name: 'Resume notes.txt'}))
+    expect(calls(be, 'sftp.resume')).toHaveLength(1)
+    await waitFor(() => expect(buttons('notes.txt')).toEqual(['Pause', 'Cancel']))
+
+    await userEvent.click(within(job('notes.txt')).getByRole('button', {name: 'Cancel notes.txt'}))
+    expect(calls(be, 'sftp.cancel')).toHaveLength(1)
+    await waitFor(() => expect(job('notes.txt')).toHaveTextContent('Canceled'))
+    expect(buttons('notes.txt')).toEqual(['Retry'])
+
+    await userEvent.click(within(job('notes.txt')).getByRole('button', {name: 'Retry notes.txt'}))
+    expect(calls(be, 'sftp.retry')).toHaveLength(1)
+    await waitFor(() => expect(buttons('notes.txt')).toEqual(['Pause', 'Cancel']))
+  })
+
+  it('a failed job shows why and can be retried; a finished one has no buttons and Clear finished removes it', async () => {
+    const be = setup({holdQueue: true})
+    const {sid, id} = await upload(be)
+    act(() => be.finishJob(sid, id(), {state: 'failed', error: 'connection reset'}))
+    await waitFor(() => expect(job('notes.txt')).toHaveTextContent('Failed'))
+    expect(within(job('notes.txt')).getByRole('alert')).toHaveTextContent('connection reset')
+    expect(buttons('notes.txt')).toEqual(['Retry'])
+    expect(await screen.findByText('notes.txt: connection reset')).toBeInTheDocument() // and a message
+    expect(within(panel()).getByRole('button', {name: 'Clear finished'})).toBeEnabled()
+
+    await userEvent.click(within(job('notes.txt')).getByRole('button', {name: 'Retry notes.txt'}))
+    await waitFor(() => expect(buttons('notes.txt')).toEqual(['Pause', 'Cancel']))
+    expect(within(panel()).getByRole('button', {name: 'Clear finished'})).toBeDisabled() // nothing finished now
+
+    act(() => be.finishJob(sid, id(), {files: 1, bytes: 300}))
+    await waitFor(() => expect(job('notes.txt')).toHaveTextContent('Done'))
+    expect(buttons('notes.txt')).toEqual([])
+    expect(await screen.findByText('Uploaded 1 file (300 B)')).toBeInTheDocument()
+    await userEvent.click(within(panel()).getByRole('button', {name: 'Clear finished'}))
+    expect(calls(be, 'sftp.clearFinished')).toHaveLength(1)
+    await waitFor(() => expect(screen.queryByRole('region', {name: 'Transfers'})).toBeNull())
+  })
+
+  it('collapsed, it shows how many are active and one bar for all of them', async () => {
+    const be = setup({holdQueue: true})
+    await upload(be)
+    expect(panel()).toHaveTextContent('1/1')
+    await userEvent.click(within(panel()).getByRole('button', {name: 'Transfers'}))
+    expect(within(panel()).queryByRole('listitem')).toBeNull()
+    expect(within(panel()).getByRole('progressbar', {name: 'Overall progress'})).toHaveAttribute('aria-valuenow', '40')
+    await userEvent.click(within(panel()).getByRole('button', {name: 'Transfers'}))
+    expect(within(panel()).getAllByRole('listitem')).toHaveLength(1)
+  })
+
+  it('a job finishing refreshes the side it wrote to and says what it did', async () => {
+    const be = setup()
+    await ready()
+    await pick(R(), 'readme.txt')
+    await userEvent.click(screen.getByRole('button', {name: 'Download selected'}))
+    await waitFor(() => expect(names(L())).toContain('readme.txt'))
+    expect(await screen.findByText('Saved 1 file (1.5 KB)')).toBeInTheDocument()
+  })
+})
+
+describe('SftpBrowser: sync folders', () => {
+  const dialog = () => screen.getByRole('dialog', {name: 'Sync folders'})
+  const openSync = async () => { await userEvent.click(screen.getByRole('button', {name: 'Sync folders'})) }
+
+  it('needs a connected host', async () => {
+    setup({}, false)
+    await waitFor(() => expect(names(L())).toHaveLength(2))
+    expect(screen.getByRole('button', {name: 'Sync folders'})).toBeDisabled()
+  })
+
+  it('compares the two open folders, previews what would be copied, and queues one sync job', async () => {
+    const be = setup()
+    await ready()
+    await openSync()
+    expect(within(dialog()).getByRole('radio', {name: 'Local → Remote'})).toBeChecked()
+    expect(within(dialog()).getByText('/Users/me')).toBeInTheDocument()
+    expect(within(dialog()).getByRole('button', {name: /^Sync/})).toBeDisabled() // nothing compared yet
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Compare'}))
+    const preview = await within(dialog()).findByRole('region', {name: 'Sync preview'})
+    expect(calls(be, 'sftp.syncPlan')[0].slice(2)).toEqual(['sync-up', '/Users/me', '/'])
+    expect(within(preview).getByRole('status')).toHaveTextContent('3 files to copy')
+    expect(within(within(preview).getByRole('list', {name: 'Files to copy'})).getAllByRole('listitem').map(li => li.textContent)).toEqual([
+      'New.zshrc120 B', 'NewDocuments/cv.pdf40.0 KB', 'Newnotes.txt300 B'])
+    expect(preview).toHaveTextContent('2 files exist only in the destination and stay untouched')
+    expect(dialog()).toHaveTextContent('Nothing is ever deleted')
+
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Sync 3 files'}))
+    expect(calls(be, 'sftp.enqueue')[0][2]).toEqual({direction: 'sync-up', sources: ['/Users/me'], destDir: '/', overwrite: true})
+    expect(screen.queryByRole('dialog', {name: 'Sync folders'})).toBeNull()
+    await waitFor(() => expect(be.state.remote['/Documents/cv.pdf']).toBeDefined())
+    expect(be.state.remote['/readme.txt']).toBeDefined() // never deleted
+    expect(await screen.findByText(/Synced 3 files/)).toBeInTheDocument()
+    await waitFor(() => expect(names(R())).toContain('notes.txt'))
+  })
+
+  it('the direction can be reversed; changed files are told apart; identical ones are counted', async () => {
+    const be = setup({remote: {'/': {dir: true, size: 0}, '/notes.txt': {dir: false, size: 999}, '/.zshrc': {dir: false, size: 120}}})
+    await ready()
+    await openSync()
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Compare'}))
+    const preview = await within(dialog()).findByRole('region', {name: 'Sync preview'})
+    expect(within(preview).getByText('Changed').nextElementSibling).toHaveTextContent('notes.txt')
+    expect(preview).toHaveTextContent('1 identical')
+
+    await userEvent.click(within(dialog()).getByRole('radio', {name: 'Remote → Local'}))
+    expect(within(dialog()).queryByRole('region', {name: 'Sync preview'})).toBeNull() // the old comparison no longer applies
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Compare'}))
+    await within(dialog()).findByRole('region', {name: 'Sync preview'})
+    expect(calls(be, 'sftp.syncPlan')[1].slice(2)).toEqual(['sync-down', '/', '/Users/me'])
+  })
+
+  it('says so when nothing differs, and shows an error from the comparison', async () => {
+    const be = setup({remote: {'/': {dir: true, size: 0}, '/notes.txt': {dir: false, size: 300}}, local: {'/': {dir: true, size: 0}, '/Users': {dir: true, size: 0}, '/Users/me': {dir: true, size: 0}, '/Users/me/notes.txt': {dir: false, size: 300}}})
+    await waitFor(() => expect(names(R())).toEqual(['notes.txt']))
+    await openSync()
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Compare'}))
+    expect(await within(dialog()).findByText(/^Everything is up to date\./)).toBeInTheDocument()
+    expect(within(dialog()).getByRole('button', {name: 'Sync'})).toBeDisabled()
+    be.sftp.syncPlan = async () => { throw 'permission denied' }
+    await userEvent.click(within(dialog()).getByRole('button', {name: 'Compare again'}))
+    expect(await within(dialog()).findByRole('alert')).toHaveTextContent('permission denied')
+  })
+})
+
+describe('SftpBrowser: edit and save back', () => {
+  const sidOf = (be: Fake) => calls(be, 'sftp.list')[0][1] as string
+  const edit = async () => {
+    fireEvent.contextMenu(row(R(), 'readme.txt'))
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', {name: 'Edit and save back'}))
+  }
+
+  it('is only offered for remote files', async () => {
+    setup()
+    await ready()
+    fireEvent.contextMenu(row(L(), 'notes.txt'))
+    expect(within(screen.getByRole('menu')).queryByRole('menuitem', {name: 'Edit and save back'})).toBeNull()
+    fireEvent.keyDown(window, {key: 'Escape'})
+    fireEvent.contextMenu(row(R(), 'projects'))
+    expect(within(screen.getByRole('menu')).getByRole('menuitem', {name: 'Edit and save back'})).toBeDisabled() // not for a folder
+  })
+
+  it('fetches the file, opens it and starts watching it; each save is announced', async () => {
+    const be = setup()
+    await ready()
+    await edit()
+    await waitFor(() => expect(calls(be, 'sftp.editStart')).toHaveLength(1))
+    expect(calls(be, 'sftp.downloadAll')[0].slice(2)).toEqual([['/readme.txt'], '/tmp/vvterm-open-1', true])
+    expect(calls(be, 'system.openPath')).toEqual([['system.openPath', '/tmp/vvterm-open-1/readme.txt']])
+    expect(calls(be, 'sftp.editStart')[0].slice(1)).toEqual([sidOf(be), '/readme.txt', '/tmp/vvterm-open-1/readme.txt'])
+    act(() => be.emit('sftp:edit:' + sidOf(be), {remote: '/readme.txt', state: 'uploaded', message: ''}))
+    expect(await screen.findByText('Saved readme.txt to the server')).toBeInTheDocument()
+    act(() => be.emit('sftp:edit:' + sidOf(be), {remote: '/readme.txt', state: 'error', message: 'permission denied'}))
+    expect(await screen.findByText('readme.txt: permission denied')).toBeInTheDocument()
+  })
+
+  it('when the server copy changed it asks before overwriting it, and does nothing when declined', async () => {
+    const be = setup()
+    await ready()
+    await edit()
+    await waitFor(() => expect(calls(be, 'sftp.editStart')).toHaveLength(1))
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    act(() => be.emit('sftp:edit:' + sidOf(be), {remote: '/readme.txt', state: 'conflict', message: ''}))
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1))
+    expect(ask.mock.calls[0][0]).toBe('readme.txt changed on the server since you opened it. Overwrite with your version?')
+    expect(calls(be, 'sftp.editPush')).toHaveLength(0)
+    act(() => be.emit('sftp:edit:' + sidOf(be), {remote: '/readme.txt', state: 'conflict', message: ''}))
+    await waitFor(() => expect(calls(be, 'sftp.editPush')).toHaveLength(1))
+    expect(calls(be, 'sftp.editPush')[0].slice(1)).toEqual([sidOf(be), '/readme.txt', true])
+  })
+
+  it('stops watching when the host is closed', async () => {
+    const be = setup()
+    await ready()
+    await edit()
+    await waitFor(() => expect(calls(be, 'sftp.editStart')).toHaveLength(1))
+    await userEvent.click(within(R()).getByRole('button', {name: 'Change host'}))
+    await waitFor(() => expect(calls(be, 'sftp.editStop')).toHaveLength(1))
+    expect(calls(be, 'sftp.editStop')[0].slice(2)).toEqual(['/readme.txt'])
+    expect(calls(be, 'sftp.close')).toHaveLength(1)
   })
 })

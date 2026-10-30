@@ -1189,6 +1189,18 @@ describe('App: terminal sidebar and new windows', () => {
     await waitFor(() => expect(be.state.settings.terminal_theme).toBe('dracula'))
   })
 
+  it('the Files section browses the host of the focused terminal over its own SFTP connection', async () => {
+    const be = setup()
+    await unlock(be)
+    await userEvent.dblClick(hostCard('web-1'))
+    await userEvent.click(await screen.findByRole('button', {name: 'Files (SFTP)'}))
+    expect(await screen.findByRole('listbox', {name: 'Files'})).toBeInTheDocument()
+    await waitFor(() => expect(be.state.calls.filter(c => c[0] === 'sftp.open').map(c => c[1])).toEqual(['h1']))
+    await userEvent.click(screen.getByRole('button', {name: 'Hosts'})) // another section: the connection is let go
+    await waitFor(() => expect(be.state.calls.filter(c => c[0] === 'sftp.close')).toHaveLength(1))
+    localStorage.removeItem('vvterm.sidebar.tab')
+  })
+
   it('Duplicate in new window opens a window for the host of the tab', async () => {
     const be = setup()
     await unlock(be)

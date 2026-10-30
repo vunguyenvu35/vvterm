@@ -22,6 +22,8 @@ export interface PaneFs {
   open?(e: RemoteEntry): Promise<void>
   /** open a file with an app the user picks */
   openWith?(e: RemoteEntry): Promise<void>
+  /** open a remote file and save it back to the server every time it is saved; absent: no such menu item */
+  edit?(e: RemoteEntry): Promise<void>
 }
 
 export type Side = 'local' | 'remote'
@@ -303,6 +305,7 @@ export function FilePane({side, title, icon, fs, startDir, reloadKey, showHidden
             onMouseDown={ev => ev.stopPropagation()} onContextMenu={ev => ev.preventDefault()}>
             <button role="menuitem" disabled={!entry || (!entry.is_dir && !fs?.open)} onClick={() => act(() => openEntry(entry!))}>Open</button>
             <button role="menuitem" disabled={!entry || entry.is_dir || !fs?.openWith} onClick={() => act(() => fs!.openWith!(entry!))}>Open with…</button>
+            {fs?.edit && <button role="menuitem" disabled={!entry || entry.is_dir} onClick={() => act(() => fs.edit!(entry!))}>Edit and save back</button>}
             <button role="menuitem" disabled={none || !onCopyOut} onClick={() => { setMenu(null); onCopyOut?.(targets.map(x => ({path: x.path, name: x.name, is_dir: x.is_dir}))) }}>{copyLabel}</button>
             <button role="menuitem" disabled={!entry} onClick={() => { setMenu(null); setNaming({mode: 'rename', value: entry!.name, err: ''}) }}>Rename</button>
             <button role="menuitem" className="danger-item" disabled={none} onClick={() => { setMenu(null); void remove(targets) }}>Delete</button>

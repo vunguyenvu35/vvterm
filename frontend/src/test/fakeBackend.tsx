@@ -2,7 +2,7 @@ import {ReactNode} from 'react'
 import {BackendContext, Backend} from '../lib/backend'
 import {ToastProvider} from '../lib/ui/Toast'
 import {DEFAULT_SETTINGS} from '../lib/settings/defaults'
-import type {ActivityEntry, KnownHost, RemoteEntry, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus,
+import type {ActivityEntry, KnownHost, QueueJob, RemoteEntry, SyncDiff, TransferResult, ConnectionTest, ForwardStatus, Group, Host, Identity, PortForward, Settings, Snippet, VaultStatus,
   CacheReport, AiCommandCheck, AiModelList, AiPreview, AiProvider, AiReply, AiSessionState, AiSettings, McpImportItem, McpServer, McpTool} from '../lib/types'
 
 export interface Fake extends Backend {
@@ -33,6 +33,8 @@ export interface Fake extends Backend {
     /** the system clipboard */
     clipboard: string
     knownHosts: KnownHost[]
+    /** true: queued transfers stay running (40 %) until a test finishes them with finishJob */
+    holdQueue: boolean
     /** the activity log, newest first */
     logs: ActivityEntry[]
     testResult: ConnectionTest
@@ -61,6 +63,10 @@ export interface Fake extends Backend {
     }
   }
   emit(event: string, data?: unknown): void
+  /** Sets a queued job to a state (default done) and sends the snapshot, like the Go side does when a transfer ends. */
+  finishJob(sid: string, jobId: string, patch?: Partial<QueueJob>): void
+  /** the jobs of a session's queue */
+  jobs(sid: string): QueueJob[]
 }
 
 let n = 0
@@ -92,6 +98,22 @@ function copyTree(from: Tree, to: Tree, sources: string[], destDir: string, over
   }
   return res
 }
+/** What syncing would copy from one tree into the other: files that are missing or have another size. */
+function syncDiff(from: Tree, to: Tree, src: string, dst: string): SyncDiff {
+  const files = (t: Tree, root: string) => Object.entries(t).filter(([p, e]) => !e.dir && p.startsWith(root === '/' ? '/' : root + '/')).map(([p, e]) => ({rel: p.slice(root === '/' ? 1 : root.length + 1), size: e.size}))
+  const there = new Map(files(to, dst).map(f => [f.rel, f.size]))
+  const out: SyncDiff = {copy: [], same: 0, extra: []}
+  const have = new Set<string>()
+  for (const f of files(from, src).sort((a, b) => a.rel.localeCompare(b.rel))) {
+    have.add(f.rel)
+    const t = there.get(f.rel)
+    if (t === undefined) out.copy.push({path: f.rel, size: f.size, reason: 'new'})
+    else if (t !== f.size) out.copy.push({path: f.rel, size: f.size, reason: 'changed'})
+    else out.same++
+  }
+  out.extra = [...there.keys()].filter(r => !have.has(r)).sort()
+  return out
+}
 const id = (p: string) => `${p}${++n}`
 
 /** In-memory Backend that behaves like the Go side closely enough for UI tests. */
@@ -108,6 +130,7 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
       '/Users/me/notes.txt': {dir: false, size: 300}, '/Users/me/.zshrc': {dir: false, size: 120}, '/Users/me/Documents/cv.pdf': {dir: false, size: 40960},
     },
     nativeSettings: false,
+    holdQueue: false,
     hostHistory: [],
     cache: {files: 3, bytes: 5120},
     serialPorts: ['/dev/cu.usbserial-1410', '/dev/cu.usbmodem1101'],
@@ -131,6 +154,41 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
   }
   const rec = (name: string, ...a: unknown[]) => { state.calls.push([name, ...a]) }
   const emit = (e: string, d?: unknown) => listeners.get(e)?.forEach(cb => cb(d))
+  // the transfer queue: one list per SFTP session; every change sends the whole list, like the Go side
+  const queues: Record<string, QueueJob[]> = {}
+  const push = (sid: string) => emit('sftp:queue:' + sid, (queues[sid] ?? []).map(j => ({...j})))
+  const patchJob = (sid: string, jobId: string, patch: Partial<QueueJob>) => {
+    const j = (queues[sid] ?? []).find(x => x.id === jobId)
+    if (!j) return
+    Object.assign(j, patch)
+    push(sid)
+  }
+  const run = (sid: string, job: QueueJob, spec: {direction: QueueJob['direction']; sources: string[]; destDir: string; overwrite: boolean}) => {
+    if (job.state !== 'queued') return
+    const up = spec.direction === 'upload' || spec.direction === 'sync-up'
+    const [from, to] = up ? [state.local, state.remote] : [state.remote, state.local]
+    try {
+      let res: TransferResult
+      if (spec.direction === 'upload' || spec.direction === 'download') {
+        res = copyTree(from, to, spec.sources, spec.destDir, spec.overwrite, () => {})
+      } else {
+        const src = spec.sources[0], dst = spec.destDir
+        const diff = syncDiff(from, to, src, dst)
+        res = {files: 0, dirs: 0, bytes: 0, skipped: [], ignored: []}
+        for (const i of diff.copy) {
+          const target = (dst === '/' ? '' : dst) + '/' + i.path
+          for (let d = target.slice(0, target.lastIndexOf('/')); d && d !== '/'; d = d.slice(0, d.lastIndexOf('/'))) if (!to[d]) to[d] = {dir: true, size: 0}
+          to[target] = {dir: false, size: i.size}
+          res.files++
+          res.bytes += i.size
+        }
+      }
+      Object.assign(job, {...res, state: 'done', done: res.bytes, total: res.bytes})
+    } catch (e) {
+      Object.assign(job, {state: 'failed', error: String(e)})
+    }
+    push(sid)
+  }
   const upsert = <T extends {id: string}>(list: T[], item: Partial<T>, prefix: string): T => {
     const full = {...item, id: item.id || id(prefix)} as T
     const i = list.findIndex(x => x.id === full.id)
@@ -277,6 +335,42 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         rec('sftp.downloadAll', s, remotes, dir, overwrite)
         return copyTree(state.remote, state.local, remotes, dir, overwrite, e => emit('sftp:progress:' + s, {name: e, direction: 'download', done: 1, total: 1}))
       },
+      conflicts: async (s, direction, sources, destDir) => {
+        rec('sftp.conflicts', s, direction, sources, destDir)
+        const [from, to] = direction === 'upload' ? [state.local, state.remote] : [state.remote, state.local]
+        const out: string[] = []
+        for (const src of sources) {
+          const name = src.slice(src.lastIndexOf('/') + 1)
+          for (const p of Object.keys(from).filter(x => x === src || x.startsWith(src + '/')).sort()) {
+            const rel = name + p.slice(src.length)
+            if (!from[p].dir && to[(destDir === '/' ? '' : destDir) + '/' + rel]) out.push(rel)
+          }
+        }
+        return out
+      },
+      enqueue: async (s, spec) => {
+        rec('sftp.enqueue', s, spec)
+        const first = spec.sources[0] ?? ''
+        const base = first.slice(first.lastIndexOf('/') + 1) || first
+        const job: QueueJob = {id: id('job'), direction: spec.direction, name: spec.sources.length > 1 ? `${base} and ${spec.sources.length - 1} more` : base, destDir: spec.destDir,
+          state: 'queued', current: '', done: 0, total: 0, files: 0, dirs: 0, bytes: 0, skipped: [], ignored: [], error: ''}
+        queues[s] = [...(queues[s] ?? []), job]
+        if (state.holdQueue) { Object.assign(job, {state: 'running', current: base, done: 40, total: 100}); push(s) } else { push(s); void Promise.resolve().then(() => run(s, job, spec)) }
+        return job.id
+      },
+      syncPlan: async (s, direction, src, dst) => {
+        rec('sftp.syncPlan', s, direction, src, dst)
+        return direction === 'sync-up' ? syncDiff(state.local, state.remote, src, dst) : syncDiff(state.remote, state.local, src, dst)
+      },
+      queue: async s => { rec('sftp.queue', s); return (queues[s] ?? []).map(j => ({...j})) },
+      pause: async (s, j) => { rec('sftp.pause', s, j); patchJob(s, j, {state: 'paused'}) },
+      resume: async (s, j) => { rec('sftp.resume', s, j); patchJob(s, j, {state: 'running'}) },
+      cancel: async (s, j) => { rec('sftp.cancel', s, j); patchJob(s, j, {state: 'canceled'}) },
+      retry: async (s, j) => { rec('sftp.retry', s, j); patchJob(s, j, {state: 'running', error: ''}) },
+      clearFinished: async s => { rec('sftp.clearFinished', s); queues[s] = (queues[s] ?? []).filter(j => !['done', 'failed', 'canceled'].includes(j.state)); push(s) },
+      editStart: async (s, r, l) => { rec('sftp.editStart', s, r, l) },
+      editPush: async (s, r, f) => { rec('sftp.editPush', s, r, f) },
+      editStop: async (s, r) => { rec('sftp.editStop', s, r) },
     },
     assistant: {
       providers: async () => (state.ai.checking-- > 0 ? state.ai.providers.map(p => ({...p, status: {...p.status, state: '' as const}})) : state.ai.providers.map(p => ({...p}))),
@@ -413,6 +507,8 @@ export function makeFake(init: Partial<Fake['state']> = {}): Fake {
         if (!state.nativeSettings) throw new Error('native windows are not available')
       },
     },
+    finishJob: (sid, jobId, patch = {}) => patchJob(sid, jobId, {state: 'done', done: 100, total: 100, ...patch}),
+    jobs: sid => (queues[sid] ?? []).map(j => ({...j})),
     on: (event, cb) => {
       if (!listeners.has(event)) listeners.set(event, new Set())
       listeners.get(event)!.add(cb)

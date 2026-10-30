@@ -1,11 +1,13 @@
 import {ReactNode, useEffect, useMemo, useRef, useState} from 'react'
 import {useBackend} from '../backend'
 import {errMsg} from '../util'
+import {useConfirm} from '../ui/Confirm'
+import {useToast} from '../ui/Toast'
 import {IconFolder} from '../ui/Icons'
 import {OsIcon} from '../ui/OsIcon'
 import {joinPath} from './format'
 import {FilePane, PaneFs, PaneState, DragPayload, Item} from './FilePane'
-import type {Host, HostKeyPrompt} from '../types'
+import type {EditEvent, Host, HostKeyPrompt} from '../types'
 
 export interface RemoteHost {id: string; label: string}
 let seq = 0
@@ -35,7 +37,10 @@ interface Props {
  */
 export function RemotePane({host, hosts, onHost, onNewTab, tabsLead, hidden, reloadKey, onState, onDropEntry, onSession, onCopyOut}: Props) {
   const be = useBackend()
+  const confirm = useConfirm()
+  const toast = useToast()
   const sid = useRef('')
+  const edited = useRef(new Set<string>()) // remote files being edited here: each is released when the connection ends
   const alive = useRef(true)
   const [state, setState] = useState<'connecting' | 'ready' | 'closed'>('connecting')
   const [home, setHome] = useState('')
@@ -62,6 +67,14 @@ export function RemotePane({host, hosts, onHost, onNewTab, tabsLead, hidden, rel
         const info = await be.sftp.open(hostId, key)
         if (!alive.current) { void be.sftp.close(info.sid).catch(() => {}); return }
         sid.current = info.sid
+        offs.push(be.on(`sftp:edit:${info.sid}`, (ev: EditEvent) => {
+          const name = ev.remote.slice(ev.remote.lastIndexOf('/') + 1)
+          if (ev.state === 'uploaded') toast.info(`Saved ${name} to the server`)
+          else if (ev.state === 'error') toast.error(`${name}: ${ev.message || 'could not be saved to the server'}`)
+          else void confirm(`${name} changed on the server since you opened it. Overwrite with your version?`, {confirmLabel: 'Overwrite', danger: true})
+            .then(yes => (yes ? be.sftp.editPush(info.sid, ev.remote, true) : undefined))
+            .catch(e => toast.error(`${name}: ${errMsg(e)}`))
+        }))
         offs.push(be.on(`sftp:closed:${info.sid}`, () => { setState('closed'); setClosedReason('The connection was lost.'); sid.current = ''; setFs(null); onSession('') }))
         setPrompt(null)
         const s = info.sid
@@ -85,6 +98,16 @@ export function RemotePane({host, hosts, onHost, onNewTab, tabsLead, hidden, rel
             await be.sftp.downloadAll(s, [e.path], dir, true)
             await be.system.openPathWith(joinPath(dir, e.name), app)
           },
+          // fetched like Open, then the file is watched: each save goes back to the server
+          edit: async e => {
+            const dir = await be.local.tempDir()
+            const res = await be.sftp.downloadAll(s, [e.path], dir, true)
+            if (res.files < 1) throw new Error('Could not download the file')
+            const local = joinPath(dir, e.name)
+            await be.system.openPath(local)
+            await be.sftp.editStart(s, e.path, local)
+            edited.current.add(e.path)
+          },
         })
         setHome(info.home || '/')
         setState('ready')
@@ -96,7 +119,11 @@ export function RemotePane({host, hosts, onHost, onNewTab, tabsLead, hidden, rel
     return () => {
       alive.current = false
       offs.forEach(o => o())
-      if (sid.current) void be.sftp.close(sid.current).catch(() => {})
+      if (sid.current) {
+        for (const p of edited.current) void be.sftp.editStop(sid.current, p).catch(() => {})
+        void be.sftp.close(sid.current).catch(() => {})
+      }
+      edited.current.clear()
       sid.current = ''
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

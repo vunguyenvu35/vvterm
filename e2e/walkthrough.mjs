@@ -370,6 +370,11 @@ try {
   const remotePane = sftp.getByRole('region', {name: 'Remote'})
   const lrow = name => localPane.getByRole('row', {name: new RegExp('^' + name.replace('.', '\\.'))})
   const rrow = name => remotePane.getByRole('row', {name: new RegExp('^' + name.replace('.', '\\.'))})
+  // every file action lives in the pane's Actions menu (the same one as the right-click menu)
+  const act = async (pane, item) => {
+    await pane.getByRole('button', {name: 'Actions'}).click()
+    await page.getByRole('menu', {name: 'Actions'}).getByRole('menuitem', {name: item}).click()
+  }
   await rrow('notes.txt').waitFor()
   assert.equal(await remotePane.getByLabel('Remote path').inputValue(), '/', 'opens in the remote home folder')
   await localPane.getByLabel('Local path').fill(tmp)
@@ -379,18 +384,21 @@ try {
 
   // one file with the button
   await lrow('upload-me.txt').click()
-  await localPane.getByRole('button', {name: 'Upload selected'}).click()
+  await act(localPane, 'Upload')
   await rrow('upload-me.txt').waitFor()
-  await sftp.getByRole('status', {name: 'Transfer progress'}).waitFor()
+  const queue = sftp.getByRole('region', {name: 'Transfers'}) // transfers run in a queue now
+  await queue.waitFor()
+  await queue.getByRole('listitem', {name: 'upload-me.txt'}).filter({hasText: 'Done'}).waitFor()
   await shot(page, 'sftp-transfer')
-  await sftp.getByRole('status', {name: 'Transfer progress'}).waitFor({state: 'detached'}) // goes away by itself
+  await queue.getByRole('button', {name: 'Clear finished'}).click()
+  await queue.waitFor({state: 'detached'}) // nothing left to show
 
   // a folder and a file together: Cmd/Ctrl-click, then one Upload
   await lrow('bundle').click()
   await lrow('extra.txt').click({modifiers: mod})
   await localPane.getByRole('status').filter({hasText: '2 selected'}).waitFor()
   await shot(page, 'sftp-multi-select')
-  await localPane.getByRole('button', {name: 'Upload selected'}).click()
+  await act(localPane, 'Upload')
   await rrow('bundle').waitFor()
   await rrow('extra.txt').waitFor()
   await rrow('bundle').dblclick()
@@ -404,7 +412,7 @@ try {
   // uploading again asks once before replacing, in the app (a desktop webview has no confirm())
   write('extra.txt', 'extra v2\n')
   await lrow('extra.txt').click()
-  await localPane.getByRole('button', {name: 'Upload selected'}).click()
+  await act(localPane, 'Upload')
   const replace = page.getByRole('alertdialog', {name: 'Confirm'})
   await replace.waitFor()
   assert.match(await replace.textContent(), /extra\.txt already exists/)
@@ -429,7 +437,7 @@ try {
 
   // rename, then delete two items after one confirmation
   await rrow('extra.txt').click()
-  await remotePane.getByRole('button', {name: 'Rename'}).click()
+  await act(remotePane, 'Rename')
   await remotePane.getByLabel('Name').fill('extra-renamed.txt')
   await remotePane.getByLabel('Name').press('Enter')
   await rrow('extra-renamed.txt').waitFor()
@@ -437,7 +445,7 @@ try {
   await rrow('extra-renamed.txt').click({button: 'right'})
   const ctx = page.getByRole('menu', {name: 'File menu'})
   await ctx.waitFor()
-  assert.deepEqual(await ctx.getByRole('menuitem').allTextContents(), ['Open', 'Open with…', 'Copy to target directory', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Edit Permissions'])
+  assert.deepEqual(await ctx.getByRole('menuitem').allTextContents(), ['Open', 'Open with…', 'Edit and save back', 'Download', 'Rename', 'Delete', 'Refresh', 'New Folder', 'Hide Hidden Files', 'Edit Permissions', 'Select All', 'Close'])
   await shot(page, 'sftp-context-menu')
   await ctx.getByRole('menuitem', {name: 'Edit Permissions'}).click()
   await L('Octal permissions').fill('600')
@@ -446,7 +454,7 @@ try {
   await page.getByRole('dialog').waitFor({state: 'detached'})
   await rrow('bundle').click()
   await rrow('extra-renamed.txt').click({modifiers: mod})
-  await remotePane.getByRole('button', {name: 'Delete'}).click()
+  await act(remotePane, 'Delete')
   const del = page.getByRole('alertdialog', {name: 'Confirm'})
   assert.match(await del.textContent(), /these 2 items/)
   await del.getByRole('button', {name: 'Delete'}).click()

@@ -229,6 +229,57 @@ export interface TransferProgress {
   total: number
 }
 
+/** Where a queued transfer stands. */
+export type QueueState = 'queued' | 'preparing' | 'running' | 'paused' | 'done' | 'failed' | 'canceled'
+export type QueueDirection = 'upload' | 'download' | 'sync-up' | 'sync-down'
+
+/** What to queue: upload (sources are local paths), download (remote paths), sync-up / sync-down (one folder each). */
+export interface QueueSpec {
+  direction: QueueDirection
+  sources: string[]
+  destDir: string
+  overwrite: boolean
+}
+
+/** One transfer in the queue (see usecase.QueueJob). The counts and lists describe what has happened so far. */
+export interface QueueJob {
+  id: string
+  direction: QueueDirection
+  name: string
+  destDir: string
+  state: QueueState
+  /** the file being worked on */
+  current: string
+  done: number
+  total: number
+  files: number
+  dirs: number
+  bytes: number
+  skipped: string[]
+  ignored: string[]
+  error: string
+}
+
+export interface SyncItem {
+  path: string
+  size: number
+  reason: 'new' | 'changed'
+}
+
+/** What a sync would do: files to copy, how many are identical, and files only on the target (never touched). */
+export interface SyncDiff {
+  copy: SyncItem[]
+  same: number
+  extra: string[]
+}
+
+/** The result of saving an edited remote file back. */
+export interface EditEvent {
+  remote: string
+  state: 'uploaded' | 'conflict' | 'error'
+  message: string
+}
+
 // ---- AI assistant ----
 
 export type AiPolicy = '' | 'off' | 'ask' | 'on'

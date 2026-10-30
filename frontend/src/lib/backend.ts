@@ -1,7 +1,7 @@
 import {createContext, useContext} from 'react'
 import type {
   CacheReport, ConnectionTest, ExportReport, ForwardStatus, Group, Host, HostFilter, Identity, ImportReport, PortForward, Settings,
-  ActivityEntry, KnownHost, RemoteEntry, SftpInfo, Snippet, SyncStatus, TransferResult, VaultStatus,
+  ActivityEntry, KnownHost, QueueJob, QueueSpec, RemoteEntry, SftpInfo, SyncDiff, Snippet, SyncStatus, TransferResult, VaultStatus,
   AiAskOptions, AiAttachment, AiCommandCheck, AiCustomProvider, AiModelList, AiPolicy, AiPreview, AiProvider, AiSessionState, AiSettings,
   McpImportItem, McpServer, McpServerInput, McpTool,
 } from './types'
@@ -99,6 +99,26 @@ export interface Backend {
     uploadAll(sid: string, locals: string[], remoteDir: string, overwrite: boolean): Promise<TransferResult>
     /** Remote files and folders into a local folder. Existing files are skipped unless overwrite. */
     downloadAll(sid: string, remotes: string[], localDir: string, overwrite: boolean): Promise<TransferResult>
+    /** Names that already exist at the destination (relative to it), so the UI can ask once before replacing. */
+    conflicts(sid: string, direction: 'upload' | 'download', sources: string[], destDir: string): Promise<string[]>
+    /** Adds a transfer to the queue and returns its id at once; it runs in the background, two at a time. */
+    enqueue(sid: string, spec: QueueSpec): Promise<string>
+    /** What syncing srcDir into dstDir would copy. Nothing is ever deleted. */
+    syncPlan(sid: string, direction: 'sync-up' | 'sync-down', srcDir: string, dstDir: string): Promise<SyncDiff>
+    queue(sid: string): Promise<QueueJob[]>
+    pause(sid: string, jobId: string): Promise<void>
+    /** Continues a paused job from the bytes already sent. */
+    resume(sid: string, jobId: string): Promise<void>
+    cancel(sid: string, jobId: string): Promise<void>
+    /** Starts a failed or canceled job again, continuing a partial file. */
+    retry(sid: string, jobId: string): Promise<void>
+    /** Drops the done, failed and canceled jobs from the list. */
+    clearFinished(sid: string): Promise<void>
+    /** The file at localPath was fetched from remotePath and opened: save it back to the server each time it changes. */
+    editStart(sid: string, remotePath: string, localPath: string): Promise<void>
+    /** Saves the edited file now; force replaces a file that changed on the server meanwhile. */
+    editPush(sid: string, remotePath: string, force: boolean): Promise<void>
+    editStop(sid: string, remotePath: string): Promise<void>
   }
   serial: {
     ports(): Promise<string[]>
@@ -306,6 +326,21 @@ export function wailsBackend(): Backend {
       close: s => u('SftpService', 'Close', s),
       uploadAll: (s, l, d, o) => u('SftpService', 'UploadAll', s, l, d, o),
       downloadAll: (s, r, d, o) => u('SftpService', 'DownloadAll', s, r, d, o),
+      conflicts: async (s, dir, src, d) => (await u<string[]>('SftpService', 'Conflicts', s, dir, src, d)) ?? [],
+      enqueue: (s, spec) => u('SftpService', 'Enqueue', s, spec),
+      syncPlan: async (s, dir, a, b) => {
+        const r = await u<SyncDiff>('SftpService', 'SyncPlan', s, dir, a, b)
+        return {copy: r?.copy ?? [], same: r?.same ?? 0, extra: r?.extra ?? []}
+      },
+      queue: async s => (await u<QueueJob[]>('SftpService', 'Queue', s)) ?? [],
+      pause: (s, j) => u('SftpService', 'Pause', s, j),
+      resume: (s, j) => u('SftpService', 'Resume', s, j),
+      cancel: (s, j) => u('SftpService', 'Cancel', s, j),
+      retry: (s, j) => u('SftpService', 'Retry', s, j),
+      clearFinished: s => u('SftpService', 'ClearFinished', s),
+      editStart: (s, r, l) => u('SftpService', 'EditStart', s, r, l),
+      editPush: (s, r, f) => u('SftpService', 'EditPush', s, r, f),
+      editStop: (s, r) => u('SftpService', 'EditStop', s, r),
     },
     knownHosts: {
       list: async () => (await call<KnownHost[]>('usecase', 'KnownHostsService', 'List')) ?? [],

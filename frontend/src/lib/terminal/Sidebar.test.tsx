@@ -123,10 +123,10 @@ describe('TerminalSidebar hosts tree', () => {
 })
 
 describe('TerminalSidebar', () => {
-  it('has the five sections and tells which one is open', async () => {
+  it('has the six sections and tells which one is open', async () => {
     const cb = setup('snippets')
     const bar = screen.getByRole('toolbar', {name: 'Sidebar sections'})
-    expect(within(bar).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Hosts', 'Snippets', 'History', 'Themes and font', 'AI assistant'])
+    expect(within(bar).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Hosts', 'Snippets', 'History', 'Files (SFTP)', 'Themes and font', 'AI assistant'])
     expect(within(bar).getByRole('button', {name: 'Snippets'})).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(within(bar).getByRole('button', {name: 'History'}))
     expect(cb.onTab).toHaveBeenCalledWith('history')

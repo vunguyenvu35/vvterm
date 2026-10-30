@@ -75,7 +75,7 @@ export default function App({initial}: {/** an app window opened for this place 
   // the panel on the right of a terminal (hosts, snippets, history, themes): open or closed is remembered
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('vvterm.sidebar') !== 'closed' } catch { return true } })
   const [sidebarTab, setSidebarTabState] = useState<SidebarTab>(() => {
-    try { const t = localStorage.getItem('vvterm.sidebar.tab'); if (t === 'hosts' || t === 'snippets' || t === 'history' || t === 'themes' || t === 'assistant') return t } catch { /* default */ }
+    try { const t = localStorage.getItem('vvterm.sidebar.tab'); if (t === 'hosts' || t === 'snippets' || t === 'history' || t === 'files' || t === 'themes' || t === 'assistant') return t } catch { /* default */ }
     return 'hosts'
   })
   const [sideWidth, setSideWidthState] = useState<number>(() => { try { const n = Number(localStorage.getItem('vvterm.sidebar.width')); return n >= SIDE_MIN && n <= SIDE_MAX ? n : SIDE_DEFAULT } catch { return SIDE_DEFAULT } })
@@ -527,7 +527,7 @@ export default function App({initial}: {/** an app window opened for this place 
         {sidebarOpen && !onHome && activeTabObj && isTerminalTab(activeTabObj) && (
           <TerminalSidebar tab={sidebarTab} onTab={setSidebarTab} hosts={hosts} groups={groups} tabs={tabs} activeTab={termActive} onSelectTab={id => setActive(id)} onCloseTab={closeTab} snippets={snippets} settings={settings} appearance={appearance}
             onInsert={insertIntoTerminal} onNewSnippet={() => { goHome('snippets'); setDialog({k: 'snippet'}) }} onConnect={connect} onSettings={saveSettings}
-            paneId={activeTabObj.activePane} onOpenSettings={() => openSettings()} width={sideWidth} onWidth={setSideWidth} />
+            paneId={activeTabObj.activePane} hostId={leaves(activeTabObj.root).find(l => l.id === activeTabObj.activePane)?.hostId} onOpenSettings={() => openSettings()} width={sideWidth} onWidth={setSideWidth} />
         )}
       </div>
 
