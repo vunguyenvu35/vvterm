@@ -1,10 +1,35 @@
 <p align="center"><img src="docs/brand/logo-mark-256.png" alt="VVTerm" width="88"></p>
 
-# VVTerm 1.1.0
+# VVTerm 1.1.1
 
-Release date: 2026-10-28 · Platform: macOS (arm64 build verified) · Status: beta. Read [Known issues](#known-issues) first.
+Release date: 2026-10-30 · Platform: macOS (arm64 build verified) · Status: beta. Read [Known issues](#known-issues) first.
 
-## Unreleased: AI terminal assistant
+## What's new in 1.1.1
+
+A patch release: fixes for typing and for the macOS input tools, and two new things in the terminal and in Settings.
+
+### New: command suggestions in the terminal
+
+- **A list of matching commands appears under the cursor while you type.** Each row says where it comes from: a command you ran in VVTerm, the shell history of this computer (local terminal: `~/.zsh_history`, `~/.bash_history`), one of your one-line Snippets (also found by its name) or, if you turn it on, the shell history of an SSH server.
+- **Nothing is taken unless you choose it.** ↓ ↑ choose a row, then **Enter** or **Tab** put it on the line (it is never run for you); **Esc** closes the list. Until a row is chosen, Enter, Tab and the arrows are the shell's, as always.
+- **⌘⇧G** (Ctrl+Shift+G elsewhere) turns suggestions off and on; **⌘⇧J** (Ctrl+Shift+J) opens the list by hand, also on an empty line. Both are in the **View** menu and can be changed in Settings → Shortcuts. **Settings → Terminal → Suggest commands** switches it off for good.
+- **Safe by design.** No suggestions at a password prompt, in vim or htop, or while the shell is changing the line; a line that looks like a password, token or key is never suggested; a Snippet of several lines is never suggested (its first lines would run at once). The shell history of an SSH server is **off by default**, read once per terminal, kept in memory only, and goes through the secret filter on the way in.
+- **The history keeps the command that ran**, as the screen shows it, instead of the keys that were pressed: a line completed with Tab or with your shell's own suggestion is saved whole, and a command with long output (`ls -la`) is no longer lost.
+
+### New: Settings → Storage
+
+- **Clear cache** removes the files VVTerm can make again and forgets what it found out about your AI tools (they are looked up again). It says what it removed.
+- **Reset settings** puts appearance, terminal, general options, shortcuts and auto-lock back to their defaults, after a confirmation. Your profile, sync target, hosts, keys and vault are never touched.
+
+### Fixed
+
+- **A password field no longer leaves macOS "secure input" switched on.** While it is on, input tools such as OpenKey and GoTiengViet stop working in every app. Clicking an empty part of the unlock card (or of a panel with a password field) and then unlocking used to leave it on until some text field was focused; VVTerm now releases it. Measured with the system web view: a focused password field turns it on, a click on empty space keeps it on, focusing a text field turns it off.
+- **Vietnamese typed in the terminal on macOS**: words replaced by the input method (`insertReplacementText`) were lost.
+- **Settings → AI assistant no longer re-reads the whole page every 0.6 s** while it looks for your AI tools, which could make the page unresponsive; it also keeps what you are typing, and no longer makes the main window refresh for it. A failing load can no longer repeat itself on every notification.
+- **Settings window ran a stale helper** after a rebuild or an app update.
+- Development only: `make dev` hides the line macOS' Vietnamese input method prints for every key typed.
+
+## Also in 1.1.1: AI terminal assistant
 
 Ask an AI about what is on your terminal, without leaving VVTerm and without handing it your secrets. VVTerm runs the AI command-line tool you already use and are signed in to, so your own subscription is used and **no API key is stored**.
 
