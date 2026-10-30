@@ -63,6 +63,8 @@ Not covered by automation; run on a real Mac build (`make build`, open `build/bi
 12. Type Vietnamese with the system's Telex input and with a global input tool (GoTiengViet / OpenKey) in a terminal, and check the log has no *getApplicationProperty* line from VVTerm.
 13. **Dock and app switcher icon**, the Caps Lock hint in the unlock field, and right-click anywhere (no *Look Up* / *Inspect Element* menu).
 
+14. **Secure input** (macOS): while a password field has the keyboard, OpenKey / GoTiengViet are off (that is macOS). Click an empty part of the unlock card, unlock, then run `ioreg -l -w 0 | grep kCGSSessionSecureInputPID`: it must print nothing. Do the same after closing a panel with a password field (Settings → Security, New key with a passphrase).
+
 ## Test data and environments
 
 - SSH peer: `internal/testssh` (password + public-key auth, echo shell, `direct-tcpip`, `tcpip-forward`, keepalive), also exposed as `cmd/demoserver`.

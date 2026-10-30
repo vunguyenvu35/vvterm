@@ -6,9 +6,11 @@ import {ToastProvider} from './lib/ui/Toast'
 import {ConfirmProvider} from './lib/ui/Confirm'
 import {CapsLockWarning} from './lib/ui/CapsLockWarning'
 import {installNoNativeMenu} from './lib/ui/noNativeMenu'
+import {installSecureInputGuard} from './lib/ui/secureInput'
 import './styles.css'
 
 installNoNativeMenu() // an app, not a web page: no Look Up / Translate / Inspect Element menu
+installSecureInputGuard() // a password field must not leave macOS's secure input on (it stops input tools such as OpenKey in every app)
 
 async function boot() {
   // The Settings window is a second process of the same binary; it is the only one that has the bridge bound.
