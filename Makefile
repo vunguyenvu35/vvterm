@@ -16,7 +16,8 @@ help:
 # binary (frontend/dist), not the Vite dev server, so build it first: otherwise they show the last build.
 dev:
 	cd frontend && npm run build
-	$(WAILS) dev
+	@# the macOS Vietnamese input method logs this line for every key typed; it is not from VVTerm and means nothing
+	$(WAILS) dev 2>&1 | grep --line-buffered -v 'getApplicationProperty: called with invalid property' || true
 
 build:
 	$(WAILS) build -ldflags "-X vvterm/app.Version=$(VERSION)"
