@@ -7,10 +7,9 @@ Release date: 2026-10-30 · Platform: macOS (arm64 build verified) · Status: be
 ## Unreleased
 
 - **Panes can be dragged by their header.** The bar with the host name that shows over a pane of a split is now a handle: drop it on a side of another pane to move the pane there (also into another tab), **on the tab bar to make it a tab of its own**, or on another terminal tab to join it. The pane keeps its session, nothing reconnects. The "Move pane to its own tab" button is still there.
-
 - **It is now clear which pane has the keyboard.** In a tab with several panes the focused pane has a frame in the accent colour and a dot by its name on the pane bar, and the other panes are dimmed (a little less under the pointer, as an invitation to click). A tab with one pane looks as before.
-
 - **A tidier bar on each pane.** The bar that shows over a pane of a split has a handle (six dots) to drag the pane by, the name in bold with a small tag for what it is, quieter buttons (the close button turns red under the pointer) and no tooltip over the name.
+- **For developers:** `make e2e` and `e2e/update-shots.sh` no longer open your default browser. `wails dev -browser` does that by itself, and a tab on the unlock screen (a focused password field) makes macOS turn on secure input for every app, which stops input tools such as OpenKey. If you start `wails dev -browser` yourself, close that tab (see Development.md).
 
 ## What's new in 1.1.2
 
