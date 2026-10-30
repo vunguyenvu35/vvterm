@@ -1,16 +1,21 @@
 <p align="center"><img src="docs/brand/logo-horizontal-light.png" alt="VVTerm" width="520"></p>
 
 <p align="center">
-  <a href="https://ko-fi.com/vunguyenvu"><img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support VVTerm on Ko-fi"></a>
-  <a href="#support-vvterm"><img src="https://img.shields.io/badge/Donate-USDT-26A17B?logo=tether&logoColor=white&style=for-the-badge" alt="Donate USDT to VVTerm"></a>
+  <b>VVTerm is a free, open-source SSH client for macOS, Windows and Linux that keeps your hosts, keys and passwords in an encrypted vault that you own.</b>
 </p>
 
 <p align="center">
-  <b>An SSH client for people who want to own their data.</b><br>
-  Hosts, keys and passwords live in an encrypted vault on your Mac, export to standard formats at any time, and sync through a private Git repository you control.
+  <a href="https://github.com/vunguyenvu35/vvterm/releases/latest"><img src="https://img.shields.io/github/v/release/vunguyenvu35/vvterm?label=Download%20latest&style=for-the-badge&color=2ea44f" alt="Download the latest VVTerm release"></a>
 </p>
 
 <p align="center"><img src="docs/screenshots/20-split-panes.png" alt="VVTerm with two terminals side by side" width="900"></p>
+
+## Why VVTerm
+
+- **Your data stays yours.** Hosts, keys and passwords live in one encrypted vault on your computer (AES-256-GCM, a key from your master password). Export to standard formats at any time, and sync between your computers through a private Git repository or a cloud folder you control. Nothing goes to a server of ours, and there is no account.
+- **Everything an SSH client needs, in one app.** Tabs and split panes, jump hosts, port forwards, serial and Telnet, and SFTP with a transfer queue that resumes, syncs folders and saves your edits back.
+- **Careful with secrets.** Private keys and passwords never reach the interface. A changed server key blocks the connection with no override. The optional AI assistant only ever sees the screen with secrets replaced, and only suggests commands: you decide what runs.
+- **Free and open source.** No licence tiers, nothing to sign up for.
 
 ## What you can do
 
